@@ -8,8 +8,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install
 
 RUN npm install -g pnpm
 
-# bb
-RUN curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/master/barretenberg/bbup/install | bash && . ~/.bashrc && bbup -v 0.87.2
+# Note: bb native binary is no longer needed - prover uses bb.js (WASM) internally
 
 WORKDIR /app
 
