@@ -51,7 +51,19 @@ importers:
         specifier: ^3.23.8
         version: 3.25.67
     devDependencies:
+      '@aztec/accounts':
+        specifier: 4.0.0-nightly.20260204
+        version: 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/aztec.js':
+        specifier: 4.0.0-nightly.20260204
+        version: 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/pxe':
+        specifier: 4.0.0-nightly.20260204
+        version: 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
       '@aztec/simulator':
+        specifier: 4.0.0-nightly.20260204
+        version: 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
+      '@aztec/test-wallet':
         specifier: 4.0.0-nightly.20260204
         version: 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
       '@types/ms':
@@ -60,6 +72,9 @@ importers:
       prettier:
         specifier: ^3.5.3
         version: 3.5.3
+      tsx:
+        specifier: ^4.19.2
+        version: 4.19.4
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -287,6 +302,14 @@ packages:
     resolution: {integrity: sha512-oLvsaPMTBejkkmHhjf09xTgk71mOqyr/409NKhRIL08If7AhVfUsJhVsx386uJaqNd42v9kWamQ9lFbkoC2dYw==}
     engines: {node: '>=18.0.0'}
 
+  '@aztec/accounts@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-cHLNLgCb0oiamA3SYcMbGWyXrO2cyY0PdeYKnu1BqEHes8kR8M4CKbRJu30qu335+scVbhMPG/P3rLG8rfDztQ==}
+    engines: {node: '>=20.10'}
+
+  '@aztec/aztec.js@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-j8VwLNCqsX8sdl+/k/YiSiTFurPuVRVk59XrRRCx7r4ctJ+T0B3jGz+Ms5nRQ6nEBY/pCN04540O9zHG+16CQQ==}
+    engines: {node: '>=20.10'}
+
   '@aztec/bb-prover@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-v4ItjYCGzdyoLbJcQLHj6vfhv8Gcl4CUfYhqbn1xQs8zdzko7zNlEfDl3rTi1gOkbPp26sSV+He3ebpD4GnD7g==}
     engines: {node: '>=20.10'}
@@ -300,8 +323,16 @@ packages:
     resolution: {integrity: sha512-imW0yZd5fwEhORVC3i6fzKWzKgb2gBOJRmvOSILb6yeZ/O561kFmgrRM7aGFTjxwnogBD9gp4UXCkVvcdu6lIQ==}
     engines: {node: '>=20.10'}
 
+  '@aztec/builder@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-F3gExdS72mT6lqbCdB63icmS98+coOBLQRbbSXBmaEEg3jnJO1ZoI5ycI77WUoLMjR8KzDsfwhZGSWZ8T3zsNw==}
+    engines: {node: '>=20.10'}
+
   '@aztec/constants@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-NuZb2r6+mMK0EvgXOtMQNZY7gaNNeqc2vGQxBf75vidhL0bmHL7Qjjy22ZIfP+XenLUmktJ8lUmkY3rUdl9Aug==}
+    engines: {node: '>=20.10'}
+
+  '@aztec/entrypoints@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-TXe7hqSJH72Ap2jIbXRO534/fae3foPCbB1Yg5u7b4t8t2Xtt/bQufD1AV4ea4E5dk1ANObpQSZR1PFJMt2Q7w==}
     engines: {node: '>=20.10'}
 
   '@aztec/ethereum@4.0.0-nightly.20260204':
@@ -310,6 +341,10 @@ packages:
 
   '@aztec/foundation@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-MY/rAgobwxgL6bwzCsbJmVxkmNmxfYZQRt0qdZhea94I27AYLnuFFlv/wRdhbdbj8tPEgu9D+PphPMLdZZzfmA==}
+    engines: {node: '>=20.10'}
+
+  '@aztec/key-store@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-Grvp3lq/HwdzgEti560hgS7k0YusRfP7LHmL/E+8c98UG74hQy0PPs7frHxaxl0X5dAHP1TvOZVnVuGDAAu2dA==}
     engines: {node: '>=20.10'}
 
   '@aztec/kv-store@4.0.0-nightly.20260204':
@@ -330,6 +365,10 @@ packages:
   '@aztec/noir-acvm_js@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-5jp/HAY8jMuoVzYh7eeImlJFj5j8LKNZaUI1aZS8VTbHd3qxk6xnRYggwoxCwFjReSMGL/PZ5mmvfRdiaEwxwA==}
 
+  '@aztec/noir-contracts.js@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-Iu2y3H+kiyPwA1h1s2ndV+6T3z/oVfBhLz9BKwhp09E00JkmbuYndYW/hPlny06Q1oAG6pmMnf6GtRZoDmFZtw==}
+    engines: {node: '>=20.10'}
+
   '@aztec/noir-noir_codegen@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-5dFxHfCJ6czRkE/uBFRM3L3he/bXTDw6NXfG714F3nvMNTIfewZiBcyylEpUnpCxXnwFZtPV0w3HxlsLKUi5RA==}
     hasBin: true
@@ -348,6 +387,11 @@ packages:
     resolution: {integrity: sha512-cKwluKjORoCPj1VMvUzSVWqVjW1K9NTOkrRH+Ohr5tjS60eweree3gOCzpsN1QogGgC9HerFFr4onDjp3fbYng==}
     engines: {node: '>=20.10'}
 
+  '@aztec/pxe@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-fzcGB2fOFycPGVBHE3RmeQjlBU1fCeUKMfn2NhxIblVYYuBBUdsGuSz0pQk7oZ/vL6SWLzGQQbk5Fnqme85/fg==}
+    engines: {node: '>=20.10'}
+    hasBin: true
+
   '@aztec/simulator@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-ko7e7Z/GcgPvH0RuLRTMjEUaw/QvXSse8eIw3P2jpJh7g5g24YWRSfrBB65IMN5k61rwmgLXRt7Hnj8xjggERg==}
     engines: {node: '>=20.10'}
@@ -358,6 +402,10 @@ packages:
 
   '@aztec/telemetry-client@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-A/dPBY0Vcej9MQ7Kp/R7O5ILlg4z7T3FSy9y/zOBm80UhBXDtk344zAYEBWoa2ADcX37C/Bupl8vxXgm7UVLXw==}
+    engines: {node: '>=20.10'}
+
+  '@aztec/test-wallet@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-WoxH40nqiLBf0UOkBvx7rkhqQzoRCAEB6Ito83hDXJv1QWnE3I6zMUYQgSSCh+NF82H8uzp4adNu2Kk93w0o1g==}
     engines: {node: '>=20.10'}
 
   '@aztec/validator-ha-signer@4.0.0-nightly.20260204':
@@ -371,6 +419,10 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  '@aztec/wallet-sdk@4.0.0-nightly.20260204':
+    resolution: {integrity: sha512-sgGiEv0zfsXHuTLaKh2BoiAJEBCmba+LWSxSev4IO1QntTKI9cmZK+om+pvQ+Y/hZ96Z6cP0RCcbAjfvOH/K7w==}
+    engines: {node: '>=20.10'}
 
   '@aztec/world-state@4.0.0-nightly.20260204':
     resolution: {integrity: sha512-sytpFWjnf5lJS7GV8i3COGBm5M6MpTYeDF8rGxI2eIxCDB7+A6GjdUpUMXDklm9znxduoCoHELrhA8ddMxMrFA==}
@@ -3498,6 +3550,49 @@ snapshots:
 
   '@aws/lambda-invoke-store@0.2.3': {}
 
+  '@aztec/accounts@4.0.0-nightly.20260204(typescript@5.8.3)':
+    dependencies:
+      '@aztec/aztec.js': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/entrypoints': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/ethereum': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
+
+  '@aztec/aztec.js@4.0.0-nightly.20260204(typescript@5.8.3)':
+    dependencies:
+      '@aztec/constants': 4.0.0-nightly.20260204
+      '@aztec/entrypoints': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/ethereum': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/l1-artifacts': 4.0.0-nightly.20260204
+      '@aztec/protocol-contracts': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      axios: 1.13.4
+      tslib: 2.8.1
+      viem: '@aztec/viem@2.38.2(typescript@5.8.3)(zod@3.25.67)'
+      zod: 3.25.67
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
+
   '@aztec/bb-prover@4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)':
     dependencies:
       '@aztec/bb.js': 4.0.0-nightly.20260204
@@ -3544,12 +3639,47 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@aztec/builder@4.0.0-nightly.20260204(typescript@5.8.3)':
+    dependencies:
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      commander: 12.1.0
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
+
   '@aztec/constants@4.0.0-nightly.20260204':
     dependencies:
       '@aztec/foundation': 4.0.0-nightly.20260204
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+
+  '@aztec/entrypoints@4.0.0-nightly.20260204(typescript@5.8.3)':
+    dependencies:
+      '@aztec/constants': 4.0.0-nightly.20260204
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/protocol-contracts': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      tslib: 2.8.1
+      zod: 3.25.67
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
 
   '@aztec/ethereum@4.0.0-nightly.20260204(typescript@5.8.3)':
     dependencies:
@@ -3597,6 +3727,24 @@ snapshots:
       zod: 3.25.67
     transitivePeerDependencies:
       - supports-color
+
+  '@aztec/key-store@4.0.0-nightly.20260204(typescript@5.8.3)':
+    dependencies:
+      '@aztec/constants': 4.0.0-nightly.20260204
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/kv-store': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
 
   '@aztec/kv-store@4.0.0-nightly.20260204(typescript@5.8.3)':
     dependencies:
@@ -3653,6 +3801,21 @@ snapshots:
 
   '@aztec/noir-acvm_js@4.0.0-nightly.20260204': {}
 
+  '@aztec/noir-contracts.js@4.0.0-nightly.20260204(typescript@5.8.3)':
+    dependencies:
+      '@aztec/aztec.js': 4.0.0-nightly.20260204(typescript@5.8.3)
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
+
   '@aztec/noir-noir_codegen@4.0.0-nightly.20260204':
     dependencies:
       '@aztec/noir-types': 4.0.0-nightly.20260204
@@ -3706,6 +3869,39 @@ snapshots:
       - supports-color
       - typescript
       - utf-8-validate
+
+  '@aztec/pxe@4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)':
+    dependencies:
+      '@aztec/bb-prover': 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
+      '@aztec/bb.js': 4.0.0-nightly.20260204
+      '@aztec/builder': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/constants': 4.0.0-nightly.20260204
+      '@aztec/ethereum': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/key-store': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/kv-store': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/noir-protocol-circuits-types': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/noir-types': 4.0.0-nightly.20260204
+      '@aztec/protocol-contracts': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/simulator': 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      koa: 2.16.1
+      koa-router: 13.1.1
+      lodash.omit: 4.5.0
+      sha3: 2.1.4
+      tslib: 2.8.1
+      viem: '@aztec/viem@2.38.2(typescript@5.8.3)(zod@3.25.67)'
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
+      - zod
 
   '@aztec/simulator@4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)':
     dependencies:
@@ -3801,6 +3997,28 @@ snapshots:
       - utf-8-validate
       - zod
 
+  '@aztec/test-wallet@4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)':
+    dependencies:
+      '@aztec/accounts': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/aztec.js': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/entrypoints': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/noir-contracts.js': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/pxe': 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/wallet-sdk': 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
+      - utf-8-validate
+      - zod
+
   '@aztec/validator-ha-signer@4.0.0-nightly.20260204(typescript@5.8.3)':
     dependencies:
       '@aztec/ethereum': 4.0.0-nightly.20260204(typescript@5.8.3)
@@ -3832,6 +4050,26 @@ snapshots:
       typescript: 5.8.3
     transitivePeerDependencies:
       - bufferutil
+      - utf-8-validate
+      - zod
+
+  '@aztec/wallet-sdk@4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)':
+    dependencies:
+      '@aztec/aztec.js': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/constants': 4.0.0-nightly.20260204
+      '@aztec/entrypoints': 4.0.0-nightly.20260204(typescript@5.8.3)
+      '@aztec/foundation': 4.0.0-nightly.20260204
+      '@aztec/pxe': 4.0.0-nightly.20260204(typescript@5.8.3)(zod@3.25.67)
+      '@aztec/stdlib': 4.0.0-nightly.20260204(typescript@5.8.3)
+    transitivePeerDependencies:
+      - '@types/pg'
+      - aws-crt
+      - bufferutil
+      - debug
+      - encoding
+      - pg-native
+      - supports-color
+      - typescript
       - utf-8-validate
       - zod
 

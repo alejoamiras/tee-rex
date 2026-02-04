@@ -39,9 +39,14 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@aztec/accounts": "4.0.0-nightly.20260204",
+    "@aztec/aztec.js": "4.0.0-nightly.20260204",
+    "@aztec/pxe": "4.0.0-nightly.20260204",
     "@aztec/simulator": "4.0.0-nightly.20260204",
+    "@aztec/test-wallet": "4.0.0-nightly.20260204",
     "@types/ms": "^0.7.34",
     "prettier": "^3.5.3",
+    "tsx": "^4.19.2",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }
