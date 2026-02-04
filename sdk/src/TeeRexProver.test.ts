@@ -1,8 +1,34 @@
-import { WASMSimulator } from "@aztec/simulator/client";
-import { describe, expect, test } from "vitest";
-import { ProvingMode, TeeRexProver } from "./TeeRexProver.js";
+import { describe, expect, test, beforeAll } from "bun:test";
 
-describe(TeeRexProver, () => {
+// Patch expect for @aztec/foundation compatibility BEFORE importing @aztec modules
+// @aztec/foundation checks if expect.addEqualityTesters exists (vitest API)
+if (!(expect as any).addEqualityTesters) {
+  (expect as any).addEqualityTesters = () => {};
+}
+
+// Also patch globalThis for modules that check there
+if (
+  (globalThis as any).expect &&
+  !(globalThis as any).expect.addEqualityTesters
+) {
+  (globalThis as any).expect.addEqualityTesters = () => {};
+}
+
+// Dynamic imports to control load order
+let WASMSimulator: typeof import("@aztec/simulator/client").WASMSimulator;
+let TeeRexProver: typeof import("./TeeRexProver.js").TeeRexProver;
+let ProvingMode: typeof import("./TeeRexProver.js").ProvingMode;
+
+beforeAll(async () => {
+  const simulator = await import("@aztec/simulator/client");
+  WASMSimulator = simulator.WASMSimulator;
+
+  const proverModule = await import("./TeeRexProver.js");
+  TeeRexProver = proverModule.TeeRexProver;
+  ProvingMode = proverModule.ProvingMode;
+});
+
+describe("TeeRexProver", () => {
   test("can instantiate with correct proving modes", () => {
     const prover = new TeeRexProver(
       "http://localhost:4000",

@@ -2,7 +2,6 @@
 node_modules
 build
 dist
-.turbo
 package
 .env
 .env.*
@@ -18,4 +17,5 @@ cache
 
 **/target
 
-.pnpm-store
+# Bun
+.bun
