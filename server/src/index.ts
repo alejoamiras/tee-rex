@@ -45,7 +45,7 @@ app.post("/prove", async (req, res) => {
       ),
     })
     .parse(decryptedData);
-  const proof = await lib.prover.createClientIvcProof(data.executionSteps);
+  const proof = await lib.prover.createChonkProof(data.executionSteps);
   res.json({
     proof: Base64.fromBytes(proof.toBuffer()), // proof will be publicly posted on chain, so no need to encrypt
   });

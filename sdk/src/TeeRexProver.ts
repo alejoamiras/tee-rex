@@ -1,7 +1,7 @@
-import { BBWASMLazyPrivateKernelProver } from "@aztec/bb-prover/client/wasm/lazy";
+import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
-import { ClientIvcProof } from "@aztec/stdlib/proofs";
+import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
 import ky from "ky";
 import ms from "ms";
@@ -17,13 +17,13 @@ export const ProvingMode = {
   remote: "remote",
 } as const;
 
-export class TeeRexProver extends BBWASMLazyPrivateKernelProver {
+export class TeeRexProver extends BBLazyPrivateKernelProver {
   // TODO: move switching proving modes to a different class
   #provingMode: ProvingMode = ProvingMode.remote;
 
   constructor(
     private apiUrl: string,
-    ...args: ConstructorParameters<typeof BBWASMLazyPrivateKernelProver>
+    ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>
   ) {
     super(...args);
   }
@@ -32,17 +32,17 @@ export class TeeRexProver extends BBWASMLazyPrivateKernelProver {
     this.#provingMode = mode;
   }
 
-  async createClientIvcProof(
+  async createChonkProof(
     executionSteps: PrivateExecutionStep[],
-  ): Promise<ClientIvcProof> {
+  ): Promise<ChonkProofWithPublicInputs> {
     switch (this.#provingMode) {
       case "local": {
         console.log("using local prover");
-        return super.createClientIvcProof(executionSteps);
+        return super.createChonkProof(executionSteps);
       }
       case "remote": {
         console.log("using remote prover");
-        return this.#remoteCreateClientIvcProof(executionSteps);
+        return this.#remoteCreateChonkProof(executionSteps);
       }
       default: {
         throw new UnreachableCaseError(this.#provingMode);
@@ -50,10 +50,10 @@ export class TeeRexProver extends BBWASMLazyPrivateKernelProver {
     }
   }
 
-  async #remoteCreateClientIvcProof(
+  async #remoteCreateChonkProof(
     executionSteps: PrivateExecutionStep[],
-  ): Promise<ClientIvcProof> {
-    console.log("creating client ivc proof", this.apiUrl);
+  ): Promise<ChonkProofWithPublicInputs> {
+    console.log("creating chonk proof", this.apiUrl);
     const executionsStepsSerialized = executionSteps.map((step) => ({
       functionName: step.functionName,
       witness: JSON.parse(jsonStringify(step.witness)),
@@ -85,7 +85,7 @@ export class TeeRexProver extends BBWASMLazyPrivateKernelProver {
         proof: schemas.Buffer,
       })
       .parse(response);
-    return ClientIvcProof.fromBuffer(data.proof);
+    return ChonkProofWithPublicInputs.fromBuffer(data.proof);
   }
 
   async #fetchEncryptionPublicKey() {
