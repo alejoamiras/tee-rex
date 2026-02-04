@@ -1,0 +1,7 @@
+[test]
+# 15 minute timeout for proving operations
+timeout = 900000
+
+# Run tests sequentially to avoid race conditions with service startup
+# connectivity.test.ts runs first (alphabetically), then proving.test.ts
+smol = true

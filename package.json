@@ -1,6 +1,6 @@
 {
   "private": true,
-  "workspaces": ["sdk", "server"],
+  "workspaces": ["sdk", "server", "integration"],
   "scripts": {
     "build": "docker build -t tee-rex --platform linux/amd64 .",
     "dev": "bun run --cwd server dev",
@@ -8,6 +8,8 @@
     "test": "bun run test:lint && bun run test:unit",
     "test:lint": "bun run --cwd sdk test:lint",
     "test:unit": "bun run --cwd sdk test:unit",
+    "test:integration": "bun run --cwd integration test",
+    "test:all": "bun run test && bun run test:integration",
     "sdk:build": "bun run --cwd sdk build"
   },
   "devDependencies": {

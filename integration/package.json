@@ -1,0 +1,16 @@
+{
+  "name": "@nemi-fi/tee-rex-integration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "test:connectivity": "bun test connectivity.test.ts",
+    "test:proving": "bun test proving.test.ts"
+  },
+  "devDependencies": {
+    "@aztec/aztec.js": "4.0.0-nightly.20260204",
+    "@aztec/simulator": "4.0.0-nightly.20260204",
+    "@aztec/test-wallet": "4.0.0-nightly.20260204",
+    "@nemi-fi/tee-rex": "workspace:*"
+  }
+}
