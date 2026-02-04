@@ -8,7 +8,10 @@
  */
 
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
-import { TestWallet, registerInitialLocalNetworkAccountsInWallet } from "@aztec/test-wallet/server";
+import {
+  TestWallet,
+  registerInitialLocalNetworkAccountsInWallet,
+} from "@aztec/test-wallet/server";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { Fr } from "@aztec/aztec.js/fields";
 import { ProvingMode, TeeRexProver } from "./TeeRexProver.js";
@@ -86,10 +89,14 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════");
 
   console.log("3.1 Creating TestWallet with TeeRexProver as backend...");
-  const wallet = await TestWallet.create(node, {}, {
-    proverOrOptions: prover,
-    loggers: {},
-  });
+  const wallet = await TestWallet.create(
+    node,
+    {},
+    {
+      proverOrOptions: prover,
+      loggers: {},
+    },
+  );
   console.log("    ✅ TestWallet created with TeeRexProver");
 
   if (TEST_LEVEL < 4) {
@@ -105,8 +112,11 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════");
 
   console.log("4.1 Registering initial local network accounts...");
-  const registeredAddresses = await registerInitialLocalNetworkAccountsInWallet(wallet);
-  console.log(`    ✅ Registered ${registeredAddresses.length} sandbox accounts`);
+  const registeredAddresses =
+    await registerInitialLocalNetworkAccountsInWallet(wallet);
+  console.log(
+    `    ✅ Registered ${registeredAddresses.length} sandbox accounts`,
+  );
   for (const addr of registeredAddresses) {
     console.log(`       - ${addr.toString()}`);
   }
@@ -127,10 +137,14 @@ async function main() {
   const secret = Fr.random();
   const salt = Fr.random();
   const accountManager = await wallet.createSchnorrAccount(secret, salt);
-  console.log(`    ✅ New account created: ${accountManager.address.toString()}`);
+  console.log(
+    `    ✅ New account created: ${accountManager.address.toString()}`,
+  );
 
   console.log("5.2 Deploying account (this triggers remote proving!)...");
-  console.log("    ⏳ This may take a while as proofs are generated remotely...");
+  console.log(
+    "    ⏳ This may take a while as proofs are generated remotely...",
+  );
 
   const startTime = Date.now();
   try {
@@ -138,7 +152,7 @@ async function main() {
     // Deploy with self-payment (from: AztecAddress.ZERO means self-deploy)
     const deployedContract = await deployMethod.send({
       from: registeredAddresses[0], // Use first sandbox account to pay
-      skipClassPublication: true,   // Class already published
+      skipClassPublication: true, // Class already published
     });
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -171,7 +185,9 @@ async function main() {
   console.log("   ✅ Sandbox accounts registered");
   console.log("   ✅ New account deployed with remote proving");
   console.log("");
-  console.log("   TeeRexProver is fully working with Aztec 4.0.0-nightly.20260204!");
+  console.log(
+    "   TeeRexProver is fully working with Aztec 4.0.0-nightly.20260204!",
+  );
   console.log("═══════════════════════════════════════════════════════════");
 }
 

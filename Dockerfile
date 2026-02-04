@@ -1,26 +1,28 @@
-FROM ubuntu:24.04
+FROM oven/bun:1.3-debian
 
-# system dependencies
-RUN apt update && apt install -y curl git build-essential libc++-dev python3 && rm -rf /var/lib/apt/lists/*
-
-# node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g pnpm
-
-# Note: bb native binary is no longer needed - prover uses bb.js (WASM) internally
+# system dependencies for native modules
+RUN apt update && apt install -y git build-essential libc++-dev python3 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Copy workspace config first for layer caching
+COPY package.json bun.lock ./
+COPY sdk/package.json ./sdk/
+COPY server/package.json ./server/
+
+# Install dependencies
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
-RUN pnpm install --frozen-lockfile
+# Create symlinks for workspace module resolution
+RUN ln -sf /app/node_modules /app/sdk/node_modules && \
+    ln -sf /app/node_modules /app/server/node_modules
 
-# Expose port (adjust if your app uses a different port)
 EXPOSE 80
 ENV PORT=80
 
-# Start the application
+# Run the server
 WORKDIR /app/server
-CMD ["pnpm", "start"]
+CMD ["bun", "run", "src/index.ts"]
