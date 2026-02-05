@@ -4,6 +4,9 @@
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
 
+    // Bun types for bun:test, Bun.spawn, etc.
+    "types": ["bun-types"],
+
     // compatibility
     "esModuleInterop": true,
     "resolveJsonModule": true,

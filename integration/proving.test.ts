@@ -1,25 +1,14 @@
 /**
  * Proving flow integration tests
  *
- * These tests verify the full proving flow:
- * 1. TeeRexProver creation
- * 2. TestWallet integration
- * 3. Account registration
- * 4. Account deployment with remote proving
- *
- * Services are automatically started if not running.
+ * Services are automatically started via globalSetup.ts preload.
+ * Tests FAIL if services are not available.
  */
 
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import {
-  config,
-  services,
-  allServicesAvailable,
-  detectAndStartServices,
-  cleanupServices,
-} from "./setup";
+import { describe, test, expect, beforeAll } from "bun:test";
+import { config, services } from "./globalSetup";
 
-// Lazy-loaded modules (to avoid import errors when services unavailable)
+// Lazy-loaded modules
 let createAztecNodeClient: typeof import("@aztec/aztec.js/node").createAztecNodeClient;
 let TestWallet: typeof import("@aztec/test-wallet/server").TestWallet;
 let registerInitialLocalNetworkAccountsInWallet: typeof import("@aztec/test-wallet/server").registerInitialLocalNetworkAccountsInWallet;
@@ -34,16 +23,14 @@ let prover: InstanceType<typeof TeeRexProver>;
 let wallet: InstanceType<typeof TestWallet>;
 let registeredAddresses: any[];
 
-// Start services before running tests
+// Load modules before tests
 beforeAll(async () => {
-  await detectAndStartServices();
-
-  if (!allServicesAvailable()) {
-    console.log("\n⚠️  Skipping proving tests - services not available\n");
+  // Services must be available - tests will fail otherwise
+  if (!services.aztecNode || !services.teeRexServer) {
+    console.log("\n❌ Services not available - tests will fail\n");
     return;
   }
 
-  // Load modules dynamically
   const aztecNode = await import("@aztec/aztec.js/node");
   createAztecNodeClient = aztecNode.createAztecNodeClient;
 
@@ -63,18 +50,10 @@ beforeAll(async () => {
   ProvingMode = teeRex.ProvingMode;
 });
 
-// Clean up services after tests
-afterAll(async () => {
-  await cleanupServices();
-});
-
 describe("TeeRexProver Integration", () => {
   describe("Prover Creation", () => {
-    test("should create TeeRexProver with remote mode", async () => {
-      if (!allServicesAvailable()) {
-        console.log("   [skipped - services not available]");
-        return;
-      }
+    test("should create TeeRexProver with remote mode", () => {
+      expect(services.aztecNode && services.teeRexServer).toBe(true);
 
       prover = new TeeRexProver(config.teeRexUrl, new WASMSimulator());
       prover.setProvingMode(ProvingMode.remote);
@@ -86,10 +65,7 @@ describe("TeeRexProver Integration", () => {
 
   describe("Aztec Node Connection", () => {
     test("should connect to Aztec node", async () => {
-      if (!allServicesAvailable()) {
-        console.log("   [skipped - services not available]");
-        return;
-      }
+      expect(services.aztecNode && services.teeRexServer).toBe(true);
 
       node = createAztecNodeClient(config.nodeUrl);
       const nodeInfo = await node.getNodeInfo();
@@ -102,10 +78,9 @@ describe("TeeRexProver Integration", () => {
 
   describe("TestWallet Integration", () => {
     test("should create TestWallet with TeeRexProver", async () => {
-      if (!allServicesAvailable() || !node || !prover) {
-        console.log("   [skipped - prerequisites not met]");
-        return;
-      }
+      expect(services.aztecNode && services.teeRexServer).toBe(true);
+      expect(node).toBeDefined();
+      expect(prover).toBeDefined();
 
       wallet = await TestWallet.create(
         node,
@@ -121,10 +96,8 @@ describe("TeeRexProver Integration", () => {
     });
 
     test("should register sandbox accounts", async () => {
-      if (!allServicesAvailable() || !wallet) {
-        console.log("   [skipped - prerequisites not met]");
-        return;
-      }
+      expect(services.aztecNode && services.teeRexServer).toBe(true);
+      expect(wallet).toBeDefined();
 
       registeredAddresses =
         await registerInitialLocalNetworkAccountsInWallet(wallet);
@@ -141,10 +114,9 @@ describe("TeeRexProver Integration", () => {
     test(
       "should deploy account with remote proving",
       async () => {
-        if (!allServicesAvailable() || !wallet || !registeredAddresses) {
-          console.log("   [skipped - prerequisites not met]");
-          return;
-        }
+        expect(services.aztecNode && services.teeRexServer).toBe(true);
+        expect(wallet).toBeDefined();
+        expect(registeredAddresses).toBeDefined();
 
         console.log("   Creating new Schnorr account...");
         const secret = Fr.random();
@@ -152,11 +124,9 @@ describe("TeeRexProver Integration", () => {
         const accountManager = await wallet.createSchnorrAccount(secret, salt);
 
         expect(accountManager).toBeDefined();
-        expect(accountManager.address).toBeDefined();
         console.log(`   Account address: ${accountManager.address.toString()}`);
 
         console.log("   Deploying account (triggers remote proving)...");
-        console.log("   ⏳ This may take a while...");
 
         const startTime = Date.now();
         const deployMethod = await accountManager.getDeployMethod();
@@ -167,14 +137,12 @@ describe("TeeRexProver Integration", () => {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
         expect(deployedContract).toBeDefined();
-        expect(deployedContract.address).toBeDefined();
 
         console.log(`   ✅ Account deployed successfully!`);
         console.log(`   📜 Contract: ${deployedContract.address?.toString()}`);
         console.log(`   ⏱️  Time: ${elapsed}s`);
       },
-      // 10 minute timeout for proving
-      600000,
+      600000, // 10 minute timeout
     );
   });
 });
@@ -182,28 +150,11 @@ describe("TeeRexProver Integration", () => {
 describe("Integration Test Summary", () => {
   test("reports final status", () => {
     console.log("\n═══════════════════════════════════════════════════════════");
-
-    if (allServicesAvailable()) {
-      console.log("🎉 Integration tests completed!");
-      console.log("═══════════════════════════════════════════════════════════");
-      console.log("");
-      console.log("   ✅ Aztec node connected");
-      console.log("   ✅ Tee-rex server connected");
-      console.log("   ✅ TeeRexProver created with remote mode");
-      console.log("   ✅ TestWallet created with TeeRexProver backend");
-      console.log("   ✅ Sandbox accounts registered");
-      console.log("   ✅ Account deployed with remote proving");
-    } else {
-      console.log("⚠️  Integration tests skipped - services not available");
-      console.log("═══════════════════════════════════════════════════════════");
-      console.log("");
-      console.log("   Services could not be started automatically.");
-      console.log("   Make sure 'aztec' CLI is installed:");
-      console.log("   curl -fsSL https://install.aztec.network | bash");
-    }
-
-    console.log("");
+    console.log("🎉 Integration tests completed!");
     console.log("═══════════════════════════════════════════════════════════\n");
-    expect(true).toBe(true);
+
+    // Final assertion - all services must have been available
+    expect(services.aztecNode).toBe(true);
+    expect(services.teeRexServer).toBe(true);
   });
 });

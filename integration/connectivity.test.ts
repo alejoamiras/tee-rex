@@ -1,39 +1,23 @@
 /**
  * Connectivity tests for integration test prerequisites
  *
- * These tests verify that required services are available.
- * Services are automatically started if not running.
+ * Services are automatically started via globalSetup.ts preload.
+ * Tests FAIL if services cannot be started - this is intentional to ensure
+ * the integration environment is properly configured.
  */
 
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import {
-  config,
-  services,
-  detectAndStartServices,
-  cleanupServices,
-} from "./setup";
-
-// Start services before running tests
-beforeAll(async () => {
-  await detectAndStartServices();
-});
-
-// Clean up services after tests
-afterAll(async () => {
-  await cleanupServices();
-});
+import { describe, test, expect } from "bun:test";
+import { config, services } from "./globalSetup";
 
 describe("Service Connectivity", () => {
   describe("Aztec Node", () => {
-    test("should be available", async () => {
+    test("should be available", () => {
       expect(services.aztecNode).toBe(true);
+      console.log("   ✅ Aztec node is available");
     });
 
     test("should return node info", async () => {
-      if (!services.aztecNode) {
-        console.log("   [skipped - Aztec node not available]");
-        return;
-      }
+      expect(services.aztecNode).toBe(true);
 
       const { createAztecNodeClient } = await import("@aztec/aztec.js/node");
       const node = createAztecNodeClient(config.nodeUrl);
@@ -46,15 +30,13 @@ describe("Service Connectivity", () => {
   });
 
   describe("Tee-Rex Server", () => {
-    test("should be available", async () => {
+    test("should be available", () => {
       expect(services.teeRexServer).toBe(true);
+      console.log("   ✅ Tee-rex server is available");
     });
 
     test("should return encryption public key", async () => {
-      if (!services.teeRexServer) {
-        console.log("   [skipped - Tee-rex server not available]");
-        return;
-      }
+      expect(services.teeRexServer).toBe(true);
 
       const response = await fetch(
         `${config.teeRexUrl}/encryption-public-key`,
@@ -67,7 +49,7 @@ describe("Service Connectivity", () => {
   });
 
   describe("Service Summary", () => {
-    test("reports service availability", () => {
+    test("all services must be available", () => {
       console.log("\n📊 Service Status:");
       console.log(
         `   Aztec Node:     ${services.aztecNode ? "✅ Available" : "❌ Not available"}`,
@@ -76,16 +58,14 @@ describe("Service Connectivity", () => {
         `   Tee-Rex Server: ${services.teeRexServer ? "✅ Available" : "❌ Not available"}`,
       );
       console.log(
-        `   Auto-started:   ${services.servicesStarted ? "Yes" : "No (already running)"}`,
+        `   Auto-started:   ${services.servicesStarted ? "Yes" : "No"}`,
       );
 
-      if (services.aztecNode && services.teeRexServer) {
-        console.log("\n   ✅ All services available - proving tests will run!\n");
-      } else {
-        console.log("\n   ❌ Some services missing - proving tests will fail\n");
-      }
+      // Fail if any service is missing
+      expect(services.aztecNode).toBe(true);
+      expect(services.teeRexServer).toBe(true);
 
-      expect(true).toBe(true);
+      console.log("\n   ✅ All services available\n");
     });
   });
 });
