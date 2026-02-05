@@ -19,3 +19,6 @@ cache
 
 # Bun
 .bun
+
+# Benchmark results (keep .gitkeep)
+benchmarks/results/*.json
