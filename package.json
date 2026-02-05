@@ -1,6 +1,6 @@
 {
   "private": true,
-  "workspaces": ["sdk", "server", "integration"],
+  "workspaces": ["sdk", "server", "integration", "benchmarks"],
   "scripts": {
     "build": "docker build -t tee-rex --platform linux/amd64 .",
     "dev": "bun run --cwd server dev",
@@ -10,7 +10,9 @@
     "test:unit": "bun run --cwd sdk test:unit",
     "test:integration": "bun run --cwd integration test",
     "test:all": "bun run test && bun run test:integration",
-    "sdk:build": "bun run --cwd sdk build"
+    "sdk:build": "bun run --cwd sdk build",
+    "benchmark": "bun run --cwd benchmarks benchmark",
+    "benchmark:compare": "bun run --cwd benchmarks compare"
   },
   "devDependencies": {
     "bun-types": "^1.3.8"

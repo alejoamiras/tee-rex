@@ -1,0 +1,15 @@
+{
+  "name": "@nemi-fi/tee-rex-benchmarks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "benchmark": "bun run proving.ts",
+    "compare": "bun run compare.ts"
+  },
+  "devDependencies": {
+    "@aztec/aztec.js": "4.0.0-nightly.20260204",
+    "@aztec/simulator": "4.0.0-nightly.20260204",
+    "@aztec/test-wallet": "4.0.0-nightly.20260204",
+    "@nemi-fi/tee-rex": "workspace:*"
+  }
+}
