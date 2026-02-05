@@ -1,18 +1,18 @@
 /**
  * Service management for integration tests
  *
- * Automatically starts and stops Aztec sandbox and tee-rex server.
+ * - Aztec sandbox: Must be started manually (complex infrastructure)
+ *   Run: aztec start --sandbox
+ * - Tee-rex server: Auto-started by tests
  */
 
 import { spawn, type Subprocess } from "bun";
 
 export interface ManagedServices {
-  aztecProcess: Subprocess | null;
   serverProcess: Subprocess | null;
 }
 
 const services: ManagedServices = {
-  aztecProcess: null,
   serverProcess: null,
 };
 
@@ -48,46 +48,15 @@ async function waitForService(
 }
 
 /**
- * Start the Aztec sandbox
+ * Check if the Aztec sandbox is running
  */
-export async function startAztecSandbox(): Promise<boolean> {
-  console.log("\n🚀 Starting Aztec sandbox...");
-
-  // Check if already running
+export async function checkAztecSandbox(): Promise<boolean> {
   try {
     const response = await fetch("http://localhost:8080/status", {
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(5000),
     });
-    if (response.ok) {
-      console.log("   ℹ️  Aztec sandbox already running");
-      return true;
-    }
+    return response.ok;
   } catch {
-    // Not running, we'll start it
-  }
-
-  try {
-    services.aztecProcess = spawn({
-      cmd: ["aztec", "start", "--sandbox"],
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    // Wait for sandbox to be ready
-    const ready = await waitForService(
-      "http://localhost:8080/status",
-      "Aztec sandbox",
-      180000, // 3 minutes for sandbox startup
-    );
-
-    if (!ready && services.aztecProcess) {
-      services.aztecProcess.kill();
-      services.aztecProcess = null;
-    }
-
-    return ready;
-  } catch (error) {
-    console.log(`   ❌ Failed to start Aztec sandbox: ${error}`);
     return false;
   }
 }
@@ -144,23 +113,34 @@ export async function startTeeRexServer(): Promise<boolean> {
 
 /**
  * Start all services needed for integration tests
+ *
+ * Note: Aztec sandbox must be started manually before running tests.
+ * Run: aztec start --sandbox
  */
 export async function startAllServices(): Promise<boolean> {
-  const aztecReady = await startAztecSandbox();
+  // Check if Aztec sandbox is running (must be started manually)
+  console.log("\n🔍 Checking Aztec sandbox...");
+  const aztecReady = await checkAztecSandbox();
   if (!aztecReady) {
-    console.log("\n❌ Failed to start Aztec sandbox");
-    console.log("   Make sure 'aztec' CLI is installed and in PATH");
-    console.log("   Install with: curl -fsSL https://install.aztec.network | bash");
+    console.log("   ❌ Aztec sandbox is NOT running");
+    console.log("");
+    console.log("   Please start it manually in another terminal:");
+    console.log("   $ aztec start --sandbox");
+    console.log("");
+    console.log("   If you don't have aztec installed:");
+    console.log("   $ curl -fsSL https://install.aztec.network | bash");
+    console.log("");
     return false;
   }
+  console.log("   ✅ Aztec sandbox is running");
 
+  // Start tee-rex server (auto-started)
   const serverReady = await startTeeRexServer();
   if (!serverReady) {
-    console.log("\n❌ Failed to start tee-rex server");
     return false;
   }
 
-  console.log("\n✅ All services started successfully\n");
+  console.log("\n✅ All services ready\n");
   return true;
 }
 
@@ -176,12 +156,6 @@ export async function stopAllServices(): Promise<void> {
     services.serverProcess = null;
   }
 
-  if (services.aztecProcess) {
-    console.log("   Stopping Aztec sandbox...");
-    services.aztecProcess.kill();
-    services.aztecProcess = null;
-  }
-
   // Give processes time to clean up
   await Bun.sleep(1000);
   console.log("   ✅ Services stopped\n");
@@ -191,5 +165,5 @@ export async function stopAllServices(): Promise<void> {
  * Check if services were started by us (vs already running)
  */
 export function hasOwnedProcesses(): boolean {
-  return services.aztecProcess !== null || services.serverProcess !== null;
+  return services.serverProcess !== null;
 }
