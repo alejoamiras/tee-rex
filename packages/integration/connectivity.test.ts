@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { config, services } from "./globalSetup";
 
 describe("Service Connectivity", () => {
@@ -19,7 +20,6 @@ describe("Service Connectivity", () => {
     test("should return node info", async () => {
       expect(services.aztecNode).toBe(true);
 
-      const { createAztecNodeClient } = await import("@aztec/aztec.js/node");
       const node = createAztecNodeClient(config.nodeUrl);
       const nodeInfo = await node.getNodeInfo();
 

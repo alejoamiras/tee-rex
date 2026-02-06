@@ -8,49 +8,19 @@
  * Services are automatically started via globalSetup.ts preload.
  */
 
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { Fr } from "@aztec/aztec.js/fields";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { WASMSimulator } from "@aztec/simulator/client";
+import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
+import { ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 import { config, services } from "./globalSetup";
 
-// Lazy-loaded modules
-let createAztecNodeClient: typeof import("@aztec/aztec.js/node").createAztecNodeClient;
-let TestWallet: typeof import("@aztec/test-wallet/server").TestWallet;
-let registerInitialLocalNetworkAccountsInWallet: typeof import("@aztec/test-wallet/server").registerInitialLocalNetworkAccountsInWallet;
-let WASMSimulator: typeof import("@aztec/simulator/client").WASMSimulator;
-let Fr: typeof import("@aztec/aztec.js/fields").Fr;
-let TeeRexProver: typeof import("@nemi-fi/tee-rex").TeeRexProver;
-let ProvingMode: typeof import("@nemi-fi/tee-rex").ProvingMode;
-
 // Shared state across tests
-let node: Awaited<ReturnType<typeof createAztecNodeClient>>;
-let prover: InstanceType<typeof TeeRexProver>;
-let wallet: InstanceType<typeof TestWallet>;
+let node: ReturnType<typeof createAztecNodeClient>;
+let prover: TeeRexProver;
+let wallet: TestWallet;
 let registeredAddresses: any[];
-
-// Load modules before tests
-beforeAll(async () => {
-  if (!services.aztecNode || !services.teeRexServer) {
-    console.log("\n❌ Services not available - tests will fail\n");
-    return;
-  }
-
-  const aztecNode = await import("@aztec/aztec.js/node");
-  createAztecNodeClient = aztecNode.createAztecNodeClient;
-
-  const testWallet = await import("@aztec/test-wallet/server");
-  TestWallet = testWallet.TestWallet;
-  registerInitialLocalNetworkAccountsInWallet =
-    testWallet.registerInitialLocalNetworkAccountsInWallet;
-
-  const simulator = await import("@aztec/simulator/client");
-  WASMSimulator = simulator.WASMSimulator;
-
-  const fields = await import("@aztec/aztec.js/fields");
-  Fr = fields.Fr;
-
-  const teeRex = await import("@nemi-fi/tee-rex");
-  TeeRexProver = teeRex.TeeRexProver;
-  ProvingMode = teeRex.ProvingMode;
-});
 
 describe("Mode Switching", () => {
   describe("Setup", () => {
