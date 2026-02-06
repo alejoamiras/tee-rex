@@ -5,7 +5,9 @@
   "scripts": {
     "test": "bun test",
     "test:connectivity": "bun test connectivity.test.ts",
-    "test:proving": "bun test proving.test.ts"
+    "test:remote": "bun test remote-proving.test.ts",
+    "test:local": "bun test local-proving.test.ts",
+    "test:mode-switching": "bun test mode-switching.test.ts"
   },
   "devDependencies": {
     "@aztec/aztec.js": "4.0.0-nightly.20260204",
