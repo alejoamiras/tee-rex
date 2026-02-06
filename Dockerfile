@@ -7,8 +7,8 @@ WORKDIR /app
 
 # Copy workspace config first for layer caching
 COPY package.json bun.lock ./
-COPY sdk/package.json ./sdk/
-COPY server/package.json ./server/
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/server/package.json ./packages/server/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
@@ -17,12 +17,12 @@ RUN bun install --frozen-lockfile
 COPY . .
 
 # Create symlinks for workspace module resolution
-RUN ln -sf /app/node_modules /app/sdk/node_modules && \
-    ln -sf /app/node_modules /app/server/node_modules
+RUN ln -sf /app/node_modules /app/packages/sdk/node_modules && \
+    ln -sf /app/node_modules /app/packages/server/node_modules
 
 EXPOSE 80
 ENV PORT=80
 
 # Run the server
-WORKDIR /app/server
+WORKDIR /app/packages/server
 CMD ["bun", "run", "src/index.ts"]

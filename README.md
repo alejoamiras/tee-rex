@@ -8,13 +8,13 @@
   </p>
 </div>
 
-Prove [Aztec](https://aztec.network) transactions in a TEE. Read the [SDK docs](sdk/README.md) to get started.
+Prove [Aztec](https://aztec.network) transactions in a TEE. Read the [SDK docs](packages/sdk/README.md) to get started.
 
 ## Features
 
 - Delegate Aztec transaction proving to a TEE
 - Encrypt sensitive data with TEE-generated encryptions keys
-- Easy to plug into your PXE ([SDK docs](sdk/README.md))
+- Easy to plug into your PXE ([SDK docs](packages/sdk/README.md))
 - Use a hosted TEE or run your own
 - Fallback to local proving if the TEE is not available
 

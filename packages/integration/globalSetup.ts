@@ -5,11 +5,7 @@
  */
 
 import { expect } from "bun:test";
-import {
-  startAllServices,
-  stopAllServices,
-  hasOwnedProcesses,
-} from "./services";
+import { hasOwnedProcesses, startAllServices, stopAllServices } from "./services";
 
 // Patch expect for @aztec/foundation compatibility
 if (!(expect as any).addEqualityTesters) {
@@ -70,10 +66,7 @@ async function globalSetup(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════════");
 
   // Check if services are already running
-  const [aztecNode, teeRexServer] = await Promise.all([
-    checkAztecNode(),
-    checkTeeRexServer(),
-  ]);
+  const [aztecNode, teeRexServer] = await Promise.all([checkAztecNode(), checkTeeRexServer()]);
 
   if (aztecNode && teeRexServer) {
     console.log("\n✅ All services already running\n");
@@ -137,6 +130,7 @@ process.on("SIGTERM", async () => {
 
 // Register afterAll at the global level for cleanup
 import { afterAll } from "bun:test";
+
 afterAll(async () => {
   await globalTeardown();
 });

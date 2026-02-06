@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 
 // Patch expect for @aztec/foundation compatibility BEFORE importing @aztec modules
 // @aztec/foundation checks if expect.addEqualityTesters exists (vitest API)
@@ -7,10 +7,7 @@ if (!(expect as any).addEqualityTesters) {
 }
 
 // Also patch globalThis for modules that check there
-if (
-  (globalThis as any).expect &&
-  !(globalThis as any).expect.addEqualityTesters
-) {
+if ((globalThis as any).expect && !(globalThis as any).expect.addEqualityTesters) {
   (globalThis as any).expect.addEqualityTesters = () => {};
 }
 
@@ -30,10 +27,7 @@ beforeAll(async () => {
 
 describe("TeeRexProver", () => {
   test("can instantiate with correct proving modes", () => {
-    const prover = new TeeRexProver(
-      "http://localhost:4000",
-      new WASMSimulator(),
-    );
+    const prover = new TeeRexProver("http://localhost:4000", new WASMSimulator());
 
     // Default mode should be remote
     expect(prover).toBeDefined();

@@ -1,6 +1,6 @@
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
-import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
 import { WASMSimulator } from "@aztec/simulator/client";
+import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
 import { lazyValue } from "./utils.js";
 
 export class ProverService {

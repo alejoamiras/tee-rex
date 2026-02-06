@@ -1,0 +1,52 @@
+name: CI - SDK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/sdk/**"
+      - "tsconfig.json"
+      - "biome.json"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/ci-sdk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/sdk/**"
+      - "tsconfig.json"
+      - "biome.json"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/ci-sdk.yml"
+
+jobs:
+  test:
+    name: Lint, Typecheck & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Biome check
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run --cwd packages/sdk test:lint
+
+      - name: Unit tests
+        run: bun run --cwd packages/sdk test:unit

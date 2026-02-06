@@ -21,4 +21,4 @@ cache
 .bun
 
 # Benchmark results (keep .gitkeep)
-benchmarks/results/*.json
+packages/benchmarks/results/*.json
