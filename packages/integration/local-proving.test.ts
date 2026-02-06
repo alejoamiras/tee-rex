@@ -13,8 +13,11 @@ import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
+import { getLogger } from "@logtape/logtape";
 import { ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 import { config, services } from "./globalSetup";
+
+const logger = getLogger(["tee-rex", "integration", "local-proving"]);
 
 // Shared state across tests
 let node: ReturnType<typeof createAztecNodeClient>;
@@ -32,7 +35,7 @@ describe("TeeRexProver Local Proving", () => {
       prover.setProvingMode(ProvingMode.local);
 
       expect(prover).toBeDefined();
-      console.log("   ✅ TeeRexProver created with local mode");
+      logger.info("TeeRexProver created with local mode");
     });
 
     test("should connect to Aztec node", async () => {
@@ -43,7 +46,7 @@ describe("TeeRexProver Local Proving", () => {
 
       expect(nodeInfo).toBeDefined();
       expect(nodeInfo.l1ChainId).toBeDefined();
-      console.log(`   ✅ Connected to Aztec node (chain: ${nodeInfo.l1ChainId})`);
+      logger.info("Connected to Aztec node", { chainId: nodeInfo.l1ChainId });
     });
   });
 
@@ -63,7 +66,7 @@ describe("TeeRexProver Local Proving", () => {
       );
 
       expect(wallet).toBeDefined();
-      console.log("   ✅ TestWallet created with TeeRexProver (local mode)");
+      logger.info("TestWallet created with TeeRexProver (local mode)");
     });
 
     test("should register sandbox accounts", async () => {
@@ -74,7 +77,7 @@ describe("TeeRexProver Local Proving", () => {
 
       expect(registeredAddresses).toBeDefined();
       expect(registeredAddresses.length).toBeGreaterThan(0);
-      console.log(`   ✅ Registered ${registeredAddresses.length} sandbox accounts`);
+      logger.info("Registered sandbox accounts", { count: registeredAddresses.length });
     });
   });
 
@@ -84,15 +87,15 @@ describe("TeeRexProver Local Proving", () => {
       expect(wallet).toBeDefined();
       expect(registeredAddresses).toBeDefined();
 
-      console.log("   Creating new Schnorr account...");
+      logger.debug("Creating new Schnorr account");
       const secret = Fr.random();
       const salt = Fr.random();
       const accountManager = await wallet.createSchnorrAccount(secret, salt);
 
       expect(accountManager).toBeDefined();
-      console.log(`   Account address: ${accountManager.address.toString()}`);
+      logger.debug("Account created", { address: accountManager.address.toString() });
 
-      console.log("   Deploying account (triggers local proving)...");
+      logger.debug("Deploying account (local proving)");
 
       const startTime = Date.now();
       const deployMethod = await accountManager.getDeployMethod();
@@ -104,9 +107,10 @@ describe("TeeRexProver Local Proving", () => {
 
       expect(deployedContract).toBeDefined();
 
-      console.log("   ✅ Account deployed with local proving!");
-      console.log(`   📜 Contract: ${deployedContract.address?.toString()}`);
-      console.log(`   ⏱️  Time: ${elapsed}s`);
+      logger.info("Account deployed with local proving", {
+        contract: deployedContract.address?.toString(),
+        durationSec: elapsed,
+      });
     }, 600000); // 10 minute timeout — local proving is slower
   });
 });

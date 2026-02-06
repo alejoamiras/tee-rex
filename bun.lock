@@ -18,6 +18,7 @@
         "@aztec/aztec.js": "4.0.0-nightly.20260204",
         "@aztec/simulator": "4.0.0-nightly.20260204",
         "@aztec/test-wallet": "4.0.0-nightly.20260204",
+        "@logtape/logtape": "^2.0",
         "@nemi-fi/tee-rex": "workspace:*",
       },
     },
@@ -30,6 +31,7 @@
         "@aztec/noir-acvm_js": "4.0.0-nightly.20260204",
         "@aztec/noir-noirc_abi": "4.0.0-nightly.20260204",
         "@aztec/stdlib": "4.0.0-nightly.20260204",
+        "@logtape/logtape": "^2.0",
         "ky": "^1.7.1",
         "ms": "^2.1.3",
         "openpgp": "6.1.1",
@@ -53,6 +55,8 @@
         "@aztec/bb-prover": "4.0.0-nightly.20260204",
         "@aztec/simulator": "4.0.0-nightly.20260204",
         "@aztec/stdlib": "4.0.0-nightly.20260204",
+        "@logtape/express": "^2.0",
+        "@logtape/logtape": "^2.0",
         "cors": "^2.8.5",
         "express": "^5.1.0",
         "ms": "^2.1.3",
@@ -61,6 +65,7 @@
         "zod": "^3.23.8",
       },
       "devDependencies": {
+        "@logtape/pretty": "^2.0",
         "@types/cors": "^2.8.17",
         "@types/express": "^5.0.1",
         "@types/ms": "^0.7.34",
@@ -318,6 +323,12 @@
     "@lmdb/lmdb-win32-arm64": ["@lmdb/lmdb-win32-arm64@3.5.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-50v0O1Lt37cwrmR9vWZK5hRW0Aw+KEmxJJ75fge/zIYdvNKB/0bSMSVR5Uc2OV9JhosIUyklOmrEvavwNJ8D6w=="],
 
     "@lmdb/lmdb-win32-x64": ["@lmdb/lmdb-win32-x64@3.5.1", "", { "os": "win32", "cpu": "x64" }, "sha512-qwosvPyl+zpUlp3gRb7UcJ3H8S28XHCzkv0Y0EgQToXjQP91ZD67EHSCDmaLjtKhe+GVIW5om1KUpzVLA0l6pg=="],
+
+    "@logtape/express": ["@logtape/express@2.0.2", "", { "peerDependencies": { "@logtape/logtape": "^2.0.2", "express": "^4.0.0 || ^5.0.0" } }, "sha512-WvLPy1Hj10ci/RMuGpCx92Cu3AzNretxB0KEn5vW0qBFGjC6LyqL94yoWLc2wFtBPjZ460XrEjj8etDI+Oc1mA=="],
+
+    "@logtape/logtape": ["@logtape/logtape@2.0.2", "", {}, "sha512-cveUBLbCMFkvkLycP/2vNWvywl47JcJbazHIju94/QNGboZ/jyYAgZIm0ZXezAOx3eIz8OG1EOZ5CuQP3+2FQg=="],
+
+    "@logtape/pretty": ["@logtape/pretty@2.0.2", "", { "peerDependencies": { "@logtape/logtape": "^2.0.2" } }, "sha512-WMKoHuaEZvJgDeciIM/OL+joDDlheuoSpkfJOuKncdim7eV6GfIh0BUxLt0Td4JJsljzt5dAttxaX0kXqE0N9Q=="],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw=="],
 

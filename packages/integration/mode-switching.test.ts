@@ -13,8 +13,11 @@ import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
+import { getLogger } from "@logtape/logtape";
 import { ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 import { config, services } from "./globalSetup";
+
+const logger = getLogger(["tee-rex", "integration", "mode-switching"]);
 
 // Shared state across tests
 let node: ReturnType<typeof createAztecNodeClient>;
@@ -31,7 +34,7 @@ describe("Mode Switching", () => {
       prover.setProvingMode(ProvingMode.remote);
 
       expect(prover).toBeDefined();
-      console.log("   ✅ TeeRexProver created in remote mode");
+      logger.info("TeeRexProver created in remote mode");
     });
 
     test("should connect to Aztec node", async () => {
@@ -41,7 +44,7 @@ describe("Mode Switching", () => {
       const nodeInfo = await node.getNodeInfo();
 
       expect(nodeInfo).toBeDefined();
-      console.log(`   ✅ Connected to Aztec node (chain: ${nodeInfo.l1ChainId})`);
+      logger.info("Connected to Aztec node", { chainId: nodeInfo.l1ChainId });
     });
 
     test("should create TestWallet and register accounts", async () => {
@@ -62,7 +65,7 @@ describe("Mode Switching", () => {
 
       expect(wallet).toBeDefined();
       expect(registeredAddresses.length).toBeGreaterThan(0);
-      console.log(`   ✅ Wallet ready with ${registeredAddresses.length} accounts`);
+      logger.info("Wallet ready", { accounts: registeredAddresses.length });
     });
   });
 
@@ -71,12 +74,12 @@ describe("Mode Switching", () => {
       expect(services.aztecNode && services.teeRexServer).toBe(true);
       expect(wallet).toBeDefined();
 
-      console.log("   [Remote Mode] Creating Schnorr account...");
+      logger.debug("Creating Schnorr account (remote mode)");
       const secret = Fr.random();
       const salt = Fr.random();
       const accountManager = await wallet.createSchnorrAccount(secret, salt);
 
-      console.log("   [Remote Mode] Deploying account...");
+      logger.debug("Deploying account (remote mode)");
       const startTime = Date.now();
       const deployMethod = await accountManager.getDeployMethod();
       const deployedContract = await deployMethod.send({
@@ -86,7 +89,7 @@ describe("Mode Switching", () => {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
       expect(deployedContract).toBeDefined();
-      console.log(`   ✅ Remote deploy: ${elapsed}s`);
+      logger.info("Remote deploy completed", { durationSec: elapsed });
     }, 600000);
 
     test("should switch to local mode and deploy second account", async () => {
@@ -94,14 +97,14 @@ describe("Mode Switching", () => {
       expect(wallet).toBeDefined();
 
       prover.setProvingMode(ProvingMode.local);
-      console.log("   Switched to local proving mode");
+      logger.info("Switched to local proving mode");
 
-      console.log("   [Local Mode] Creating Schnorr account...");
+      logger.debug("Creating Schnorr account (local mode)");
       const secret = Fr.random();
       const salt = Fr.random();
       const accountManager = await wallet.createSchnorrAccount(secret, salt);
 
-      console.log("   [Local Mode] Deploying account...");
+      logger.debug("Deploying account (local mode)");
       const startTime = Date.now();
       const deployMethod = await accountManager.getDeployMethod();
       const deployedContract = await deployMethod.send({
@@ -111,7 +114,7 @@ describe("Mode Switching", () => {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
       expect(deployedContract).toBeDefined();
-      console.log(`   ✅ Local deploy: ${elapsed}s`);
+      logger.info("Local deploy completed", { durationSec: elapsed });
     }, 600000);
   });
 });

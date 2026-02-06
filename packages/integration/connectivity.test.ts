@@ -8,13 +8,16 @@
 
 import { describe, expect, test } from "bun:test";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { getLogger } from "@logtape/logtape";
 import { config, services } from "./globalSetup";
+
+const logger = getLogger(["tee-rex", "integration", "connectivity"]);
 
 describe("Service Connectivity", () => {
   describe("Aztec Node", () => {
     test("should be available", () => {
       expect(services.aztecNode).toBe(true);
-      console.log("   ✅ Aztec node is available");
+      logger.info("Aztec node is available");
     });
 
     test("should return node info", async () => {
@@ -25,14 +28,14 @@ describe("Service Connectivity", () => {
 
       expect(nodeInfo).toBeDefined();
       expect(nodeInfo.l1ChainId).toBeDefined();
-      console.log(`   Chain ID: ${nodeInfo.l1ChainId}`);
+      logger.info("Got node info", { chainId: nodeInfo.l1ChainId });
     });
   });
 
   describe("Tee-Rex Server", () => {
     test("should be available", () => {
       expect(services.teeRexServer).toBe(true);
-      console.log("   ✅ Tee-rex server is available");
+      logger.info("Tee-rex server is available");
     });
 
     test("should return encryption public key", async () => {
@@ -48,18 +51,15 @@ describe("Service Connectivity", () => {
 
   describe("Service Summary", () => {
     test("all services must be available", () => {
-      console.log("\n📊 Service Status:");
-      console.log(`   Aztec Node:     ${services.aztecNode ? "✅ Available" : "❌ Not available"}`);
-      console.log(
-        `   Tee-Rex Server: ${services.teeRexServer ? "✅ Available" : "❌ Not available"}`,
-      );
-      console.log(`   Auto-started:   ${services.servicesStarted ? "Yes" : "No"}`);
+      logger.info("Service status", {
+        aztecNode: services.aztecNode,
+        teeRexServer: services.teeRexServer,
+        autoStarted: services.servicesStarted,
+      });
 
       // Fail if any service is missing
       expect(services.aztecNode).toBe(true);
       expect(services.teeRexServer).toBe(true);
-
-      console.log("\n   ✅ All services available\n");
     });
   });
 });

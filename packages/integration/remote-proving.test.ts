@@ -10,8 +10,11 @@ import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
+import { getLogger } from "@logtape/logtape";
 import { ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 import { config, services } from "./globalSetup";
+
+const logger = getLogger(["tee-rex", "integration", "remote-proving"]);
 
 // Shared state across tests
 let node: ReturnType<typeof createAztecNodeClient>;
@@ -28,7 +31,7 @@ describe("TeeRexProver Integration", () => {
       prover.setProvingMode(ProvingMode.remote);
 
       expect(prover).toBeDefined();
-      console.log("   ✅ TeeRexProver created with remote mode");
+      logger.info("TeeRexProver created with remote mode");
     });
   });
 
@@ -41,7 +44,7 @@ describe("TeeRexProver Integration", () => {
 
       expect(nodeInfo).toBeDefined();
       expect(nodeInfo.l1ChainId).toBeDefined();
-      console.log(`   ✅ Connected to Aztec node (chain: ${nodeInfo.l1ChainId})`);
+      logger.info("Connected to Aztec node", { chainId: nodeInfo.l1ChainId });
     });
   });
 
@@ -61,7 +64,7 @@ describe("TeeRexProver Integration", () => {
       );
 
       expect(wallet).toBeDefined();
-      console.log("   ✅ TestWallet created with TeeRexProver backend");
+      logger.info("TestWallet created with TeeRexProver backend");
     });
 
     test("should register sandbox accounts", async () => {
@@ -72,7 +75,7 @@ describe("TeeRexProver Integration", () => {
 
       expect(registeredAddresses).toBeDefined();
       expect(registeredAddresses.length).toBeGreaterThan(0);
-      console.log(`   ✅ Registered ${registeredAddresses.length} sandbox accounts`);
+      logger.info("Registered sandbox accounts", { count: registeredAddresses.length });
     });
   });
 
@@ -82,15 +85,15 @@ describe("TeeRexProver Integration", () => {
       expect(wallet).toBeDefined();
       expect(registeredAddresses).toBeDefined();
 
-      console.log("   Creating new Schnorr account...");
+      logger.debug("Creating new Schnorr account");
       const secret = Fr.random();
       const salt = Fr.random();
       const accountManager = await wallet.createSchnorrAccount(secret, salt);
 
       expect(accountManager).toBeDefined();
-      console.log(`   Account address: ${accountManager.address.toString()}`);
+      logger.debug("Account created", { address: accountManager.address.toString() });
 
-      console.log("   Deploying account (triggers remote proving)...");
+      logger.debug("Deploying account (remote proving)");
 
       const startTime = Date.now();
       const deployMethod = await accountManager.getDeployMethod();
@@ -102,21 +105,10 @@ describe("TeeRexProver Integration", () => {
 
       expect(deployedContract).toBeDefined();
 
-      console.log("   ✅ Account deployed successfully!");
-      console.log(`   📜 Contract: ${deployedContract.address?.toString()}`);
-      console.log(`   ⏱️  Time: ${elapsed}s`);
+      logger.info("Account deployed", {
+        contract: deployedContract.address?.toString(),
+        durationSec: elapsed,
+      });
     }, 600000); // 10 minute timeout
-  });
-});
-
-describe("Integration Test Summary", () => {
-  test("reports final status", () => {
-    console.log("\n═══════════════════════════════════════════════════════════");
-    console.log("🎉 Integration tests completed!");
-    console.log("═══════════════════════════════════════════════════════════\n");
-
-    // Final assertion - all services must have been available
-    expect(services.aztecNode).toBe(true);
-    expect(services.teeRexServer).toBe(true);
   });
 });

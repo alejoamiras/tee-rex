@@ -6,7 +6,10 @@
  * - Tee-rex server: `bun run src/index.ts`
  */
 
+import { getLogger } from "@logtape/logtape";
 import { type Subprocess, spawn } from "bun";
+
+const logger = getLogger(["tee-rex", "integration", "services"]);
 
 export interface ManagedServices {
   aztecProcess: Subprocess | null;
@@ -28,7 +31,7 @@ async function waitForService(
   intervalMs = 2000,
 ): Promise<boolean> {
   const startTime = Date.now();
-  console.log(`   Waiting for ${name} at ${url}...`);
+  logger.debug("Waiting for service", { name, url });
 
   while (Date.now() - startTime < timeoutMs) {
     try {
@@ -36,7 +39,7 @@ async function waitForService(
         signal: AbortSignal.timeout(5000),
       });
       if (response.ok) {
-        console.log(`   ✅ ${name} is ready`);
+        logger.info("Service ready", { name });
         return true;
       }
     } catch {
@@ -45,7 +48,7 @@ async function waitForService(
     await Bun.sleep(intervalMs);
   }
 
-  console.log(`   ❌ ${name} failed to start within ${timeoutMs / 1000}s`);
+  logger.error("Service failed to start", { name, timeoutMs });
   return false;
 }
 
@@ -108,25 +111,23 @@ function findAztecBinary(): string | null {
  * Start the Aztec local network
  */
 export async function startAztecNetwork(): Promise<boolean> {
-  console.log("\n🚀 Starting Aztec local network...");
+  logger.info("Starting Aztec local network");
 
   // Check if already running
   if (await checkAztecNode()) {
-    console.log("   ℹ️  Aztec node already running");
+    logger.info("Aztec node already running");
     return true;
   }
 
   const aztecBin = findAztecBinary();
   if (!aztecBin) {
-    console.log("   ❌ Aztec CLI not found");
-    console.log("");
-    console.log("   Install it with:");
-    console.log("   $ curl -fsSL https://install.aztec.network | bash");
-    console.log("");
+    logger.error(
+      "Aztec CLI not found. Install with: curl -fsSL https://install.aztec.network | bash",
+    );
     return false;
   }
 
-  console.log(`   Using aztec binary: ${aztecBin}`);
+  logger.debug("Using aztec binary", { path: aztecBin });
 
   try {
     services.aztecProcess = spawn({
@@ -149,7 +150,7 @@ export async function startAztecNetwork(): Promise<boolean> {
 
     return ready;
   } catch (error) {
-    console.log(`   ❌ Failed to start Aztec local network: ${error}`);
+    logger.error("Failed to start Aztec local network", { error });
     return false;
   }
 }
@@ -158,7 +159,7 @@ export async function startAztecNetwork(): Promise<boolean> {
  * Start the tee-rex server
  */
 export async function startTeeRexServer(): Promise<boolean> {
-  console.log("\n🚀 Starting tee-rex server...");
+  logger.info("Starting tee-rex server");
 
   // Check if already running
   try {
@@ -166,7 +167,7 @@ export async function startTeeRexServer(): Promise<boolean> {
       signal: AbortSignal.timeout(2000),
     });
     if (response.ok) {
-      console.log("   ℹ️  Tee-rex server already running");
+      logger.info("Tee-rex server already running");
       return true;
     }
   } catch {
@@ -199,7 +200,7 @@ export async function startTeeRexServer(): Promise<boolean> {
 
     return ready;
   } catch (error) {
-    console.log(`   ❌ Failed to start tee-rex server: ${error}`);
+    logger.error("Failed to start tee-rex server", { error });
     return false;
   }
 }
@@ -220,7 +221,7 @@ export async function startAllServices(): Promise<boolean> {
     return false;
   }
 
-  console.log("\n✅ All services ready\n");
+  logger.info("All services ready");
   return true;
 }
 
@@ -228,23 +229,23 @@ export async function startAllServices(): Promise<boolean> {
  * Stop all managed services
  */
 export async function stopAllServices(): Promise<void> {
-  console.log("\n🛑 Stopping services...");
+  logger.info("Stopping services");
 
   if (services.serverProcess) {
-    console.log("   Stopping tee-rex server...");
+    logger.debug("Stopping tee-rex server");
     services.serverProcess.kill();
     services.serverProcess = null;
   }
 
   if (services.aztecProcess) {
-    console.log("   Stopping Aztec local network...");
+    logger.debug("Stopping Aztec local network");
     services.aztecProcess.kill();
     services.aztecProcess = null;
   }
 
   // Give processes time to clean up
   await Bun.sleep(1000);
-  console.log("   ✅ Services stopped\n");
+  logger.info("Services stopped");
 }
 
 /**
