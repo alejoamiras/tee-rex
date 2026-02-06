@@ -40,6 +40,15 @@ This document outlines the planned improvements for the tee-rex project.
 - If a step breaks something, fix it before continuing — don't accumulate broken state
 - Never make large, multi-file changes in a single step when smaller steps are possible
 
+### 3b. Lesson tracking (CRITICAL — prevents loops)
+
+When working on infrastructure, deployment, or debugging tasks:
+
+- **Before trying a new approach**: Check `lessons/` for files related to the current phase. Read them to avoid repeating past mistakes.
+- **After each attempt**: Record the approach and outcome in the relevant lessons file under `lessons/phase-<N>-<feature>.md`.
+- **Format**: Use a table or numbered list with columns: Attempt | Approach | Result (worked/failed/partial + details).
+- **When stuck after 3+ failed attempts**: STOP. Write down all attempts so far, save them, and either research the problem more deeply or ask the user for guidance. Do NOT keep looping with slight variations of the same broken approach.
+
 ### 4. Validation
 
 Every step must include a validation strategy. Think about how to verify the step worked:
@@ -146,11 +155,88 @@ curl -fsSL https://install.aztec.network | bash
 **Parts:**
 - **A** ✅ — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`) — 20 tests
 - **B** ✅ — E2E tests for local proving, remote proving, and mode switching — 21 tests
-- **C** — Vanilla TS + Vite demo page with a local/remote toggle and timing display
+- **C** — Demo page with three proving modes and TEE indicator
 
-**Status**: A & B complete, C not started
+**Status**: A & B complete, C partially built (has local/remote toggle, needs TEE mode)
+
+**Phase 4C Details**:
+
+The demo (`packages/demo`) already has a working Vite + Tailwind frontend with local/remote mode toggle, timing display, and log output. It needs to be extended with a **third mode button** and TEE awareness:
+
+1. **Three buttons**: Local | Remote | Remote + TEE
+   - **Local**: Proves using in-browser WASM Barretenberg (current `local` mode)
+   - **Remote**: Proves via local tee-rex server at `localhost:4000` (current `remote` mode, standard attestation)
+   - **Remote + TEE**: Proves via the Nitro Enclave server (configurable URL, requires Nitro attestation)
+2. **TEE indicator**: When using Remote + TEE, show attestation status — verified/unverified, mode (nitro/standard), PCR0 snippet
+3. **Server URL config**: Input field or env var for the TEE server URL (since it's on EC2, not localhost)
+4. **Attestation badge**: Fetch `/attestation` and display `mode: "nitro"` vs `mode: "standard"` with a visual indicator
+
+**Implementation notes**:
+- `aztec.ts` currently hardcodes `TEEREX_URL = "http://localhost:4000"` — needs to become configurable per mode
+- The SDK's `setAttestationConfig()` should be called when switching to TEE mode
+- Results panel already has local/remote cards — add a third "tee" card for side-by-side timing comparison
 
 **Planning document**: See `/plans/phase-4-testing-and-demo.md`
+
+---
+
+## Phase 5: TEE Attestation & Nitro Enclave Deployment (In Progress)
+
+**Goal**: Real TEE attestation via AWS Nitro Enclaves — SDK verifies COSE_Sign1 attestation documents, server generates them via libnsm.so FFI.
+
+**Parts:**
+- **A** ✅ — Attestation verification in SDK (`verifyNitroAttestation`, COSE_Sign1/CBOR parsing, cert chain validation)
+- **B** ✅ — Server `NitroAttestationService` with Bun FFI calls to libnsm.so
+- **C** ✅ — `Dockerfile.nitro` multi-stage build (Rust → libnsm.so, Bun builder, runtime with socat/vsock bridge)
+- **D** ✅ — AWS Nitro Enclave deployment on EC2 — working! Real attestation documents returned.
+
+**Lessons learned**: See `lessons/phase-5d-nitro-enclave-deployment.md`
+
+**Key fix**: `ifconfig lo 127.0.0.1` (not just `ip link set lo up`) — must assign the IP address, not just bring the link up.
+
+- **E** — Deployment runbook & debugging guide (`docs/nitro-deployment.md`)
+
+**Phase 5E Details**:
+
+Write a complete step-by-step runbook so any team member can deploy, debug, and tear down the Nitro Enclave from scratch. Should cover:
+
+1. **Prerequisites**: AWS CLI configured, Docker with buildx, region/account info
+2. **Infrastructure setup**: Create ECR repo, security group, IAM role + instance profile, key pair (or reuse existing)
+3. **Build & push**: `docker buildx build` for linux/amd64, ECR login, push
+4. **Launch EC2**: Instance type, AMI, user-data script, enclave options, wait for bootstrap
+5. **Build & run enclave**: `nitro-cli build-enclave`, `nitro-cli run-enclave` with correct memory/CPU, socat proxy setup
+6. **Test**: curl the attestation endpoint, verify `mode: "nitro"`
+7. **Debugging**: SSH into host, `nitro-cli console`, `nitro-cli describe-enclaves`, reading `/var/log/nitro_enclaves/`, common errors (E11, E26, E45, E51)
+8. **Iterating**: How to rebuild after code changes (push new image, terminate old enclave, rebuild EIF, relaunch)
+9. **Teardown**: Terminate instance, optionally delete infra
+10. **Cost awareness**: Instance pricing, spot instance option, don't leave running overnight
+
+Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad `user-data.sh` + this session's commands
+
+---
+
+## Phase 6: End-to-End Testing on Next-Net
+
+**Goal**: Validate the full proving flow against Aztec's next-net (nightly network) — both locally and from inside the Nitro Enclave.
+
+**Context**: So far, all testing uses `--local-network` (sandbox). We haven't tested with a real proving payload against a real network. Next-net runs the same nightly version we depend on (`4.0.0-nightly.20260204`), so it's the right target.
+
+**Parts:**
+- **A** — Local client → next-net proving (verify the SDK + local prover works against next-net)
+- **B** — Local client → TEE server (EC2 enclave) → next-net proving (full remote flow)
+- **C** — Demo frontend pointing at next-net + TEE server (visual end-to-end)
+
+**What needs to happen:**
+1. Configure `AZTEC_NODE_URL` to point at next-net (URL TBD — check with Aztec team)
+2. Test account deployment + transaction proving against next-net from local machine
+3. Test same flow but with `provingMode: "remote"` pointing at the EC2 enclave
+4. Verify attestation documents are checked in the remote flow
+5. Measure proving times: local WASM vs remote native (enclave) — this is the key metric for the show-and-tell
+
+**Risks:**
+- Next-net may have different contract class requirements or gas settings
+- Network latency (client → EC2 → next-net) could affect timeouts
+- Proving payload size over the wire (encrypted witness data) — may need to tune body size limits
 
 ---
 
@@ -161,3 +247,4 @@ curl -fsSL https://install.aztec.network | bash
 3. **Preserve functionality**: Each step should maintain backward compatibility where possible
 4. **Test at each step**: Verify the system works before moving to the next step
 5. **Document decisions**: Record why certain approaches were chosen
+6. **Track lessons**: When debugging or deploying, record every approach and its outcome in `lessons/`. Check lessons before trying new approaches. Stop after 3+ failures to reassess.

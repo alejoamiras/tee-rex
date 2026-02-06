@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "docker build -t tee-rex --platform linux/amd64 .",
+    "build:nitro": "docker build -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
     "dev": "bun run --cwd packages/server dev",
     "start": "bun run --cwd packages/server start",
     "lint": "biome check .",

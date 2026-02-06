@@ -39,7 +39,7 @@ describe("TeeRexProver", () => {
       globalThis.fetch = originalFetch;
     });
 
-    test("remote mode calls the API's encryption-public-key endpoint", async () => {
+    test("remote mode calls the API's attestation endpoint", async () => {
       const fetchedUrls: string[] = [];
 
       globalThis.fetch = mock(async (input: any) => {
@@ -60,10 +60,31 @@ describe("TeeRexProver", () => {
         // Expected — the mock doesn't return a valid response
       }
 
-      const keyEndpointCalled = fetchedUrls.some((url) =>
-        url.includes(`${API_URL}/encryption-public-key`),
+      const attestationEndpointCalled = fetchedUrls.some((url) =>
+        url.includes(`${API_URL}/attestation`),
       );
-      expect(keyEndpointCalled).toBe(true);
+      expect(attestationEndpointCalled).toBe(true);
+    });
+
+    test("requireAttestation rejects standard mode servers", async () => {
+      globalThis.fetch = mock(async (input: any) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/attestation")) {
+          return new Response(JSON.stringify({ mode: "standard", publicKey: "fake-key" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      }) as any;
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.remote);
+      prover.setAttestationConfig({ requireAttestation: true });
+
+      await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
+        "requireAttestation is enabled",
+      );
     });
 
     test("local mode calls super.createChonkProof, not the API", async () => {
