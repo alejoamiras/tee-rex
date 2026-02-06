@@ -1,18 +1,20 @@
 /**
  * Service management for integration tests
  *
- * - Aztec sandbox: Must be started manually (complex infrastructure)
- *   Run: aztec start --sandbox
- * - Tee-rex server: Auto-started by tests
+ * Both services are auto-started if not already running:
+ * - Aztec local network: `aztec start --local-network`
+ * - Tee-rex server: `bun run src/index.ts`
  */
 
 import { type Subprocess, spawn } from "bun";
 
 export interface ManagedServices {
+  aztecProcess: Subprocess | null;
   serverProcess: Subprocess | null;
 }
 
 const services: ManagedServices = {
+  aztecProcess: null,
   serverProcess: null,
 };
 
@@ -48,15 +50,106 @@ async function waitForService(
 }
 
 /**
- * Check if the Aztec sandbox is running
+ * Check if the Aztec node is running
  */
-export async function checkAztecSandbox(): Promise<boolean> {
+export async function checkAztecNode(): Promise<boolean> {
   try {
     const response = await fetch("http://localhost:8080/status", {
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
   } catch {
+    return false;
+  }
+}
+
+/**
+ * Find the aztec CLI binary
+ */
+function findAztecBinary(): string | null {
+  // Check PATH first
+  try {
+    const result = Bun.spawnSync({ cmd: ["which", "aztec"] });
+    const path = result.stdout.toString().trim();
+    if (path) return path;
+  } catch {
+    // Not in PATH
+  }
+
+  // Check common install locations
+  const home = process.env.HOME || "";
+  const candidates = [`${home}/.aztec/bin/aztec`, `${home}/.aztec/current/node_modules/.bin/aztec`];
+
+  // Also check versioned installs
+  try {
+    const versionsDir = `${home}/.aztec/versions`;
+    const entries = Array.from(new Bun.Glob("*/node_modules/.bin/aztec").scanSync(versionsDir));
+    for (const entry of entries) {
+      candidates.push(`${versionsDir}/${entry}`);
+    }
+  } catch {
+    // No versions dir
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const file = Bun.file(candidate);
+      // Check if file exists by checking size (throws if not found)
+      if (file.size > 0) return candidate;
+    } catch {
+      // Not found
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Start the Aztec local network
+ */
+export async function startAztecNetwork(): Promise<boolean> {
+  console.log("\n🚀 Starting Aztec local network...");
+
+  // Check if already running
+  if (await checkAztecNode()) {
+    console.log("   ℹ️  Aztec node already running");
+    return true;
+  }
+
+  const aztecBin = findAztecBinary();
+  if (!aztecBin) {
+    console.log("   ❌ Aztec CLI not found");
+    console.log("");
+    console.log("   Install it with:");
+    console.log("   $ curl -fsSL https://install.aztec.network | bash");
+    console.log("");
+    return false;
+  }
+
+  console.log(`   Using aztec binary: ${aztecBin}`);
+
+  try {
+    services.aztecProcess = spawn({
+      cmd: [aztecBin, "start", "--local-network"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    // Aztec network takes a while to start — wait up to 2 minutes
+    const ready = await waitForService(
+      "http://localhost:8080/status",
+      "Aztec local network",
+      120000,
+    );
+
+    if (!ready && services.aztecProcess) {
+      services.aztecProcess.kill();
+      services.aztecProcess = null;
+    }
+
+    return ready;
+  } catch (error) {
+    console.log(`   ❌ Failed to start Aztec local network: ${error}`);
     return false;
   }
 }
@@ -113,28 +206,15 @@ export async function startTeeRexServer(): Promise<boolean> {
 
 /**
  * Start all services needed for integration tests
- *
- * Note: Aztec sandbox must be started manually before running tests.
- * Run: aztec start --sandbox
  */
 export async function startAllServices(): Promise<boolean> {
-  // Check if Aztec sandbox is running (must be started manually)
-  console.log("\n🔍 Checking Aztec sandbox...");
-  const aztecReady = await checkAztecSandbox();
+  // Start Aztec local network
+  const aztecReady = await startAztecNetwork();
   if (!aztecReady) {
-    console.log("   ❌ Aztec sandbox is NOT running");
-    console.log("");
-    console.log("   Please start it manually in another terminal:");
-    console.log("   $ aztec start --sandbox");
-    console.log("");
-    console.log("   If you don't have aztec installed:");
-    console.log("   $ curl -fsSL https://install.aztec.network | bash");
-    console.log("");
     return false;
   }
-  console.log("   ✅ Aztec sandbox is running");
 
-  // Start tee-rex server (auto-started)
+  // Start tee-rex server
   const serverReady = await startTeeRexServer();
   if (!serverReady) {
     return false;
@@ -156,6 +236,12 @@ export async function stopAllServices(): Promise<void> {
     services.serverProcess = null;
   }
 
+  if (services.aztecProcess) {
+    console.log("   Stopping Aztec local network...");
+    services.aztecProcess.kill();
+    services.aztecProcess = null;
+  }
+
   // Give processes time to clean up
   await Bun.sleep(1000);
   console.log("   ✅ Services stopped\n");
@@ -165,5 +251,5 @@ export async function stopAllServices(): Promise<void> {
  * Check if services were started by us (vs already running)
  */
 export function hasOwnedProcesses(): boolean {
-  return services.serverProcess !== null;
+  return services.serverProcess !== null || services.aztecProcess !== null;
 }
