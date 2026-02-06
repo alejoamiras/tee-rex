@@ -2,15 +2,40 @@
  * Global test setup - runs once before all test files
  *
  * Starts services and registers cleanup handlers.
+ * Configures LogTape for structured logging with LOG_LEVEL env var support.
  */
 
-import { expect } from "bun:test";
+import { afterAll, expect } from "bun:test";
+import { configure, getConsoleSink, getLogger, parseLogLevel } from "@logtape/logtape";
 import { hasOwnedProcesses, startAllServices, stopAllServices } from "./services";
 
 // Patch expect for @aztec/foundation compatibility
 if (!(expect as any).addEqualityTesters) {
   (expect as any).addEqualityTesters = () => {};
 }
+
+// Configure LogTape for integration tests
+const logLevel = parseLogLevel(process.env.LOG_LEVEL || "warning");
+
+await configure({
+  sinks: {
+    console: getConsoleSink(),
+  },
+  loggers: [
+    {
+      category: ["logtape", "meta"],
+      sinks: ["console"],
+      lowestLevel: "warning",
+    },
+    {
+      category: ["tee-rex"],
+      sinks: ["console"],
+      lowestLevel: logLevel,
+    },
+  ],
+});
+
+const logger = getLogger(["tee-rex", "integration"]);
 
 // Environment configuration
 export const config = {
@@ -61,15 +86,13 @@ async function checkTeeRexServer(): Promise<boolean> {
  * Global setup - runs once before all tests
  */
 async function globalSetup(): Promise<void> {
-  console.log("═══════════════════════════════════════════════════════════");
-  console.log("Integration Test Setup");
-  console.log("═══════════════════════════════════════════════════════════");
+  logger.info("Integration test setup starting");
 
   // Check if services are already running
   const [aztecNode, teeRexServer] = await Promise.all([checkAztecNode(), checkTeeRexServer()]);
 
   if (aztecNode && teeRexServer) {
-    console.log("\n✅ All services already running\n");
+    logger.info("All services already running");
     services.aztecNode = true;
     services.teeRexServer = true;
     services.setupComplete = true;
@@ -78,7 +101,7 @@ async function globalSetup(): Promise<void> {
 
   // Start services if auto-start is enabled
   if (config.autoStart) {
-    console.log("\n📦 Services not running - starting automatically...");
+    logger.info("Services not running, starting automatically");
     const started = await startAllServices();
 
     if (started) {
@@ -86,14 +109,10 @@ async function globalSetup(): Promise<void> {
       services.teeRexServer = true;
       services.servicesStarted = true;
     } else {
-      console.log("\n❌ Failed to start services - tests will FAIL");
-      console.log("   Make sure 'aztec' CLI is installed:");
-      console.log("   curl -fsSL https://install.aztec.network | bash\n");
-      // Services remain false, tests will fail with clear assertions
+      logger.error("Failed to start services");
     }
   } else {
-    console.log("\n⚠️  Some services not available and auto-start is disabled");
-    console.log("   Tests will FAIL without services.\n");
+    logger.warn("Some services not available and auto-start is disabled");
     services.aztecNode = aztecNode;
     services.teeRexServer = teeRexServer;
   }
@@ -112,9 +131,8 @@ async function globalTeardown(): Promise<void> {
 
 // Register cleanup handlers
 process.on("exit", () => {
-  // Sync cleanup - can't use async here
   if (hasOwnedProcesses()) {
-    console.log("\n🛑 Cleaning up services...");
+    logger.info("Cleaning up services");
   }
 });
 
@@ -129,8 +147,6 @@ process.on("SIGTERM", async () => {
 });
 
 // Register afterAll at the global level for cleanup
-import { afterAll } from "bun:test";
-
 afterAll(async () => {
   await globalTeardown();
 });

@@ -10,6 +10,7 @@ import { UnreachableCaseError, type ValueOf } from "ts-essentials";
 import { joinURL } from "ufo";
 import { z } from "zod";
 import { encrypt } from "./encrypt.js";
+import { logger } from "./logger.js";
 
 export type ProvingMode = ValueOf<typeof ProvingMode>;
 export const ProvingMode = {
@@ -37,11 +38,11 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   ): Promise<ChonkProofWithPublicInputs> {
     switch (this.#provingMode) {
       case "local": {
-        console.log("using local prover");
+        logger.info("Using local prover");
         return super.createChonkProof(executionSteps);
       }
       case "remote": {
-        console.log("using remote prover");
+        logger.info("Using remote prover");
         return this.#remoteCreateChonkProof(executionSteps);
       }
       default: {
@@ -53,7 +54,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   async #remoteCreateChonkProof(
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
-    console.log("creating chonk proof", this.apiUrl);
+    logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
     const executionsStepsSerialized = executionSteps.map((step) => ({
       functionName: step.functionName,
       witness: JSON.parse(jsonStringify(step.witness)),
@@ -61,7 +62,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       vk: Base64.fromBytes(step.vk),
       timings: step.timings,
     }));
-    console.log("payload chars", JSON.stringify(executionsStepsSerialized).length);
+    logger.debug("Serialized payload", { chars: JSON.stringify(executionsStepsSerialized).length });
     const encryptionPublicKey = await this.#fetchEncryptionPublicKey();
     const encryptedData = Base64.fromBytes(
       await encrypt({
