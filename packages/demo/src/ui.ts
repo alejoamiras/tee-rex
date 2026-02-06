@@ -1,0 +1,44 @@
+export function $(id: string): HTMLElement {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`Element #${id} not found`);
+  return el;
+}
+
+export function setStatus(elementId: string, connected: boolean | null): void {
+  const el = $(elementId);
+  el.className = `status-dot ${
+    connected === null ? "status-unknown" : connected ? "status-online" : "status-offline"
+  }`;
+}
+
+let logCount = 0;
+
+export function appendLog(
+  msg: string,
+  level: "info" | "warn" | "error" | "success" = "info",
+): void {
+  const log = $("log");
+  const line = document.createElement("div");
+  const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+  const prefix =
+    level === "error" ? "ERR" : level === "warn" ? "WRN" : level === "success" ? " OK" : "   ";
+  line.className = `log-${level}`;
+  line.textContent = `${time} ${prefix}  ${msg}`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+  logCount++;
+  $("log-count").textContent = `${logCount} ${logCount === 1 ? "entry" : "entries"}`;
+}
+
+export function formatDuration(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+export function startClock(): void {
+  const update = () => {
+    const now = new Date();
+    $("clock").textContent = now.toLocaleTimeString("en-US", { hour12: false });
+  };
+  update();
+  setInterval(update, 1000);
+}

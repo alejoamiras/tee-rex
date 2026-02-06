@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TEE-Rex — Proving Demo</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦖</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-gray-950 text-gray-300 min-h-screen font-mono antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- Scan-line overlay -->
+  <div class="pointer-events-none fixed inset-0 z-50 scanlines"></div>
+
+  <!-- Subtle vignette -->
+  <div class="pointer-events-none fixed inset-0 z-40 bg-[radial-gradient(ellipse_at_center,transparent_50%,rgba(0,0,0,0.4)_100%)]"></div>
+
+  <div class="relative z-10 flex items-center justify-center min-h-screen p-6">
+    <main class="w-full max-w-2xl space-y-4">
+
+      <!-- ═══ HEADER ═══ -->
+      <header class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+        <div class="border-b border-gray-800 px-4 py-1.5 flex items-center gap-2">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">sys://tee-rex/prover</span>
+          <span class="ml-auto text-[10px] text-gray-700" id="clock"></span>
+        </div>
+        <div class="px-5 py-6 text-center">
+          <h1 class="text-2xl font-bold tracking-tight text-gray-100">
+            <span class="text-emerald-400">TEE</span><span class="text-gray-500">-</span>Rex
+            <span class="inline-block ml-1 text-lg opacity-60">🦖</span>
+          </h1>
+          <p class="mt-1.5 text-xs tracking-wide text-gray-500 uppercase">
+            Compare local vs remote zero-knowledge proving
+          </p>
+        </div>
+      </header>
+
+      <!-- ═══ SERVICES ═══ -->
+      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+        <div class="border-b border-gray-800 px-4 py-1.5">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">services</span>
+        </div>
+        <div class="px-4 py-3 space-y-2">
+          <div class="flex items-center gap-3 text-xs">
+            <span id="aztec-status" class="status-dot status-unknown"></span>
+            <span class="text-gray-400 w-28">Aztec Node</span>
+            <span id="aztec-url" class="text-gray-600 ml-auto font-light">localhost:8080</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span id="teerex-status" class="status-dot status-unknown"></span>
+            <span class="text-gray-400 w-28">TEE-Rex Server</span>
+            <span id="teerex-url" class="text-gray-600 ml-auto font-light">localhost:4000</span>
+          </div>
+          <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
+            <span id="wallet-dot" class="status-dot status-unknown"></span>
+            <span class="text-gray-400 w-28">Wallet</span>
+            <span id="wallet-state" class="text-gray-600 ml-auto font-light">not initialized</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ MODE TOGGLE ═══ -->
+      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+        <div class="border-b border-gray-800 px-4 py-1.5">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">proving mode</span>
+        </div>
+        <div class="p-3 flex gap-2">
+          <button
+            id="mode-local"
+            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+          >
+            ▸ Local <span class="text-gray-600 normal-case tracking-normal">(wasm)</span>
+          </button>
+          <button
+            id="mode-remote"
+            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
+          >
+            ▸ Remote <span class="normal-case tracking-normal opacity-80">(tee)</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ═══ DEPLOY ACTION ═══ -->
+      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+        <div class="border-b border-gray-800 px-4 py-1.5">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">action</span>
+        </div>
+        <div class="p-3 space-y-3">
+          <button
+            id="deploy-btn"
+            disabled
+            class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-emerald-700/50 bg-emerald-900/20 text-emerald-500 hover:bg-emerald-900/40 hover:border-emerald-600/60 hover:text-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-emerald-900/20 disabled:hover:border-emerald-700/50 disabled:hover:text-emerald-500"
+          >
+            Deploy Test Account
+          </button>
+
+          <div id="progress" class="hidden">
+            <div class="flex items-center gap-3 text-xs px-1">
+              <div class="proving-spinner"></div>
+              <span id="progress-text" class="text-gray-400">proving...</span>
+              <span id="elapsed-time" class="ml-auto font-semibold text-emerald-400 tabular-nums">0.0s</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ RESULTS ═══ -->
+      <section id="results" class="hidden border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+        <div class="border-b border-gray-800 px-4 py-1.5">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
+        </div>
+        <div class="p-3 grid grid-cols-2 gap-2">
+          <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
+            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
+            <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+          </div>
+          <div id="result-remote" class="border border-gray-800 p-4 text-center transition-colors">
+            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (tee)</div>
+            <div id="time-remote" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ LOG ═══ -->
+      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+        <div class="border-b border-gray-800 px-4 py-1.5 flex items-center">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">log</span>
+          <span id="log-count" class="ml-auto text-[10px] text-gray-700 tabular-nums">0 entries</span>
+        </div>
+        <div
+          id="log"
+          class="h-56 overflow-y-auto text-[11px] leading-[1.6] text-gray-500 bg-black/40 px-3 py-2 space-y-px scroll-smooth"
+        ></div>
+      </section>
+
+      <!-- ═══ FOOTER ═══ -->
+      <footer class="text-center text-[10px] text-gray-700 py-2 tracking-wide">
+        tee-rex &middot; nemi.fi
+      </footer>
+
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

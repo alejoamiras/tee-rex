@@ -125,19 +125,17 @@ curl -fsSL https://install.aztec.network | bash
 
 ---
 
-## Phase 3: Performance Benchmarking
+## Phase 3: Structured Logging ✅ Complete
 
-**Goal**: Create a benchmarking system to measure proof generation performance across different machines.
+**Goal**: Replace all `console.log` with structured logging using LogTape.
 
-**Requirements**:
-- Measure proof generation time for different circuit sizes
-- Compare performance across machines (local dev, cloud VMs, TEE environments)
-- Store and visualize benchmark results
-- Track performance regressions over time
-
-**Status**: Not started
-
-**Planning document**: See `/plans/phase-3-benchmarking.md`
+**Completed:**
+- Added LogTape (`@logtape/logtape`) across SDK, server, and integration packages
+- SDK uses library-first pattern (silent by default, consumers configure)
+- Server uses `@logtape/express` for request logging, `@logtape/pretty` for dev, JSON Lines for production
+- Error handling middleware on all Express routes
+- Integration tests quiet by default (`LOG_LEVEL=warning`), verbose with `LOG_LEVEL=debug`
+- Zero `console.log` calls remaining in codebase
 
 ---
 
@@ -146,11 +144,11 @@ curl -fsSL https://install.aztec.network | bash
 **Goal**: Proper unit/E2E test coverage + a demo frontend to showcase local vs remote proving speed.
 
 **Parts:**
-- **A** — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`)
-- **B** — E2E tests for local proving, remote proving, and mode switching
+- **A** ✅ — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`) — 20 tests
+- **B** ✅ — E2E tests for local proving, remote proving, and mode switching — 21 tests
 - **C** — Vanilla TS + Vite demo page with a local/remote toggle and timing display
 
-**Status**: Not started
+**Status**: A & B complete, C not started
 
 **Planning document**: See `/plans/phase-4-testing-and-demo.md`
 

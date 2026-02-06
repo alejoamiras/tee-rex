@@ -3,7 +3,8 @@
   "workspaces": [
     "packages/sdk",
     "packages/server",
-    "packages/integration"
+    "packages/integration",
+    "packages/demo"
   ],
   "scripts": {
     "build": "docker build -t tee-rex --platform linux/amd64 .",
@@ -17,6 +18,7 @@
     "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit",
     "test:integration": "bun run --cwd packages/integration test",
     "test:all": "bun run test && bun run test:integration",
+    "demo": "bun run --cwd packages/demo dev",
     "sdk:build": "bun run --cwd packages/sdk build",
     "prepare": "husky"
   },
