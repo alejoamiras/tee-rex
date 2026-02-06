@@ -1,33 +1,7 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
-
-// Patch expect for @aztec/foundation compatibility BEFORE importing @aztec modules
-// @aztec/foundation checks if expect.addEqualityTesters exists (vitest API)
-if (!(expect as any).addEqualityTesters) {
-  (expect as any).addEqualityTesters = () => {};
-}
-
-// Also patch globalThis for modules that check there
-if ((globalThis as any).expect && !(globalThis as any).expect.addEqualityTesters) {
-  (globalThis as any).expect.addEqualityTesters = () => {};
-}
-
-// Dynamic imports to control load order
-let BBLazyPrivateKernelProver: typeof import("@aztec/bb-prover/client/lazy").BBLazyPrivateKernelProver;
-let WASMSimulator: typeof import("@aztec/simulator/client").WASMSimulator;
-let TeeRexProver: typeof import("./tee-rex-prover.js").TeeRexProver;
-let ProvingMode: typeof import("./tee-rex-prover.js").ProvingMode;
-
-beforeAll(async () => {
-  const bbProver = await import("@aztec/bb-prover/client/lazy");
-  BBLazyPrivateKernelProver = bbProver.BBLazyPrivateKernelProver;
-
-  const simulator = await import("@aztec/simulator/client");
-  WASMSimulator = simulator.WASMSimulator;
-
-  const proverModule = await import("./tee-rex-prover.js");
-  TeeRexProver = proverModule.TeeRexProver;
-  ProvingMode = proverModule.ProvingMode;
-});
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
+import { WASMSimulator } from "@aztec/simulator/client";
+import { ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
 
 describe("TeeRexProver", () => {
   test("can instantiate with correct proving modes", () => {
