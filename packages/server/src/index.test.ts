@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import * as openpgp from "openpgp";
 import { Base64, Bytes } from "ox";
 import { type AppDependencies, createApp } from "./index.js";
+import { StandardAttestationService } from "./lib/attestation-service.js";
 import { EncryptionService } from "./lib/encryption-service.js";
 
 /** Encrypt data using a public key (mirrors what the SDK does). */
@@ -18,13 +19,14 @@ async function encryptForKey(data: Uint8Array, publicKeyArmored: string): Promis
 /** Create a test app with a mocked ProverService. */
 function createTestApp() {
   const encryption = new EncryptionService();
+  const attestation = new StandardAttestationService();
   const fakeProof = {
     toBuffer: () => Buffer.from("fake-proof-data"),
   };
   const prover = {
     createChonkProof: mock(() => Promise.resolve(fakeProof)),
   };
-  const deps = { prover, encryption } as unknown as AppDependencies;
+  const deps = { prover, encryption, attestation } as unknown as AppDependencies;
   const app = createApp(deps);
   return { app, prover, encryption };
 }
@@ -43,8 +45,26 @@ async function startTestServer(app: ReturnType<typeof createApp>) {
   });
 }
 
+describe("GET /attestation", () => {
+  test("returns standard attestation with public key", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/attestation`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as { mode: string; publicKey: string };
+      expect(body.mode).toBe("standard");
+      expect(body.publicKey).toContain("-----BEGIN PGP PUBLIC KEY BLOCK-----");
+    } finally {
+      close();
+    }
+  });
+});
+
 describe("GET /encryption-public-key", () => {
-  test("returns 200 with a valid PGP public key", async () => {
+  test("returns 200 with a valid PGP public key (backward compat)", async () => {
     const { app } = createTestApp();
     const { url, close } = await startTestServer(app);
 

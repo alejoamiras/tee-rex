@@ -9,6 +9,7 @@ import { Base64, Bytes } from "ox";
 import { UnreachableCaseError, type ValueOf } from "ts-essentials";
 import { joinURL } from "ufo";
 import { z } from "zod";
+import { type AttestationVerifyOptions, verifyNitroAttestation } from "./attestation.js";
 import { encrypt } from "./encrypt.js";
 import { logger } from "./logger.js";
 
@@ -18,9 +19,18 @@ export const ProvingMode = {
   remote: "remote",
 } as const;
 
+export interface TeeRexAttestationConfig {
+  /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
+  requireAttestation?: boolean;
+  /** Expected PCR values to verify against the attestation document. */
+  expectedPCRs?: AttestationVerifyOptions["expectedPCRs"];
+  /** Maximum age of attestation documents in milliseconds. Default: 5 minutes. */
+  maxAgeMs?: number;
+}
+
 export class TeeRexProver extends BBLazyPrivateKernelProver {
-  // TODO: move switching proving modes to a different class
   #provingMode: ProvingMode = ProvingMode.remote;
+  #attestationConfig: TeeRexAttestationConfig = {};
 
   constructor(
     private apiUrl: string,
@@ -31,6 +41,10 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
 
   setProvingMode(mode: ProvingMode) {
     this.#provingMode = mode;
+  }
+
+  setAttestationConfig(config: TeeRexAttestationConfig) {
+    this.#attestationConfig = config;
   }
 
   async createChonkProof(
@@ -85,13 +99,36 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   }
 
   async #fetchEncryptionPublicKey() {
-    // TODO(security): verify the integrity of the encryption public key
-    const response = await ky.get(joinURL(this.apiUrl, "encryption-public-key")).json();
+    const response = await ky.get(joinURL(this.apiUrl, "attestation")).json();
     const data = z
-      .object({
-        publicKey: z.string(),
-      })
+      .discriminatedUnion("mode", [
+        z.object({ mode: z.literal("standard"), publicKey: z.string() }),
+        z.object({
+          mode: z.literal("nitro"),
+          attestationDocument: z.string(),
+          publicKey: z.string(),
+        }),
+      ])
       .parse(response);
-    return data.publicKey;
+
+    switch (data.mode) {
+      case "standard": {
+        if (this.#attestationConfig.requireAttestation) {
+          throw new Error(
+            "Server is running in standard mode but requireAttestation is enabled. " +
+              "The server must run inside a TEE to provide attestation.",
+          );
+        }
+        logger.warn("Server is running in standard mode (no TEE attestation)");
+        return data.publicKey;
+      }
+      case "nitro": {
+        const { publicKey } = await verifyNitroAttestation(data.attestationDocument, {
+          expectedPCRs: this.#attestationConfig.expectedPCRs,
+          maxAgeMs: this.#attestationConfig.maxAgeMs,
+        });
+        return publicKey;
+      }
+    }
   }
 }
