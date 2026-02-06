@@ -15,6 +15,45 @@ This document outlines the planned improvements for the tee-rex project.
 
 ---
 
+## Workflow: How to Execute Any Task
+
+**Before writing any code**, always follow this workflow:
+
+### 1. Research
+
+- Read the relevant source files and existing tests
+- Search the codebase for patterns, imports, and conventions already in use
+- If the task involves unfamiliar libraries or APIs, search the web for docs/examples
+- Understand what exists before changing anything
+
+### 2. To-do list
+
+- Create a to-do list (using the task tracking tools) breaking the work into small, incremental steps
+- Each step should be independently verifiable — if something breaks, you know exactly which step caused it
+- Order steps so that earlier steps don't depend on later ones
+- Prefer adding one test at a time, one function at a time, one file at a time
+
+### 3. Iterative execution
+
+- Work through the to-do list one step at a time
+- After each step, validate before moving on (see below)
+- If a step breaks something, fix it before continuing — don't accumulate broken state
+- Never make large, multi-file changes in a single step when smaller steps are possible
+
+### 4. Validation
+
+Every step must include a validation strategy. Think about how to verify the step worked:
+
+- **Code changes**: run `bun run lint` and `bun run test`
+- **New tests**: run the specific test file (`bun test path/to/file.test.ts`) and verify it passes
+- **Refactors**: run the full test suite to catch regressions
+- **Config changes**: run the relevant command (e.g., `bun install`, `bun run build`)
+- **New features**: write a test or run a manual verification script
+
+If you're unsure how to validate a step, that's a sign the step might be too big — break it down further.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -99,6 +138,21 @@ curl -fsSL https://install.aztec.network | bash
 **Status**: Not started
 
 **Planning document**: See `/plans/phase-3-benchmarking.md`
+
+---
+
+## Phase 4: Testing & Demo Frontend
+
+**Goal**: Proper unit/E2E test coverage + a demo frontend to showcase local vs remote proving speed.
+
+**Parts:**
+- **A** — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`)
+- **B** — E2E tests for local proving, remote proving, and mode switching
+- **C** — Vanilla TS + Vite demo page with a local/remote toggle and timing display
+
+**Status**: Not started
+
+**Planning document**: See `/plans/phase-4-testing-and-demo.md`
 
 ---
 
