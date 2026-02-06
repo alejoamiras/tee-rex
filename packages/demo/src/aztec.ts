@@ -1,3 +1,4 @@
+import type { AztecAddress } from "@aztec/aztec.js";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
@@ -16,7 +17,7 @@ export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;
   wallet: TestWallet | null;
-  registeredAddresses: unknown[];
+  registeredAddresses: AztecAddress[];
   provingMode: ProvingMode;
 }
 
@@ -60,13 +61,22 @@ export async function initializeWallet(log: LogFn): Promise<boolean> {
 
     log("Connecting to Aztec node...");
     state.node = createAztecNodeClient(AZTEC_NODE_URL);
-    const nodeInfo = await state.node.getNodeInfo();
+    const [nodeInfo, l1Contracts] = await Promise.all([
+      state.node.getNodeInfo(),
+      state.node.getL1ContractAddresses(),
+    ]);
     log(`Connected — chain ${nodeInfo.l1ChainId}`, "success");
 
     log("Creating wallet (may take a moment)...");
+    // Pre-fetch l1Contracts and pass them in config to avoid extra async
+    // operations during PXE init (prevents IndexedDB transaction timeouts).
+    // Pattern from gregoswap's EmbeddedWallet.
     state.wallet = await TestWallet.create(
       state.node,
-      {},
+      {
+        dataDirectory: `tee-rex-demo-${l1Contracts.rollupAddress}`,
+        l1Contracts,
+      },
       {
         proverOrOptions: state.prover,
         loggers: {},

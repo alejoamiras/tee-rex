@@ -6,14 +6,19 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       nodePolyfills({
-        include: ["buffer", "path", "process", "net", "tty", "util", "stream", "events", "crypto"],
+        include: ["buffer", "path"],
       }),
     ],
+    // Exclude WASM-containing packages from pre-bundling so their
+    // `new URL('*.wasm', import.meta.url)` pattern resolves correctly.
+    optimizeDeps: {
+      exclude: ["@aztec/noir-acvm_js", "@aztec/noir-noirc_abi"],
+    },
     server: {
       headers: {
-        // Required for SharedArrayBuffer (bb.js multi-threaded WASM)
+        // COOP/COEP enable SharedArrayBuffer for multi-threaded WASM.
         "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "require-corp",
+        "Cross-Origin-Embedder-Policy": "credentialless",
       },
       proxy: {
         // Aztec node has no CORS headers — proxy through Vite
@@ -24,11 +29,16 @@ export default defineConfig(({ mode }) => {
         },
       },
       fs: {
-        allow: [".."],
+        // Allow serving files from the monorepo root (WASM files in node_modules)
+        allow: ["../.."],
       },
     },
     build: {
       target: "esnext",
+    },
+    resolve: {
+      // Ensure single class instances for instanceof checks across packages
+      dedupe: ["@aztec/bb-prover"],
     },
     define: {
       "process.env": JSON.stringify({
