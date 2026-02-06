@@ -11,6 +11,7 @@ import {
 import { $, appendLog, formatDuration, setStatus, startClock } from "./ui";
 
 let deploying = false;
+const runCount: Record<string, number> = { local: 0, remote: 0 };
 
 // ── Clock ──
 startClock();
@@ -74,10 +75,17 @@ $("deploy-btn").addEventListener("click", async () => {
     });
 
     // Show results
+    runCount[result.mode]++;
+    const isCold = runCount[result.mode] === 1;
+
     $("results").classList.remove("hidden");
     const timeEl = $(result.mode === "local" ? "time-local" : "time-remote");
     timeEl.textContent = formatDuration(result.durationMs);
     timeEl.className = "text-3xl font-bold tabular-nums text-emerald-400";
+
+    const tagEl = $(result.mode === "local" ? "tag-local" : "tag-remote");
+    tagEl.textContent = isCold ? "cold" : "warm";
+    tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${isCold ? "text-amber-500/70" : "text-cyan-500/70"}`;
 
     const card = $(result.mode === "local" ? "result-local" : "result-remote");
     card.classList.add("result-filled");
