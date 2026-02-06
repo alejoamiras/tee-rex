@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "bun --watch run src/index.ts",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@aztec/bb-prover": "4.0.0-nightly.20260204",
@@ -21,8 +22,6 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",
     "@types/ms": "^0.7.34",
-    "@types/node": "^20.11.24",
-    "prettier": "^3.5.3",
-    "typescript": "^5.8.3"
+    "@types/node": "^20.11.24"
   }
 }

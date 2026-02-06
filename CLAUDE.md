@@ -4,11 +4,47 @@ This document outlines the planned improvements for the tee-rex project.
 
 ## Current State
 
-- **SDK** (`/sdk`): TypeScript package `@nemi-fi/tee-rex` - Remote proving client for Aztec
-- **Server** (`/server`): Express server that runs the prover in a TEE environment
-- **Integration** (`/integration`): Integration tests for the full proving flow
-- **Build system**: Bun workspaces
+- **SDK** (`/packages/sdk`): TypeScript package `@nemi-fi/tee-rex` - Remote proving client for Aztec
+- **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
+- **Integration** (`/packages/integration`): Integration tests for the full proving flow
+- **Build system**: Bun workspaces (`packages/*`)
+- **Linting/Formatting**: Biome (lint + format in one tool)
+- **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
+- **CI**: GitHub Actions (per-package, path-filtered workflows)
 - **Aztec version**: 4.0.0-nightly.20260204
+
+---
+
+## Quick Start
+
+```bash
+# Install dependencies
+bun install
+
+# Run full checks (lint + typecheck + unit tests)
+bun run test
+
+# Run only linting
+bun run lint
+
+# Auto-fix lint/format issues
+bun run lint:fix
+
+# Run integration tests (auto-starts Aztec sandbox + tee-rex server)
+bun run test:integration
+
+# Run all tests
+bun run test:all
+
+# Start server
+bun run start
+
+# Build SDK
+bun run sdk:build
+
+# Build Docker image
+bun run build
+```
 
 ---
 
@@ -22,15 +58,7 @@ This document outlines the planned improvements for the tee-rex project.
 - Migrated SDK tests from vitest to bun:test
 - Updated Dockerfile to use oven/bun:1.3-debian base image
 - All commands now use `bun run`
-
-**Commands:**
-```bash
-bun install          # Install dependencies
-bun run test         # Run lint + unit tests
-bun run start        # Start server
-bun run sdk:build    # Build SDK
-bun run build        # Build Docker image
-```
+- Restructured into `packages/` layout (sdk, server, integration)
 
 ---
 
@@ -39,18 +67,12 @@ bun run build        # Build Docker image
 **Goal**: Create a proper integration test suite that runs with `bun test`.
 
 **Completed:**
-- Created `/integration` workspace with test infrastructure
+- Created `/packages/integration` workspace with test infrastructure
 - **Automatic service management** - starts Aztec sandbox and tee-rex server if not running
 - Connectivity tests for Aztec node and tee-rex server
 - Full proving flow tests (TeeRexProver → TestWallet → Account deployment)
 - Automatic cleanup of started services after tests
 - Proper timeouts for long-running proving operations
-
-**Commands:**
-```bash
-bun run test:integration  # Run integration tests (auto-starts services)
-bun run test:all          # Run all tests (unit + integration)
-```
 
 **Environment variables:**
 - `INTEGRATION_AUTO_START=false` - Disable automatic service startup
@@ -87,24 +109,3 @@ curl -fsSL https://install.aztec.network | bash
 3. **Preserve functionality**: Each step should maintain backward compatibility where possible
 4. **Test at each step**: Verify the system works before moving to the next step
 5. **Document decisions**: Record why certain approaches were chosen
-
----
-
-## Quick Start
-
-```bash
-# Install dependencies
-bun install
-
-# Run unit tests
-bun run test
-
-# Run integration tests (auto-starts Aztec sandbox + tee-rex server)
-bun run test:integration
-
-# Or run all tests
-bun run test:all
-
-# Build Docker image
-bun run build
-```

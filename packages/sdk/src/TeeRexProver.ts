@@ -61,16 +61,11 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       vk: Base64.fromBytes(step.vk),
       timings: step.timings,
     }));
-    console.log(
-      "payload chars",
-      JSON.stringify(executionsStepsSerialized).length,
-    );
+    console.log("payload chars", JSON.stringify(executionsStepsSerialized).length);
     const encryptionPublicKey = await this.#fetchEncryptionPublicKey();
     const encryptedData = Base64.fromBytes(
       await encrypt({
-        data: Bytes.fromString(
-          JSON.stringify({ executionSteps: executionsStepsSerialized }),
-        ),
+        data: Bytes.fromString(JSON.stringify({ executionSteps: executionsStepsSerialized })),
         encryptionPublicKey,
       }),
     ); // TODO(perf): serialize executionSteps -> bytes without intermediate encoding. Needs Aztec to support serialization of the PrivateExecutionStep class.
@@ -90,9 +85,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
 
   async #fetchEncryptionPublicKey() {
     // TODO(security): verify the integrity of the encryption public key
-    const response = await ky
-      .get(joinURL(this.apiUrl, "encryption-public-key"))
-      .json();
+    const response = await ky.get(joinURL(this.apiUrl, "encryption-public-key")).json();
     const data = z
       .object({
         publicKey: z.string(),

@@ -6,7 +6,7 @@
  * the integration environment is properly configured.
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { config, services } from "./globalSetup";
 
 describe("Service Connectivity", () => {
@@ -38,9 +38,7 @@ describe("Service Connectivity", () => {
     test("should return encryption public key", async () => {
       expect(services.teeRexServer).toBe(true);
 
-      const response = await fetch(
-        `${config.teeRexUrl}/encryption-public-key`,
-      );
+      const response = await fetch(`${config.teeRexUrl}/encryption-public-key`);
       const data = await response.json();
 
       expect(data.publicKey).toBeDefined();
@@ -51,15 +49,11 @@ describe("Service Connectivity", () => {
   describe("Service Summary", () => {
     test("all services must be available", () => {
       console.log("\n📊 Service Status:");
-      console.log(
-        `   Aztec Node:     ${services.aztecNode ? "✅ Available" : "❌ Not available"}`,
-      );
+      console.log(`   Aztec Node:     ${services.aztecNode ? "✅ Available" : "❌ Not available"}`);
       console.log(
         `   Tee-Rex Server: ${services.teeRexServer ? "✅ Available" : "❌ Not available"}`,
       );
-      console.log(
-        `   Auto-started:   ${services.servicesStarted ? "Yes" : "No"}`,
-      );
+      console.log(`   Auto-started:   ${services.servicesStarted ? "Yes" : "No"}`);
 
       // Fail if any service is missing
       expect(services.aztecNode).toBe(true);

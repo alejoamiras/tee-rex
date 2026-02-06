@@ -5,7 +5,7 @@
  * Tests FAIL if services are not available.
  */
 
-import { describe, test, expect, beforeAll } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { config, services } from "./globalSetup";
 
 // Lazy-loaded modules
@@ -99,51 +99,44 @@ describe("TeeRexProver Integration", () => {
       expect(services.aztecNode && services.teeRexServer).toBe(true);
       expect(wallet).toBeDefined();
 
-      registeredAddresses =
-        await registerInitialLocalNetworkAccountsInWallet(wallet);
+      registeredAddresses = await registerInitialLocalNetworkAccountsInWallet(wallet);
 
       expect(registeredAddresses).toBeDefined();
       expect(registeredAddresses.length).toBeGreaterThan(0);
-      console.log(
-        `   ✅ Registered ${registeredAddresses.length} sandbox accounts`,
-      );
+      console.log(`   ✅ Registered ${registeredAddresses.length} sandbox accounts`);
     });
   });
 
   describe("Remote Proving", () => {
-    test(
-      "should deploy account with remote proving",
-      async () => {
-        expect(services.aztecNode && services.teeRexServer).toBe(true);
-        expect(wallet).toBeDefined();
-        expect(registeredAddresses).toBeDefined();
+    test("should deploy account with remote proving", async () => {
+      expect(services.aztecNode && services.teeRexServer).toBe(true);
+      expect(wallet).toBeDefined();
+      expect(registeredAddresses).toBeDefined();
 
-        console.log("   Creating new Schnorr account...");
-        const secret = Fr.random();
-        const salt = Fr.random();
-        const accountManager = await wallet.createSchnorrAccount(secret, salt);
+      console.log("   Creating new Schnorr account...");
+      const secret = Fr.random();
+      const salt = Fr.random();
+      const accountManager = await wallet.createSchnorrAccount(secret, salt);
 
-        expect(accountManager).toBeDefined();
-        console.log(`   Account address: ${accountManager.address.toString()}`);
+      expect(accountManager).toBeDefined();
+      console.log(`   Account address: ${accountManager.address.toString()}`);
 
-        console.log("   Deploying account (triggers remote proving)...");
+      console.log("   Deploying account (triggers remote proving)...");
 
-        const startTime = Date.now();
-        const deployMethod = await accountManager.getDeployMethod();
-        const deployedContract = await deployMethod.send({
-          from: registeredAddresses[0],
-          skipClassPublication: true,
-        });
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const startTime = Date.now();
+      const deployMethod = await accountManager.getDeployMethod();
+      const deployedContract = await deployMethod.send({
+        from: registeredAddresses[0],
+        skipClassPublication: true,
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        expect(deployedContract).toBeDefined();
+      expect(deployedContract).toBeDefined();
 
-        console.log(`   ✅ Account deployed successfully!`);
-        console.log(`   📜 Contract: ${deployedContract.address?.toString()}`);
-        console.log(`   ⏱️  Time: ${elapsed}s`);
-      },
-      600000, // 10 minute timeout
-    );
+      console.log(`   ✅ Account deployed successfully!`);
+      console.log(`   📜 Contract: ${deployedContract.address?.toString()}`);
+      console.log(`   ⏱️  Time: ${elapsed}s`);
+    }, 600000); // 10 minute timeout
   });
 });
 

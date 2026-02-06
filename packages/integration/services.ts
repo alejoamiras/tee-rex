@@ -6,7 +6,7 @@
  * - Tee-rex server: Auto-started by tests
  */
 
-import { spawn, type Subprocess } from "bun";
+import { type Subprocess, spawn } from "bun";
 
 export interface ManagedServices {
   serverProcess: Subprocess | null;

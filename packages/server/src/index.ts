@@ -51,7 +51,7 @@ app.post("/prove", async (req, res) => {
   });
 });
 
-app.get("/encryption-public-key", async (req, res) => {
+app.get("/encryption-public-key", async (_req, res) => {
   const publicKey = await lib.encryption.getEncryptionPublicKey();
   res.json({ publicKey });
 });
