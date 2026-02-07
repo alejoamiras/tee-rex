@@ -43,6 +43,10 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#provingMode = mode;
   }
 
+  setApiUrl(url: string) {
+    this.apiUrl = url;
+  }
+
   setAttestationConfig(config: TeeRexAttestationConfig) {
     this.#attestationConfig = config;
   }
