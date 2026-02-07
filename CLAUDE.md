@@ -156,9 +156,9 @@ curl -fsSL https://install.aztec.network | bash
 - **A** ✅ — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`) — 20 tests
 - **B** ✅ — E2E tests for local proving, remote proving, and mode switching — 21 tests
 - **C** ✅ — Demo page with three proving modes (Local/Remote/TEE) and attestation indicator
-- **D** — Full token flow demo: deploy token + mint + shield + private transfer in one click
+- **D** ✅ — Full token flow demo: deploy token + mint to private + private transfer + check balances in one click
 
-**Status**: A, B & C complete, D not started
+**Status**: A, B, C & D complete
 
 **Phase 4C Details**:
 
@@ -262,6 +262,81 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 - Next-net may have different contract class requirements or gas settings
 - Network latency (client → EC2 → next-net) could affect timeouts
 - Proving payload size over the wire (encrypted witness data) — may need to tune body size limits
+
+---
+
+## Phase 7: Demo Frontend Testing
+
+**Goal**: Proper test coverage for the demo app — unit tests first, then browser E2E tests.
+
+**Parts:**
+- **A** — Unit tests for demo utility functions (`ui.ts` helpers, `aztec.ts` state management, `setUiMode` logic)
+- **B** — Browser E2E tests (Playwright or similar) for the full demo flow: mode switching, TEE URL input, deploy button, token flow button, result display, log panel
+
+**Notes:**
+- Part A is straightforward — test pure functions in isolation with `bun:test`
+- Part B requires a browser testing framework. Playwright is the likely choice (headless Chromium, good Vite integration). Need to decide whether to mock Aztec/TEE backends or run against real sandbox.
+- The demo currently has zero tests
+
+---
+
+## Phase 8: Evaluate Encryption Necessity in TEE Mode
+
+**Goal**: Investigate whether OpenPGP encryption of proving inputs is still necessary when the TEE server is accessed over HTTPS.
+
+**Context**: Currently, the SDK always encrypts the proving payload with the enclave's public key (OpenPGP) before sending it via `POST /prove`. The encryption guarantees that only the enclave can decrypt. But when the server runs inside a Nitro Enclave and is accessed over HTTPS:
+- **HTTPS** already provides transport encryption (TLS)
+- **TEE isolation** already guarantees the server code hasn't been tampered with (attestation + PCRs)
+
+**Questions to answer:**
+1. Does HTTPS terminate at the EC2 host (before vsock) or inside the enclave? If at the host, the host could theoretically read the plaintext — so OpenPGP encryption IS still needed.
+2. If we add TLS termination inside the enclave, does that make OpenPGP redundant?
+3. What's the performance overhead of the OpenPGP encrypt/decrypt step? Is it significant compared to proving time?
+4. What do other TEE projects do? (e.g., Evervault, Marlin, EdgeBit)
+
+**Possible outcomes:**
+- Keep encryption (defense in depth, host can't snoop on vsock traffic)
+- Make encryption optional when attestation is verified + TLS terminates inside enclave
+- Remove encryption entirely if TLS-inside-enclave is sufficient
+
+---
+
+## Phase 9: Higher-Performance EC2 for Nitro Enclave
+
+**Goal**: Set up a more powerful EC2 instance type with Nitro Enclave support for faster proving.
+
+**Context**: Currently using m5.xlarge (4 vCPU, 16 GiB, ~$0.21/hr). Barretenberg is CPU-bound and benefits significantly from more cores. Enclave gets 2 vCPUs (of 4) — very constrained.
+
+**Options to evaluate:**
+- **m5.2xlarge** (8 vCPU, 32 GiB, ~$0.42/hr) — give enclave 4+ vCPUs
+- **c5.4xlarge** (16 vCPU, 32 GiB, ~$0.74/hr) — compute-optimized, enclave gets 8+ vCPUs
+- **c6i/c7i** variants — newer generations, better price/performance
+- Spot instances for 60-70% savings during testing
+
+**What needs to happen:**
+1. Benchmark current proving times on m5.xlarge (baseline)
+2. Test with 2-3 instance types, measuring proving times
+3. Update `docs/nitro-deployment.md` with recommended instance types
+4. Update allocator config (more CPUs/memory for enclave)
+
+---
+
+## Phase 10: CI Auto-Update Pipeline (Aztec Nightly Tracker)
+
+**Goal**: GitHub Actions workflow that automatically detects new Aztec nightly versions, updates all packages, runs tests, and publishes an SDK release if everything passes.
+
+**Parts:**
+- **A** — Nightly detection: scheduled workflow (daily cron) that checks for the latest `@aztec/aztec.js` nightly version on npm
+- **B** — Auto-update: if a new version exists, create a branch, update all `@aztec/*` dependencies across all workspace packages, run `bun install`
+- **C** — Validation: run `bun run test` (lint + typecheck + unit tests). Optionally run integration tests against sandbox if feasible in CI.
+- **D** — Auto-PR / auto-release: if tests pass, create a PR (or auto-merge) and publish the SDK to npm with the matching nightly version tag
+
+**Implementation notes:**
+- Use `npm view @aztec/aztec.js dist-tags` to find latest nightly
+- Compare against current version in root `package.json`
+- The SDK version should track the Aztec nightly (e.g., `0.1.0-nightly.20260210`)
+- Need npm publish token as a GitHub secret
+- Consider a "dry run" mode first that just opens the PR without auto-merging
 
 ---
 

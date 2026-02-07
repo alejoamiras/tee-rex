@@ -13,6 +13,10 @@ export function setStatus(elementId: string, connected: boolean | null): void {
 
 let logCount = 0;
 
+export function resetLogCount(): void {
+  logCount = 0;
+}
+
 export function appendLog(
   msg: string,
   level: "info" | "warn" | "error" | "success" = "info",

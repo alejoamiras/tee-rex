@@ -16,7 +16,7 @@
     "format": "biome format --write .",
     "test": "bun run lint && bun run test:typecheck && bun run test:unit",
     "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
-    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit",
+    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/demo test:unit",
     "test:integration": "bun run --cwd packages/integration test",
     "test:all": "bun run test && bun run test:integration",
     "demo": "bun run --cwd packages/demo dev",
