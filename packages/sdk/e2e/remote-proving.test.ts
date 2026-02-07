@@ -5,12 +5,12 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
 import { getLogger } from "@logtape/logtape";
-import { ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 import { config } from "./e2e-setup";
 
 const logger = getLogger(["tee-rex", "sdk", "e2e", "remote-proving"]);

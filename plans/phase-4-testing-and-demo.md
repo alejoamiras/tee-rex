@@ -189,7 +189,7 @@ packages/demo/
 Tech stack:
 - **Vanilla TypeScript** — no framework, keep it dead simple
 - **Vite** — for dev server and bundling (works great with Bun)
-- **@nemi-fi/tee-rex** — workspace dependency for the prover
+- **@alejoamiras/tee-rex** — workspace dependency for the prover
 
 ### C2: UI design
 

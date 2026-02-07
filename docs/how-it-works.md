@@ -130,12 +130,12 @@ This means:
 - The EC2 instance owner cannot see inside the enclave
 - The code running inside is cryptographically verified
 
-## The SDK: `@nemi-fi/tee-rex`
+## The SDK: `@alejoamiras/tee-rex`
 
 The SDK (`TeeRexProver`) is a drop-in replacement for Aztec's local prover. It extends `BBLazyPrivateKernelProver` and overrides the `createChonkProof()` method.
 
 ```typescript
-import { TeeRexProver } from "@nemi-fi/tee-rex";
+import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 const prover = new TeeRexProver("https://tee-rex.example.com", wasmSimulator);
 
