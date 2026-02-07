@@ -5,6 +5,7 @@ import {
   checkTeeRexServer,
   deployTestAccount,
   initializeWallet,
+  runTokenFlow,
   setUiMode,
   state,
   type UiMode,
@@ -111,13 +112,40 @@ $("tee-url").addEventListener("keydown", (e) => {
   }
 });
 
+// ── Shared helpers ──
+function setActionButtonsDisabled(disabled: boolean): void {
+  ($("deploy-btn") as HTMLButtonElement).disabled = disabled;
+  ($("token-flow-btn") as HTMLButtonElement).disabled = disabled;
+}
+
+function showResult(mode: UiMode, durationMs: number, tag: string): void {
+  $("results").classList.remove("hidden");
+  const suffix = mode;
+
+  const timeEl = $(`time-${suffix}`);
+  timeEl.textContent = formatDuration(durationMs);
+  timeEl.className = "text-3xl font-bold tabular-nums text-emerald-400";
+
+  const tagEl = $(`tag-${suffix}`);
+  tagEl.textContent = tag;
+  tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${
+    tag === "token flow"
+      ? "text-cyan-500/70"
+      : tag === "cold"
+        ? "text-amber-500/70"
+        : "text-cyan-500/70"
+  }`;
+
+  $(`result-${suffix}`).classList.add("result-filled");
+}
+
 // ── Deploy ──
 $("deploy-btn").addEventListener("click", async () => {
   if (deploying) return;
   deploying = true;
+  setActionButtonsDisabled(true);
 
   const btn = $("deploy-btn") as HTMLButtonElement;
-  btn.disabled = true;
   btn.textContent = "Proving...";
 
   $("progress").classList.remove("hidden");
@@ -129,28 +157,55 @@ $("deploy-btn").addEventListener("click", async () => {
       $("progress-text").textContent = `proving [${state.uiMode}]...`;
     });
 
-    // Show results
     runCount[result.mode]++;
     const isCold = runCount[result.mode] === 1;
-    const suffix = result.mode; // "local" | "remote" | "tee"
-
-    $("results").classList.remove("hidden");
-    const timeEl = $(`time-${suffix}`);
-    timeEl.textContent = formatDuration(result.durationMs);
-    timeEl.className = "text-3xl font-bold tabular-nums text-emerald-400";
-
-    const tagEl = $(`tag-${suffix}`);
-    tagEl.textContent = isCold ? "cold" : "warm";
-    tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${isCold ? "text-amber-500/70" : "text-cyan-500/70"}`;
-
-    const card = $(`result-${suffix}`);
-    card.classList.add("result-filled");
+    showResult(result.mode, result.durationMs, isCold ? "cold" : "warm");
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
     deploying = false;
-    btn.disabled = false;
+    setActionButtonsDisabled(false);
     btn.textContent = "Deploy Test Account";
+    $("progress").classList.add("hidden");
+  }
+});
+
+// ── Token Flow ──
+$("token-flow-btn").addEventListener("click", async () => {
+  if (deploying) return;
+  deploying = true;
+  setActionButtonsDisabled(true);
+
+  const btn = $("token-flow-btn") as HTMLButtonElement;
+  btn.textContent = "Running...";
+
+  $("progress").classList.remove("hidden");
+  $("elapsed-time").textContent = "0.0s";
+
+  try {
+    const result = await runTokenFlow(
+      appendLog,
+      (elapsedMs) => {
+        $("elapsed-time").textContent = formatDuration(elapsedMs);
+      },
+      (stepName) => {
+        $("progress-text").textContent = `${stepName}...`;
+      },
+    );
+
+    appendLog("--- step breakdown ---");
+    for (const step of result.steps) {
+      appendLog(`  ${step.step}: ${formatDuration(step.durationMs)}`);
+    }
+    appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
+
+    showResult(result.mode, result.totalDurationMs, "token flow");
+  } catch (err) {
+    appendLog(`Token flow failed: ${err}`, "error");
+  } finally {
+    deploying = false;
+    setActionButtonsDisabled(false);
+    btn.textContent = "Run Token Flow";
     $("progress").classList.add("hidden");
   }
 });
@@ -182,8 +237,8 @@ async function init(): Promise<void> {
     $("wallet-state").textContent = "ready";
     $("wallet-state").className = "text-emerald-500/80 ml-auto font-light";
     setStatus("wallet-dot", true);
-    ($("deploy-btn") as HTMLButtonElement).disabled = false;
-    appendLog("Ready — deploy a test account to begin", "success");
+    setActionButtonsDisabled(false);
+    appendLog("Ready — deploy a test account or run the token flow", "success");
   } else {
     $("wallet-state").textContent = "failed";
     $("wallet-state").className = "text-red-400/80 ml-auto font-light";

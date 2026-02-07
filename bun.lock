@@ -20,6 +20,7 @@
         "@aztec/bb-prover": "4.0.0-nightly.20260204",
         "@aztec/foundation": "4.0.0-nightly.20260204",
         "@aztec/noir-acvm_js": "4.0.0-nightly.20260204",
+        "@aztec/noir-contracts.js": "4.0.0-nightly.20260204",
         "@aztec/noir-noirc_abi": "4.0.0-nightly.20260204",
         "@aztec/pxe": "4.0.0-nightly.20260204",
         "@aztec/simulator": "4.0.0-nightly.20260204",

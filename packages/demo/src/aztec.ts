@@ -1,6 +1,7 @@
 import type { AztecAddress } from "@aztec/aztec.js";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { WASMSimulator } from "@aztec/simulator/client";
 import {
   registerInitialLocalNetworkAccountsInWallet,
@@ -149,6 +150,20 @@ export interface DeployResult {
   mode: UiMode;
 }
 
+export interface TokenFlowStepTiming {
+  step: string;
+  durationMs: number;
+}
+
+export interface TokenFlowResult {
+  mode: UiMode;
+  steps: TokenFlowStepTiming[];
+  totalDurationMs: number;
+  aliceBalance: bigint;
+  bobBalance: bigint;
+  tokenAddress: string;
+}
+
 export async function deployTestAccount(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
@@ -184,6 +199,97 @@ export async function deployTestAccount(
     log(`Deployed in ${(durationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`, "success");
 
     return { address, durationMs, mode };
+  } finally {
+    clearInterval(interval);
+  }
+}
+
+export async function runTokenFlow(
+  log: LogFn,
+  onTick: (elapsedMs: number) => void,
+  onStep: (stepName: string) => void,
+): Promise<TokenFlowResult> {
+  if (!state.wallet || state.registeredAddresses.length < 2) {
+    throw new Error("Wallet not initialized or not enough registered addresses");
+  }
+
+  const mode = state.uiMode;
+  const alice = state.registeredAddresses[0];
+  const bob = state.registeredAddresses[1];
+  const steps: TokenFlowStepTiming[] = [];
+  const totalStart = Date.now();
+
+  const interval = setInterval(() => {
+    onTick(Date.now() - totalStart);
+  }, 100);
+
+  try {
+    // Step 1: Deploy TokenContract
+    onStep(`deploying token [${mode}]`);
+    log(`Deploying TokenContract (admin=Alice) [${mode}]...`);
+    let stepStart = Date.now();
+
+    const token = await TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18).send({
+      from: alice,
+    });
+
+    let stepDuration = Date.now() - stepStart;
+    steps.push({ step: "deploy token", durationMs: stepDuration });
+    log(
+      `Token deployed in ${(stepDuration / 1000).toFixed(1)}s — ${token.address.toString().slice(0, 20)}...`,
+      "success",
+    );
+
+    // Step 2: Mint 1000 TREX to Alice (private)
+    onStep(`minting 1000 TREX [${mode}]`);
+    log(`Minting 1000 TREX to Alice [${mode}]...`);
+    stepStart = Date.now();
+
+    await token.methods.mint_to_private(alice, 1000n).send({ from: alice });
+
+    stepDuration = Date.now() - stepStart;
+    steps.push({ step: "mint to private", durationMs: stepDuration });
+    log(`Minted in ${(stepDuration / 1000).toFixed(1)}s`, "success");
+
+    // Step 3: Transfer 500 TREX Alice → Bob (private)
+    onStep(`transferring 500 TREX [${mode}]`);
+    log(`Transferring 500 TREX Alice → Bob [${mode}]...`);
+    stepStart = Date.now();
+
+    await token.methods.transfer(bob, 500n).send({ from: alice });
+
+    stepDuration = Date.now() - stepStart;
+    steps.push({ step: "private transfer", durationMs: stepDuration });
+    log(`Transferred in ${(stepDuration / 1000).toFixed(1)}s`, "success");
+
+    // Step 4: Check balances (simulate, no proof needed)
+    onStep("checking balances");
+    log("Checking balances...");
+    stepStart = Date.now();
+
+    const [aliceBalance, bobBalance] = await Promise.all([
+      token.methods.balance_of_private(alice).simulate({ from: alice }),
+      token.methods.balance_of_private(bob).simulate({ from: alice }),
+    ]);
+
+    stepDuration = Date.now() - stepStart;
+    steps.push({ step: "check balances", durationMs: stepDuration });
+    log(
+      `Balances — Alice: ${aliceBalance}, Bob: ${bobBalance} (${(stepDuration / 1000).toFixed(1)}s)`,
+      "success",
+    );
+
+    const totalDurationMs = Date.now() - totalStart;
+    log(`Token flow complete in ${(totalDurationMs / 1000).toFixed(1)}s`, "success");
+
+    return {
+      mode,
+      steps,
+      totalDurationMs,
+      aliceBalance: BigInt(aliceBalance.toString()),
+      bobBalance: BigInt(bobBalance.toString()),
+      tokenAddress: token.address.toString(),
+    };
   } finally {
     clearInterval(interval);
   }
