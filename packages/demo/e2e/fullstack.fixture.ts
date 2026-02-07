@@ -10,10 +10,17 @@ async function isServiceHealthy(url: string): Promise<boolean> {
   }
 }
 
-export async function checkServicesAvailable(): Promise<boolean> {
+export async function assertServicesAvailable(): Promise<void> {
   const [aztec, teerex] = await Promise.all([
     isServiceHealthy(AZTEC_STATUS_URL),
     isServiceHealthy(TEEREX_KEY_URL),
   ]);
-  return aztec && teerex;
+  if (!aztec || !teerex) {
+    throw new Error(
+      `Required services not available (aztec: ${aztec}, tee-rex: ${teerex}). ` +
+        "Start Aztec local network and tee-rex server before running fullstack e2e tests.\n" +
+        "  aztec start --local-network\n" +
+        "  bun run start",
+    );
+  }
 }

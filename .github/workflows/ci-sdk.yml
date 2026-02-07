@@ -1,6 +1,7 @@
 name: CI - SDK
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -50,3 +51,6 @@ jobs:
 
       - name: Unit tests
         run: bun run --cwd packages/sdk test:unit
+
+      # E2e tests require Aztec local network + tee-rex server.
+      # Use workflow_dispatch to run manually when infrastructure is available.

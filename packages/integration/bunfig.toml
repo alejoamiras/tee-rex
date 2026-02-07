@@ -1,6 +1,0 @@
-[test]
-# 15 minute timeout for proving operations
-timeout = 900000
-
-# Global setup - starts services before any tests run
-preload = ["./globalSetup.ts"]
