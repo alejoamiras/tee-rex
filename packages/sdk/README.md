@@ -1,13 +1,13 @@
-# @nemi-fi/tee-rex
+# @alejoamiras/tee-rex
 
 Delegate [Aztec](https://aztec.network) transaction proving to a Trusted Execution Environment.
 
-[![npm](https://img.shields.io/npm/v/@nemi-fi/tee-rex)](https://www.npmjs.com/package/@nemi-fi/tee-rex)
+[![npm](https://img.shields.io/npm/v/@alejoamiras/tee-rex)](https://www.npmjs.com/package/@alejoamiras/tee-rex)
 
 ## Installation
 
 ```sh
-npm add @nemi-fi/tee-rex
+npm add @alejoamiras/tee-rex
 ```
 
 ## Quick Start
@@ -19,7 +19,7 @@ import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { createPXE } from "@aztec/pxe/client/lazy";
 import { getPXEConfig } from "@aztec/pxe/config";
 import { WASMSimulator } from "@aztec/simulator/client";
-import { TeeRexProver, ProvingMode } from "@nemi-fi/tee-rex";
+import { TeeRexProver, ProvingMode } from "@alejoamiras/tee-rex";
 
 const TEE_REX_API = "http://localhost:4000";
 const node = createAztecNodeClient("<aztec-node-rpc-url>");
@@ -35,7 +35,7 @@ const pxe = await createPXE(node, getPXEConfig(), {
 ### Switch proving modes
 
 ```ts
-import { ProvingMode } from "@nemi-fi/tee-rex";
+import { ProvingMode } from "@alejoamiras/tee-rex";
 
 // delegate proving to a remote TEE (default)
 prover.setProvingMode(ProvingMode.remote);
@@ -89,4 +89,4 @@ In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createC
 
 ## Contributors
 
-Made with ❤️ by [Nemi](https://nemi.fi)
+Made with ❤️ by [Alejo Amiras](https://github.com/alejoamiras)

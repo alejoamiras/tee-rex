@@ -4,13 +4,15 @@ This document outlines the planned improvements for the tee-rex project.
 
 ## Current State
 
-- **SDK** (`/packages/sdk`): TypeScript package `@nemi-fi/tee-rex` - Remote proving client for Aztec
+- **Repo**: `alejoamiras/tee-rex` (GitHub)
+- **SDK** (`/packages/sdk`): TypeScript package `@alejoamiras/tee-rex` - Remote proving client for Aztec
 - **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
-- **Integration** (`/packages/integration`): Integration tests for the full proving flow
-- **Build system**: Bun workspaces (`packages/*`)
+- **Demo** (`/packages/demo`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow
+- **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/demo`)
 - **Linting/Formatting**: Biome (lint + format in one tool)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
-- **CI**: GitHub Actions (per-package, path-filtered workflows)
+- **CI**: GitHub Actions (per-package, path-filtered workflows: `ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml`)
+- **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Aztec version**: 4.0.0-nightly.20260204
 
 ---
@@ -78,10 +80,10 @@ bun run lint
 # Auto-fix lint/format issues
 bun run lint:fix
 
-# Run integration tests (auto-starts Aztec sandbox + tee-rex server)
-bun run test:integration
+# Run e2e tests (requires Aztec local network + tee-rex server)
+bun run test:e2e
 
-# Run all tests
+# Run all tests (lint + typecheck + unit + e2e)
 bun run test:all
 
 # Start server
@@ -115,22 +117,11 @@ bun run build
 **Goal**: Create a proper integration test suite that runs with `bun test`.
 
 **Completed:**
-- Created `/packages/integration` workspace with test infrastructure
-- **Automatic service management** - starts Aztec sandbox and tee-rex server if not running
-- Connectivity tests for Aztec node and tee-rex server
+- Integration tests for connectivity, remote proving, local proving, and mode switching
 - Full proving flow tests (TeeRexProver → TestWallet → Account deployment)
-- Automatic cleanup of started services after tests
 - Proper timeouts for long-running proving operations
 
-**Environment variables:**
-- `INTEGRATION_AUTO_START=false` - Disable automatic service startup
-- `AZTEC_NODE_URL` - Custom Aztec node URL (default: http://localhost:8080)
-- `TEEREX_URL` - Custom tee-rex server URL (default: http://localhost:4000)
-
-**Note:** Requires `aztec` CLI to be installed for auto-start:
-```bash
-curl -fsSL https://install.aztec.network | bash
-```
+**Note:** Originally a separate `packages/integration` workspace. Later restructured into `packages/sdk/e2e/` (see Phase 7).
 
 ---
 
@@ -265,22 +256,138 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ---
 
-## Phase 7: Demo Frontend Testing
+## Phase 7: Demo Frontend Testing ✅ Complete
 
-**Goal**: Proper test coverage for the demo app — unit tests first, then browser E2E tests.
+**Goal**: Proper test coverage for the demo app + restructure all test infrastructure.
 
-**Parts:**
-- **A** — Unit tests for demo utility functions (`ui.ts` helpers, `aztec.ts` state management, `setUiMode` logic)
-- **B** — Browser E2E tests (Playwright or similar) for the full demo flow: mode switching, TEE URL input, deploy button, token flow button, result display, log panel
-
-**Notes:**
-- Part A is straightforward — test pure functions in isolation with `bun:test`
-- Part B requires a browser testing framework. Playwright is the likely choice (headless Chromium, good Vite integration). Need to decide whether to mock Aztec/TEE backends or run against real sandbox.
-- The demo currently has zero tests
+**Completed:**
+- **Unit tests**: 6 tests for demo utility functions (`ui.ts`, `aztec.ts` state management)
+- **Mocked E2E**: 8 Playwright tests (mode switching, TEE config panel, service dots, log panel) — no services needed
+- **Fullstack E2E**: 12 Playwright tests (deploy, token flow, all 6 mode-switch combinations across remote/local/TEE) — requires Aztec + tee-rex
+- **Test restructuring**: Eliminated `packages/integration/` — SDK owns its e2e in `packages/sdk/e2e/`, demo owns its e2e in `packages/demo/e2e/`
+- **Playwright projects**: Single `playwright.config.ts` with `mocked` and `fullstack` projects (different timeouts, test patterns)
+- **Assert-or-throw**: E2e tests fail (not skip) when services unavailable. TEE tests skip only when `TEE_URL` env var is not set.
+- **Per-package CI**: `ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml` — no monolithic test workflow
 
 ---
 
-## Phase 8: Evaluate Encryption Necessity in TEE Mode
+## Phase 8: Repo Rename & Reference Update
+
+**Goal**: Update all references from `nemi-fi` to `alejoamiras` throughout the codebase.
+
+**What needs to happen:**
+1. Search all files for `nemi-fi` references (package names, imports, URLs, configs)
+2. Update `package.json` names, repository URLs, and any hardcoded references
+3. Verify all imports and workspace references still resolve
+4. Update CI workflows if they reference the org
+5. `bun install` + `bun run test` to validate
+
+---
+
+## Phase 9: CI Granular Jobs
+
+**Goal**: Split each CI workflow from one monolithic job into granular, parallel checks.
+
+**Current state**: Each CI workflow (`ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml`) runs everything sequentially in a single job: install → lint → typecheck → unit tests.
+
+**Target**: Each check runs as its own job, so failures are immediately visible (e.g., "SDK/Typecheck failed" not just "test job failed"):
+
+```
+ci-sdk.yml:
+  SDK / Lint
+  SDK / Typecheck
+  SDK / Unit Tests
+
+ci-demo.yml:
+  Demo / Lint
+  Demo / Unit Tests
+  Demo / Mocked E2E
+
+ci-server.yml:
+  Server / Lint
+  Server / Typecheck
+  Server / Unit Tests
+```
+
+**Implementation notes:**
+- Each job still shares `bun install` via cache
+- Use `needs:` if ordering matters, otherwise run in parallel
+- Keep path filters as-is (each workflow triggers on its own package)
+
+---
+
+## Phase 10: E2E CI with Aztec Local Network
+
+**Goal**: Run SDK and Demo e2e tests in CI against a real Aztec local network.
+
+**Start with SDK** (simpler — just `bun test`, no browser), then tackle Demo (Playwright + Vite dev server).
+
+**What needs to happen:**
+1. Install Aztec CLI in CI (`VERSION={version} curl -fsSL https://install.aztec.network | bash`)
+   - Reference: `/Users/alejoamiras/Projects/aztec-packages/docs` for latest install instructions
+2. Start Aztec local network (`aztec start --local-network`) as a background service
+3. Start tee-rex server (`bun run start`) as a background service
+4. Wait for both services to be healthy
+5. Run `bun run --cwd packages/sdk test:e2e`
+6. (Phase 2) Run `bun run --cwd packages/demo test:e2e:fullstack` with Playwright
+
+**CI structure:**
+- Triggered via `workflow_dispatch` (manual) initially — e2e is slow and needs services
+- Consider a scheduled run (daily/weekly) once stable
+- Separate jobs for SDK e2e and Demo e2e (different runners/timeouts)
+
+**Risks:**
+- Aztec sandbox startup time (~1-2 min) adds to CI duration
+- Memory requirements — sandbox + tee-rex + test runner may need a larger runner
+- Flakiness from IndexedDB issues in Playwright (mitigated by retry loop in beforeAll)
+
+---
+
+## Phase 11: AWS TEE Infrastructure Research & Scaling
+
+**Goal**: Research and deploy tee-rex on a beefier AWS instance for faster proving, with a clear understanding of costs.
+
+**Context**: Currently using m5.xlarge (4 vCPU, 16 GiB, ~$0.21/hr). Barretenberg is CPU-bound and benefits from more cores. Enclave gets 2 vCPUs (of 4) — very constrained.
+
+**Research needed:**
+1. Which Nitro Enclave-capable instance types exist? (m5, c5, c6i, c7i, r6i families)
+2. Price comparison: on-demand vs spot vs reserved (1yr/3yr)
+3. vCPU/memory allocation constraints for enclaves per instance type
+4. Compute-optimized (c-family) vs general-purpose (m-family) for Barretenberg workloads
+5. Cost projections: hourly, daily (8h), monthly for top 3 candidates
+
+**Deployment:**
+1. Benchmark current proving times on m5.xlarge (baseline)
+2. Deploy on 2-3 candidate instance types, measure proving times
+3. Pick the best price/performance option
+4. Update deployment docs and allocator config
+
+---
+
+## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow)
+
+**Goal**: GitHub Actions workflow that automatically tracks Aztec nightly versions, updates dependencies, tests everything, and creates a PR (or releases the SDK) if all tests pass.
+
+**Flow:**
+1. **Scheduled trigger** (daily cron) — check latest `@aztec/aztec.js` nightly on npm
+2. **Compare** against current version in workspace — skip if already up-to-date
+3. **Create branch** — `chore/aztec-nightly-{date}`
+4. **Update all `@aztec/*` dependencies** across all workspace packages, `bun install`
+5. **Run full test suite** — lint + typecheck + unit tests
+6. **Run e2e tests** against local network (Phase 10 must be working first)
+7. **If all green** — create PR (or auto-merge + npm publish with matching nightly tag)
+8. **If red** — open PR anyway with "failing" label for manual investigation
+
+**Implementation notes:**
+- Use `npm view @aztec/aztec.js dist-tags` to find latest nightly
+- SDK version should track the Aztec nightly (e.g., `0.1.0-nightly.20260210`)
+- Need npm publish token as GitHub secret
+- Start with "dry run" mode (PR only, no auto-merge/publish)
+- Depends on Phase 10 (E2E CI) being stable
+
+---
+
+## Phase 13: Evaluate Encryption Necessity in TEE Mode
 
 **Goal**: Investigate whether OpenPGP encryption of proving inputs is still necessary when the TEE server is accessed over HTTPS.
 
@@ -301,42 +408,10 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ---
 
-## Phase 9: Higher-Performance EC2 for Nitro Enclave
+## Backlog
 
-**Goal**: Set up a more powerful EC2 instance type with Nitro Enclave support for faster proving.
-
-**Context**: Currently using m5.xlarge (4 vCPU, 16 GiB, ~$0.21/hr). Barretenberg is CPU-bound and benefits significantly from more cores. Enclave gets 2 vCPUs (of 4) — very constrained.
-
-**Options to evaluate:**
-- **m5.2xlarge** (8 vCPU, 32 GiB, ~$0.42/hr) — give enclave 4+ vCPUs
-- **c5.4xlarge** (16 vCPU, 32 GiB, ~$0.74/hr) — compute-optimized, enclave gets 8+ vCPUs
-- **c6i/c7i** variants — newer generations, better price/performance
-- Spot instances for 60-70% savings during testing
-
-**What needs to happen:**
-1. Benchmark current proving times on m5.xlarge (baseline)
-2. Test with 2-3 instance types, measuring proving times
-3. Update `docs/nitro-deployment.md` with recommended instance types
-4. Update allocator config (more CPUs/memory for enclave)
-
----
-
-## Phase 10: CI Auto-Update Pipeline (Aztec Nightly Tracker)
-
-**Goal**: GitHub Actions workflow that automatically detects new Aztec nightly versions, updates all packages, runs tests, and publishes an SDK release if everything passes.
-
-**Parts:**
-- **A** — Nightly detection: scheduled workflow (daily cron) that checks for the latest `@aztec/aztec.js` nightly version on npm
-- **B** — Auto-update: if a new version exists, create a branch, update all `@aztec/*` dependencies across all workspace packages, run `bun install`
-- **C** — Validation: run `bun run test` (lint + typecheck + unit tests). Optionally run integration tests against sandbox if feasible in CI.
-- **D** — Auto-PR / auto-release: if tests pass, create a PR (or auto-merge) and publish the SDK to npm with the matching nightly version tag
-
-**Implementation notes:**
-- Use `npm view @aztec/aztec.js dist-tags` to find latest nightly
-- Compare against current version in root `package.json`
-- The SDK version should track the Aztec nightly (e.g., `0.1.0-nightly.20260210`)
-- Need npm publish token as a GitHub secret
-- Consider a "dry run" mode first that just opens the PR without auto-merging
+- **Phase 5E**: Nitro deployment runbook & debugging guide (`docs/nitro-deployment.md`)
+- **Phase 6**: End-to-end testing on Aztec next-net (real network, not sandbox)
 
 ---
 

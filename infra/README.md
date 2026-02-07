@@ -73,7 +73,7 @@ curl http://localhost:4000/attestation | jq .mode
 ## SDK Configuration
 
 ```ts
-import { TeeRexProver } from "@nemi-fi/tee-rex";
+import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 const prover = new TeeRexProver("https://your-ec2-ip:4000", simulator);
 

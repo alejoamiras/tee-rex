@@ -1,3 +1,4 @@
+import { type ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing/lazy";
 import type { AztecAddress } from "@aztec/aztec.js";
 import { Fr } from "@aztec/aztec.js/fields";
@@ -5,7 +6,6 @@ import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { TestWallet } from "@aztec/test-wallet/client/lazy";
-import { type ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
