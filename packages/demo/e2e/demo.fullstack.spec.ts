@@ -1,6 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 import { assertServicesAvailable } from "./fullstack.fixture";
 
+const TEE_URL = process.env.TEE_URL || "";
+
 let sharedPage: Page;
 
 test.describe.configure({ mode: "serial" });
@@ -259,6 +261,105 @@ test("switches from local to remote and deploys successfully", async () => {
 
   // Log contains success message
   await expect(page.locator("#log")).toContainText("Deployed in");
+
+  // Buttons re-enabled
+  await expect(page.locator("#deploy-btn")).toBeEnabled();
+  await expect(page.locator("#token-flow-btn")).toBeEnabled();
+});
+
+test("deploys account via TEE proving through the UI", async () => {
+  test.skip(!TEE_URL, "TEE_URL env var not set — skipping TEE tests");
+
+  const page = sharedPage;
+
+  // Switch to TEE mode
+  await page.click("#mode-tee");
+  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
+  await expect(page.locator("#tee-config")).not.toHaveClass(/hidden/);
+
+  // Enter TEE server URL and check attestation
+  await page.fill("#tee-url", TEE_URL);
+  await page.click("#tee-check-btn");
+
+  // Wait for attestation check — should show nitro mode
+  await expect(page.locator("#tee-attestation-dot")).toHaveClass(/status-online/, {
+    timeout: 30_000,
+  });
+  await expect(page.locator("#tee-attestation-label")).toContainText("nitro");
+  await expect(page.locator("#log")).toContainText("TEE server reachable");
+
+  // Click deploy
+  await page.click("#deploy-btn");
+
+  // Progress indicator appears
+  await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#deploy-btn")).toHaveText("Proving...");
+
+  // Wait for proving to complete
+  await expect(page.locator("#deploy-btn")).toHaveText("Deploy Test Account", {
+    timeout: 10 * 60 * 1000,
+  });
+
+  // Progress hidden
+  await expect(page.locator("#progress")).toHaveClass(/hidden/);
+
+  // Results section visible with TEE card populated
+  await expect(page.locator("#results")).not.toHaveClass(/hidden/);
+
+  const timeText = await page.locator("#time-tee").textContent();
+  expect(timeText).not.toBe("—");
+  expect(timeText).toMatch(/^\d+\.\d+s$/);
+
+  await expect(page.locator("#tag-tee")).toHaveText("cold");
+  await expect(page.locator("#result-tee")).toHaveClass(/result-filled/);
+
+  // Log contains success message
+  await expect(page.locator("#log")).toContainText("Deployed in");
+
+  // Buttons re-enabled
+  await expect(page.locator("#deploy-btn")).toBeEnabled();
+  await expect(page.locator("#token-flow-btn")).toBeEnabled();
+});
+
+test("runs full token flow via TEE proving through the UI", async () => {
+  test.skip(!TEE_URL, "TEE_URL env var not set — skipping TEE tests");
+
+  const page = sharedPage;
+
+  // Should still be in TEE mode from previous test
+  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
+
+  // Click token flow
+  await page.click("#token-flow-btn");
+
+  // Progress indicator appears
+  await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#token-flow-btn")).toHaveText("Running...");
+
+  // Wait for flow to complete
+  await expect(page.locator("#token-flow-btn")).toHaveText("Run Token Flow", {
+    timeout: 10 * 60 * 1000,
+  });
+
+  // Progress hidden
+  await expect(page.locator("#progress")).toHaveClass(/hidden/);
+
+  // Results section visible with TEE card populated
+  await expect(page.locator("#results")).not.toHaveClass(/hidden/);
+
+  const timeText = await page.locator("#time-tee").textContent();
+  expect(timeText).not.toBe("—");
+  expect(timeText).toMatch(/^\d+\.\d+s$/);
+
+  await expect(page.locator("#tag-tee")).toHaveText("token flow");
+
+  // Log contains step breakdown
+  await expect(page.locator("#log")).toContainText("step breakdown");
+  await expect(page.locator("#log")).toContainText("Token flow complete");
+
+  // Balance verification
+  await expect(page.locator("#log")).toContainText("Alice: 500");
+  await expect(page.locator("#log")).toContainText("Bob: 500");
 
   // Buttons re-enabled
   await expect(page.locator("#deploy-btn")).toBeEnabled();

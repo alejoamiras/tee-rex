@@ -98,7 +98,7 @@ test("TEE Check with mocked nitro response shows green dot", async ({ page }) =>
   await mockServicesOffline(page);
 
   // Mock the TEE attestation endpoint
-  await page.route("http://18.134.13.233:4000/attestation", (route) =>
+  await page.route("http://tee-server.test:4000/attestation", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -111,7 +111,7 @@ test("TEE Check with mocked nitro response shows green dot", async ({ page }) =>
 
   // Switch to TEE mode and enter URL
   await page.click("#mode-tee");
-  await page.fill("#tee-url", "http://18.134.13.233:4000");
+  await page.fill("#tee-url", "http://tee-server.test:4000");
   await page.click("#tee-check-btn");
 
   // Wait for attestation check to complete
@@ -123,7 +123,7 @@ test("TEE Check with unreachable server shows red dot", async ({ page }) => {
   await mockServicesOffline(page);
 
   // Mock the attestation endpoint as unreachable
-  await page.route("http://18.134.13.233:4000/attestation", (route) =>
+  await page.route("http://tee-server.test:4000/attestation", (route) =>
     route.fulfill({ status: 503, body: "unavailable" }),
   );
 
@@ -131,7 +131,7 @@ test("TEE Check with unreachable server shows red dot", async ({ page }) => {
   await expect(page.locator("#log")).toContainText("services");
 
   await page.click("#mode-tee");
-  await page.fill("#tee-url", "http://18.134.13.233:4000");
+  await page.fill("#tee-url", "http://tee-server.test:4000");
   await page.click("#tee-check-btn");
 
   await expect(page.locator("#tee-attestation-dot")).toHaveClass(/status-offline/);
