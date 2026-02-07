@@ -1,12 +1,10 @@
+import { getInitialTestAccountsData } from "@aztec/accounts/testing/lazy";
 import type { AztecAddress } from "@aztec/aztec.js";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { WASMSimulator } from "@aztec/simulator/client";
-import {
-  registerInitialLocalNetworkAccountsInWallet,
-  TestWallet,
-} from "@aztec/test-wallet/client/lazy";
+import { TestWallet } from "@aztec/test-wallet/client/lazy";
 import { type ProvingMode, TeeRexProver } from "@nemi-fi/tee-rex";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
@@ -92,7 +90,19 @@ export async function initializeWallet(log: LogFn): Promise<boolean> {
     log("Wallet created", "success");
 
     log("Registering sandbox accounts...");
-    state.registeredAddresses = await registerInitialLocalNetworkAccountsInWallet(state.wallet);
+    // Register accounts serially to avoid IndexedDB TransactionInactiveError.
+    // The SDK's registerInitialLocalNetworkAccountsInWallet uses Promise.all
+    // which causes concurrent IDB writes that conflict in real browsers.
+    const testAccounts = await getInitialTestAccountsData();
+    state.registeredAddresses = [];
+    for (const account of testAccounts) {
+      const mgr = await state.wallet.createSchnorrAccount(
+        account.secret,
+        account.salt,
+        account.signingKey,
+      );
+      state.registeredAddresses.push(mgr.address);
+    }
     log(`Registered ${state.registeredAddresses.length} accounts`, "success");
 
     return true;

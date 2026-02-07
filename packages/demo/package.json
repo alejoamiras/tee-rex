@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "test": "bun test",
     "test:unit": "bun test",
-    "test:e2e": "bunx playwright test"
+    "test:e2e": "bunx playwright test",
+    "test:e2e:fullstack": "bunx playwright test --config playwright-fullstack.config.ts"
   },
   "dependencies": {
     "@aztec/accounts": "4.0.0-nightly.20260204",
