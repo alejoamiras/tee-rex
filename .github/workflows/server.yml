@@ -10,7 +10,7 @@ on:
       - "biome.json"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/ci-server.yml"
+      - ".github/workflows/server.yml"
   pull_request:
     branches: [main]
     paths:
@@ -19,7 +19,7 @@ on:
       - "biome.json"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/ci-server.yml"
+      - ".github/workflows/server.yml"
 
 jobs:
   lint:
