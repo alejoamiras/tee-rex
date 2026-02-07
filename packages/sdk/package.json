@@ -19,7 +19,8 @@
   "scripts": {
     "dev": "tsc -w",
     "build": "rm -rf dist && tsc",
-    "test:unit": "bun test",
+    "test:unit": "bun test src/",
+    "test:e2e": "bun test --preload ./e2e/e2e-setup.ts e2e/",
     "test:lint": "tsc --noEmit --emitDeclarationOnly false",
     "prepublishOnly": "bun run test:lint && bun run build"
   },
