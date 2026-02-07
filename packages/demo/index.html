@@ -32,7 +32,7 @@
             <span class="inline-block ml-1 text-lg opacity-60">🦖</span>
           </h1>
           <p class="mt-1.5 text-xs tracking-wide text-gray-500 uppercase">
-            Compare local vs remote zero-knowledge proving
+            Compare local, remote &amp; TEE zero-knowledge proving
           </p>
         </div>
       </header>
@@ -77,8 +77,34 @@
             id="mode-remote"
             class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
           >
-            ▸ Remote <span class="normal-case tracking-normal opacity-80">(tee)</span>
+            ▸ Remote <span class="normal-case tracking-normal opacity-80">(server)</span>
           </button>
+          <button
+            id="mode-tee"
+            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+          >
+            ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
+          </button>
+        </div>
+        <div id="tee-config" class="hidden px-3 pb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <input
+              id="tee-url"
+              type="text"
+              placeholder="http://<PUBLIC_IP>:4000"
+              class="flex-1 bg-black/40 border border-gray-800 px-3 py-1.5 text-xs font-mono text-gray-400 placeholder-gray-700 focus:border-emerald-700/50 focus:outline-none transition-colors"
+            />
+            <button
+              id="tee-check-btn"
+              class="px-3 py-1.5 text-[10px] uppercase tracking-wider border border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400 transition-colors"
+            >
+              Check
+            </button>
+          </div>
+          <div class="flex items-center gap-2 px-1">
+            <span id="tee-attestation-dot" class="status-dot status-unknown"></span>
+            <span id="tee-attestation-label" class="text-[10px] text-gray-600">attestation: not checked</span>
+          </div>
         </div>
       </section>
 
@@ -111,16 +137,21 @@
         <div class="border-b border-gray-800 px-4 py-1.5">
           <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
         </div>
-        <div class="p-3 grid grid-cols-2 gap-2">
+        <div class="p-3 grid grid-cols-3 gap-2">
           <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
             <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
             <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
             <div id="tag-local" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
           </div>
           <div id="result-remote" class="border border-gray-800 p-4 text-center transition-colors">
-            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (tee)</div>
+            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (server)</div>
             <div id="time-remote" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
             <div id="tag-remote" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+          </div>
+          <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
+            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>
+            <div id="time-tee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+            <div id="tag-tee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
           </div>
         </div>
       </section>
