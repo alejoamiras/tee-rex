@@ -1,8 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./e2e",
-  timeout: 30_000,
   use: {
     baseURL: "http://localhost:5173",
     headless: true,
@@ -12,4 +10,23 @@ export default defineConfig({
     port: 5173,
     reuseExistingServer: true,
   },
+  projects: [
+    {
+      name: "mocked",
+      testDir: "./e2e",
+      testMatch: "*.mocked.spec.ts",
+      timeout: 30_000,
+    },
+    {
+      name: "fullstack",
+      testDir: "./e2e",
+      testMatch: "*.fullstack.spec.ts",
+      timeout: 10 * 60 * 1000,
+      retries: 0,
+      use: {
+        actionTimeout: 0,
+        trace: "retain-on-failure",
+      },
+    },
+  ],
 });

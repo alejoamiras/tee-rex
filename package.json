@@ -3,7 +3,6 @@
   "workspaces": [
     "packages/sdk",
     "packages/server",
-    "packages/integration",
     "packages/demo"
   ],
   "scripts": {
@@ -17,9 +16,8 @@
     "test": "bun run lint && bun run test:typecheck && bun run test:unit",
     "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
     "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/demo test:unit",
-    "test:integration": "bun run --cwd packages/integration test",
-    "test:e2e:fullstack": "bun run --cwd packages/demo test:e2e:fullstack",
-    "test:all": "bun run test && bun run test:integration",
+    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/demo test:e2e:all",
+    "test:all": "bun run test && bun run test:e2e",
     "demo": "bun run --cwd packages/demo dev",
     "sdk:build": "bun run --cwd packages/sdk build",
     "prepare": "husky"

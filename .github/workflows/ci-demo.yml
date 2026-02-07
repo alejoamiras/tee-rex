@@ -1,34 +1,31 @@
-name: CI - Integration
+name: CI - Demo
 
 on:
   workflow_dispatch:
-    inputs:
-      aztec_node_url:
-        description: "Aztec node URL"
-        required: false
-        default: "http://localhost:8080"
   push:
     branches: [main]
     paths:
-      - "packages/integration/**"
+      - "packages/demo/**"
       - "packages/sdk/**"
-      - "packages/server/**"
+      - "tsconfig.json"
+      - "biome.json"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/ci-integration.yml"
+      - ".github/workflows/ci-demo.yml"
   pull_request:
     branches: [main]
     paths:
-      - "packages/integration/**"
+      - "packages/demo/**"
       - "packages/sdk/**"
-      - "packages/server/**"
+      - "tsconfig.json"
+      - "biome.json"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/ci-integration.yml"
+      - ".github/workflows/ci-demo.yml"
 
 jobs:
-  build-check:
-    name: Build Check
+  test:
+    name: Lint, Unit Tests & Mocked E2E
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -48,13 +45,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
       - name: Biome check
         run: bun run lint
 
-      - name: Typecheck SDK
-        run: bun run --cwd packages/sdk test:lint
+      - name: Unit tests
+        run: bun run --cwd packages/demo test:unit
 
-      - name: Typecheck Server
-        run: bun run --cwd packages/server typecheck
-      # Full integration tests require Aztec sandbox.
+      - name: Mocked E2E tests
+        run: bun run --cwd packages/demo test:e2e
+
+      # Fullstack E2E tests require Aztec local network + tee-rex server.
       # Use workflow_dispatch to run manually when infrastructure is available.

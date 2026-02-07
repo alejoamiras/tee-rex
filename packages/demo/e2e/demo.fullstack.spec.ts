@@ -1,14 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
-import { checkServicesAvailable } from "./fullstack.fixture";
+import { assertServicesAvailable } from "./fullstack.fixture";
 
-let servicesAvailable = false;
 let sharedPage: Page;
 
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ browser }) => {
-  servicesAvailable = await checkServicesAvailable();
-  if (!servicesAvailable) return;
+  await assertServicesAvailable();
 
   // Share a single page across all tests — wallet init is expensive
   // and browser IndexedDB is flaky with repeated init/teardown cycles.
@@ -55,10 +53,6 @@ test.beforeAll(async ({ browser }) => {
 
 test.afterAll(async () => {
   if (sharedPage) await sharedPage.close();
-});
-
-test.beforeEach(() => {
-  test.skip(!servicesAvailable, "Aztec sandbox or tee-rex server not running");
 });
 
 test("deploys account via remote proving through the UI", async () => {

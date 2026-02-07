@@ -40,16 +40,6 @@
         "vite-plugin-node-polyfills": "^0.22.0",
       },
     },
-    "packages/integration": {
-      "name": "@nemi-fi/tee-rex-integration",
-      "devDependencies": {
-        "@aztec/aztec.js": "4.0.0-nightly.20260204",
-        "@aztec/simulator": "4.0.0-nightly.20260204",
-        "@aztec/test-wallet": "4.0.0-nightly.20260204",
-        "@logtape/logtape": "^2.0",
-        "@nemi-fi/tee-rex": "workspace:*",
-      },
-    },
     "packages/sdk": {
       "name": "@nemi-fi/tee-rex",
       "version": "0.87.2-alpha.4",
@@ -452,8 +442,6 @@
     "@nemi-fi/tee-rex": ["@nemi-fi/tee-rex@workspace:packages/sdk"],
 
     "@nemi-fi/tee-rex-demo": ["@nemi-fi/tee-rex-demo@workspace:packages/demo"],
-
-    "@nemi-fi/tee-rex-integration": ["@nemi-fi/tee-rex-integration@workspace:packages/integration"],
 
     "@nemi-fi/tee-rex-server": ["@nemi-fi/tee-rex-server@workspace:packages/server"],
 
