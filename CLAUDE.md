@@ -155,9 +155,10 @@ curl -fsSL https://install.aztec.network | bash
 **Parts:**
 - **A** ✅ — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`) — 20 tests
 - **B** ✅ — E2E tests for local proving, remote proving, and mode switching — 21 tests
-- **C** — Demo page with three proving modes and TEE indicator
+- **C** ✅ — Demo page with three proving modes (Local/Remote/TEE) and attestation indicator
+- **D** — Full token flow demo: deploy token + mint + shield + private transfer in one click
 
-**Status**: A & B complete, C partially built (has local/remote toggle, needs TEE mode)
+**Status**: A, B & C complete, D not started
 
 **Phase 4C Details**:
 
@@ -177,6 +178,30 @@ The demo (`packages/demo`) already has a working Vite + Tailwind frontend with l
 - Results panel already has local/remote cards — add a third "tee" card for side-by-side timing comparison
 
 **Planning document**: See `/plans/phase-4-testing-and-demo.md`
+
+**Phase 4D Details — Full Token Flow Demo**:
+
+Currently the demo only deploys a Schnorr account (one proving step). A more compelling demo would execute a full token lifecycle in one click, logging each step with timing:
+
+1. **Deploy TokenContract** — `TokenContract.deploy(wallet, admin, 'TeeRexToken', 'TREX', 18)`
+2. **Mint to private** — `token.methods.mint_to_private(alice, 1000n)` (mints directly into private balance, avoids shield/redeem complexity)
+3. **Private transfer** — `token.methods.transfer(bob, 500n)` (fully private token send)
+4. **Check balances** — `balance_of_private(alice)` + `balance_of_private(bob)` (simulate calls, proves state is correct)
+
+Each step generates ZK proofs, so the demo shows multiple proving rounds per mode. This is more representative of real usage and more impressive for the show-and-tell.
+
+**Key imports:**
+```typescript
+import { TokenContract } from '@aztec/noir-contracts.js/Token';
+```
+
+**Implementation notes:**
+- Add a second action button ("Run Token Flow") alongside the existing "Deploy Test Account"
+- Each step logs to the log panel with its own timing
+- Total time shown in the result card
+- The existing account deploy is still useful as a quick sanity check; the token flow is the "full demo"
+- Reference: `aztec-packages/docs/examples/ts/aztecjs_advanced/index.ts` and `aztec-packages/yarn-project/end-to-end/src/fixtures/token_utils.ts`
+- Uses `mint_to_private` (simpler than `mint_to_public` → `shield` → `redeem_shield`)
 
 ---
 
