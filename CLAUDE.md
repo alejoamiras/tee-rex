@@ -13,6 +13,7 @@ This document outlines the planned improvements for the tee-rex project.
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
 - **CI**: GitHub Actions (per-package, path-filtered workflows: `ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
+- **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
 - **Aztec version**: 4.0.0-nightly.20260204
 
 ---
@@ -271,48 +272,19 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ---
 
-## Phase 8: Repo Rename & Reference Update
+## Phase 8: Repo Rename & Reference Update ✅ Complete
 
 **Goal**: Update all references from `nemi-fi` to `alejoamiras` throughout the codebase.
 
-**What needs to happen:**
-1. Search all files for `nemi-fi` references (package names, imports, URLs, configs)
-2. Update `package.json` names, repository URLs, and any hardcoded references
-3. Verify all imports and workspace references still resolve
-4. Update CI workflows if they reference the org
-5. `bun install` + `bun run test` to validate
+**Completed:** Updated 15+ files — package names, imports, npm badges, CI workflows, docs. Biome auto-fixed import ordering (`@alejoamiras` sorts before `@aztec`).
 
 ---
 
-## Phase 9: CI Granular Jobs
+## Phase 9: CI Granular Jobs ✅ Complete
 
-**Goal**: Split each CI workflow from one monolithic job into granular, parallel checks.
+**Goal**: Split each CI workflow into granular, parallel checks.
 
-**Current state**: Each CI workflow (`ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml`) runs everything sequentially in a single job: install → lint → typecheck → unit tests.
-
-**Target**: Each check runs as its own job, so failures are immediately visible (e.g., "SDK/Typecheck failed" not just "test job failed"):
-
-```
-ci-sdk.yml:
-  SDK / Lint
-  SDK / Typecheck
-  SDK / Unit Tests
-
-ci-demo.yml:
-  Demo / Lint
-  Demo / Unit Tests
-  Demo / Mocked E2E
-
-ci-server.yml:
-  Server / Lint
-  Server / Typecheck
-  Server / Unit Tests
-```
-
-**Implementation notes:**
-- Each job still shares `bun install` via cache
-- Use `needs:` if ordering matters, otherwise run in parallel
-- Keep path filters as-is (each workflow triggers on its own package)
+**Completed:** Each workflow now has separate jobs (Lint, Typecheck, Unit Tests, E2E) that run in parallel. Failures are immediately visible (e.g., "SDK/Typecheck failed").
 
 ---
 
@@ -330,20 +302,19 @@ ci-server.yml:
 
 ---
 
-## Phase 11: AWS TEE Infrastructure Research & Scaling
+## Phase 11: AWS TEE Infrastructure Research & Scaling (Research ✅, Benchmarking Pending)
 
 **Goal**: Research and deploy tee-rex on a beefier AWS instance for faster proving, with a clear understanding of costs.
 
-**Context**: Currently using m5.xlarge (4 vCPU, 16 GiB, ~$0.21/hr). Barretenberg is CPU-bound and benefits from more cores. Enclave gets 2 vCPUs (of 4) — very constrained.
+**Research completed:**
+- Compute-optimized c-family is best for Barretenberg (CPU-bound)
+- Top 3 candidates to benchmark:
+  - **c6a.2xlarge** ($0.306/hr) — 6 enclave vCPUs, AMD EPYC Milan, cheapest 3x upgrade
+  - **c6i.2xlarge** ($0.340/hr) — 6 enclave vCPUs, Intel Ice Lake, test AVX-512 optimizations
+  - **c6a.4xlarge** ($0.612/hr) — 14 enclave vCPUs, test scaling ceiling
+- Current m5.xlarge gives only 2 enclave vCPUs; any `.2xlarge` gives 6 (3x)
 
-**Research needed:**
-1. Which Nitro Enclave-capable instance types exist? (m5, c5, c6i, c7i, r6i families)
-2. Price comparison: on-demand vs spot vs reserved (1yr/3yr)
-3. vCPU/memory allocation constraints for enclaves per instance type
-4. Compute-optimized (c-family) vs general-purpose (m-family) for Barretenberg workloads
-5. Cost projections: hourly, daily (8h), monthly for top 3 candidates
-
-**Deployment:**
+**Remaining (tackle last):**
 1. Benchmark current proving times on m5.xlarge (baseline)
 2. Deploy on 2-3 candidate instance types, measure proving times
 3. Pick the best price/performance option
@@ -353,23 +324,27 @@ ci-server.yml:
 
 ## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow)
 
-**Goal**: GitHub Actions workflow that automatically tracks Aztec nightly versions, updates dependencies, tests everything, and creates a PR (or releases the SDK) if all tests pass.
+**Goal**: Full CI/CD pipeline that automatically tracks Aztec nightly versions, updates everything, tests against real services (including TEE), and releases if green. Subsumes Phase 6 (next-net testing).
 
 **Flow:**
 1. **Scheduled trigger** (daily cron) — check latest `@aztec/aztec.js` nightly on npm
 2. **Compare** against current version in workspace — skip if already up-to-date
 3. **Create branch** — `chore/aztec-nightly-{date}`
 4. **Update all `@aztec/*` dependencies** across all workspace packages, `bun install`
-5. **Run full test suite** — lint + typecheck + unit tests
-6. **Run e2e tests** against local network (Phase 10 must be working first)
-7. **If all green** — create PR (or auto-merge + npm publish with matching nightly tag)
-8. **If red** — open PR anyway with "failing" label for manual investigation
+5. **Update `AZTEC_VERSION`** in CI workflows to match new nightly
+6. **Run full test suite** — lint + typecheck + unit tests
+7. **Run SDK e2e** against local Aztec network
+8. **Build + deploy updated TEE** — push Docker image to ECR, redeploy Nitro enclave via SSM
+9. **Run demo fullstack e2e** against local network + TEE (`TEE_URL` pointing to deployed enclave)
+10. **If all green** — release npm package + deploy TEE officially + merge to main
+11. **If red** — open PR with "failing" label for manual investigation
 
 **Implementation notes:**
 - Use `npm view @aztec/aztec.js dist-tags` to find latest nightly
 - SDK version should track the Aztec nightly (e.g., `0.1.0-nightly.20260210`)
 - Need npm publish token as GitHub secret
-- Start with "dry run" mode (PR only, no auto-merge/publish)
+- Need AWS credentials as GitHub secret for TEE deployment
+- Start with "dry run" mode (PR only, no auto-merge/publish/deploy)
 - Depends on Phase 10 (E2E CI) being stable
 
 ---
@@ -394,9 +369,50 @@ ci-server.yml:
 
 ---
 
+## Phase 14: SDK E2E Test Improvements — TEE + Mode Switching ✅ Complete
+
+**Goal**: Restructure SDK e2e tests to match the demo's elegant pattern — test TEE mode and mode switching, with TEE tests skipping gracefully when `TEE_URL` isn't set.
+
+**Completed:**
+- Consolidated `remote-proving.test.ts`, `local-proving.test.ts`, `tee-proving.test.ts` into a single `proving.test.ts` with nested describes: `TeeRexProver` > `Remote` / `Local` / `TEE`
+- Shared setup (prover + wallet created once), `deploySchnorrAccount()` helper eliminates boilerplate
+- TEE describe blocks use `describe.skipIf(!config.teeUrl)` — skip when `TEE_URL` not set
+- `mode-switching.test.ts` extended with TEE transitions: local→TEE, TEE→local, TEE→standard remote
+- `e2e-setup.ts` exports `teeUrl` from `TEE_URL` env var
+
+**SDK e2e test structure:**
+| File | Purpose |
+|---|---|
+| `e2e-setup.ts` | Preload — asserts services, exports config |
+| `connectivity.test.ts` | Service health checks |
+| `proving.test.ts` | One deploy per mode (Remote / Local / TEE) |
+| `mode-switching.test.ts` | Remote→Local + TEE transitions |
+
+---
+
+## Phase 15: TEE Generalization Research
+
+**Goal**: Research whether the tee-rex implementation can be generalized to support other TEE types beyond AWS Nitro Enclaves (e.g., Intel SGX/TDX, AMD SEV, ARM CCA).
+
+**This is research only — no code changes unless the abstraction is clean.**
+
+**Questions to answer:**
+1. What's the common abstraction across TEE types? (attestation format, key provisioning, isolation model)
+2. Where does tee-rex currently hard-code Nitro-specific logic? (NSM device, COSE_Sign1 attestation format, Nitro root CA)
+3. Could we define a `TeeProvider` interface that abstracts: `generateAttestation(publicKey)` + `verifyAttestation(doc)`?
+4. What would SGX/TDX support look like? (DCAP attestation, different certificate chain)
+5. Is the complexity worth it, or is Nitro-only the right scope for this project?
+
+**Possible outcomes:**
+- Define the interface but only implement Nitro (clean extensibility without over-engineering)
+- Keep Nitro-only if the abstraction is too leaky
+- Identify a few quick wins (e.g., make attestation verification pluggable)
+
+---
+
 ## Backlog
 
-- **Phase 6**: End-to-end testing on Aztec next-net (real network, not sandbox)
+- Phase 6 (next-net testing) is now part of Phase 12 (Golden Bow)
 
 ---
 
