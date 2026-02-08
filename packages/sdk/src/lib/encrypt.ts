@@ -1,5 +1,7 @@
 import * as openpgp from "openpgp";
 
+openpgp.config.aeadProtect = true;
+
 export async function encrypt({
   data,
   encryptionPublicKey,

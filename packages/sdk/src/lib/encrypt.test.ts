@@ -5,8 +5,7 @@ import { encrypt } from "./encrypt.js";
 /** Generate a test keypair. */
 async function generateTestKeys() {
   const keys = await openpgp.generateKey({
-    type: "ecc",
-    curve: "nistP256",
+    type: "curve25519",
     userIDs: [{ name: "Test" }],
   });
   return { publicKey: keys.publicKey, privateKey: keys.privateKey };

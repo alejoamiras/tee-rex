@@ -1,6 +1,8 @@
 import * as openpgp from "openpgp";
 import { lazyValue } from "./utils.js";
 
+openpgp.config.aeadProtect = true;
+
 export class EncryptionService {
   readonly #keys = lazyValue(() => generateKeys());
 
@@ -18,9 +20,7 @@ export class EncryptionService {
 
 async function generateKeys() {
   const keys = await openpgp.generateKey({
-    // TODO(security): review these parameters
-    type: "ecc",
-    curve: "nistP256",
+    type: "curve25519",
     userIDs: [{ name: "TEE-Rex" }],
   });
   return {
