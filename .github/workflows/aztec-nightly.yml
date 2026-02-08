@@ -1,0 +1,378 @@
+name: Aztec Nightly Update
+
+on:
+  schedule:
+    - cron: "0 8 * * 1-5" # 08:00 UTC weekdays
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Force specific version (leave empty for auto-detect)"
+        required: false
+        type: string
+      skip_e2e:
+        description: "Skip e2e tests (faster, for debugging the workflow)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: aztec-nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ── Job 1: Check if a newer nightly exists ──────────────────────────
+  check-update:
+    name: Check for new nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      new_version: ${{ steps.check.outputs.new_version }}
+      current_version: ${{ steps.check.outputs.current_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Check nightly version
+        id: check
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            CURRENT=$(bun -e "console.log(JSON.parse(require('fs').readFileSync('packages/sdk/package.json','utf8')).devDependencies['@aztec/aztec.js'])")
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "new_version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "Forced update to ${{ inputs.version }} (current: $CURRENT)"
+          else
+            RESULT=$(bun scripts/check-aztec-nightly.ts)
+            echo "$RESULT" | jq .
+            NEEDS=$(echo "$RESULT" | jq -r .needsUpdate)
+            LATEST=$(echo "$RESULT" | jq -r .latest)
+            CURRENT=$(echo "$RESULT" | jq -r .current)
+            echo "needs_update=$NEEDS" >> "$GITHUB_OUTPUT"
+            echo "new_version=$LATEST" >> "$GITHUB_OUTPUT"
+            echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            if [ "$NEEDS" = "true" ]; then
+              echo "New nightly available: $CURRENT → $LATEST"
+            else
+              echo "Already up to date at $CURRENT"
+            fi
+          fi
+
+  # ── Job 2: Update deps, commit, run fast tests ─────────────────────
+  update-and-test:
+    name: Update & unit tests
+    needs: check-update
+    if: needs.check-update.outputs.needs_update == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEW_VERSION: ${{ needs.check-update.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-nightly-${{ needs.check-update.outputs.new_version }}
+          restore-keys: |
+            ${{ runner.os }}-bun-nightly-
+            ${{ runner.os }}-bun-
+
+      - name: Update @aztec/* versions
+        run: bun scripts/update-aztec-version.ts $NEW_VERSION
+
+      - name: Install dependencies with new versions
+        run: bun install
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="chore/aztec-nightly-${NEW_VERSION}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: update @aztec/* to ${NEW_VERSION}"
+          git push -u origin "$BRANCH" --force
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run test:typecheck
+
+      - name: Unit tests
+        run: bun run test:unit
+
+  # ── Job 3: SDK E2E tests ───────────────────────────────────────────
+  e2e-sdk:
+    name: SDK E2E
+    needs: [check-update, update-and-test]
+    if: ${{ !inputs.skip_e2e }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AZTEC_VERSION: ${{ needs.check-update.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-nightly-${{ env.AZTEC_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-bun-nightly-
+            ${{ runner.os }}-bun-
+
+      - run: bun install --frozen-lockfile
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache Aztec CLI
+        id: cache-aztec
+        uses: actions/cache@v4
+        with:
+          path: ~/.aztec/versions/${{ env.AZTEC_VERSION }}
+          key: ${{ runner.os }}-aztec-${{ env.AZTEC_VERSION }}
+
+      - name: Install Aztec CLI
+        if: steps.cache-aztec.outputs.cache-hit != 'true'
+        run: |
+          export CI=1
+          export FOUNDRY_DIR="$HOME/.foundry"
+          curl -fsSL "https://install.aztec.network/$AZTEC_VERSION/install" | VERSION=$AZTEC_VERSION bash
+          ls -la ~/.aztec/versions/$AZTEC_VERSION/bin/
+
+      - name: Update PATH
+        run: |
+          echo "$HOME/.aztec/versions/$AZTEC_VERSION/bin" >> $GITHUB_PATH
+          echo "$HOME/.aztec/versions/$AZTEC_VERSION/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Start Aztec local network
+        run: aztec start --local-network &
+
+      - name: Start tee-rex server
+        run: bun run start &
+
+      - name: Wait for Aztec node
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/status > /dev/null 2>&1; then
+              echo "Aztec node ready (attempt $i)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Aztec node failed to start within 5 minutes"
+          exit 1
+
+      - name: Wait for tee-rex server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4000/encryption-public-key > /dev/null 2>&1; then
+              echo "tee-rex server ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "tee-rex server failed to start within 1 minute"
+          exit 1
+
+      - name: Run SDK E2E tests
+        run: bun run --cwd packages/sdk test:e2e
+
+  # ── Job 4: Demo fullstack E2E tests ────────────────────────────────
+  e2e-demo:
+    name: Demo Fullstack E2E
+    needs: [check-update, update-and-test]
+    if: ${{ !inputs.skip_e2e }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AZTEC_VERSION: ${{ needs.check-update.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-nightly-${{ env.AZTEC_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-bun-nightly-
+            ${{ runner.os }}-bun-
+
+      - run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache Aztec CLI
+        id: cache-aztec
+        uses: actions/cache@v4
+        with:
+          path: ~/.aztec/versions/${{ env.AZTEC_VERSION }}
+          key: ${{ runner.os }}-aztec-${{ env.AZTEC_VERSION }}
+
+      - name: Install Aztec CLI
+        if: steps.cache-aztec.outputs.cache-hit != 'true'
+        run: |
+          export CI=1
+          export FOUNDRY_DIR="$HOME/.foundry"
+          curl -fsSL "https://install.aztec.network/$AZTEC_VERSION/install" | VERSION=$AZTEC_VERSION bash
+          ls -la ~/.aztec/versions/$AZTEC_VERSION/bin/
+
+      - name: Update PATH
+        run: |
+          echo "$HOME/.aztec/versions/$AZTEC_VERSION/bin" >> $GITHUB_PATH
+          echo "$HOME/.aztec/versions/$AZTEC_VERSION/node_modules/.bin" >> $GITHUB_PATH
+
+      - name: Start Aztec local network
+        run: aztec start --local-network &
+
+      - name: Start tee-rex server
+        run: bun run start &
+
+      - name: Wait for Aztec node
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/status > /dev/null 2>&1; then
+              echo "Aztec node ready (attempt $i)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Aztec node failed to start within 5 minutes"
+          exit 1
+
+      - name: Wait for tee-rex server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4000/encryption-public-key > /dev/null 2>&1; then
+              echo "tee-rex server ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "tee-rex server failed to start within 1 minute"
+          exit 1
+
+      - name: Run fullstack E2E tests
+        run: bun run --cwd packages/demo test:e2e:fullstack
+
+  # ── Job 5: Create or update PR ─────────────────────────────────────
+  create-pr:
+    name: Create PR
+    needs: [check-update, update-and-test, e2e-sdk, e2e-demo]
+    if: always() && needs.check-update.outputs.needs_update == 'true' && needs.update-and-test.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NEW_VERSION: ${{ needs.check-update.outputs.new_version }}
+      CURRENT_VERSION: ${{ needs.check-update.outputs.current_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine results
+        id: results
+        run: |
+          UNIT="${{ needs.update-and-test.result }}"
+          SDK_E2E="${{ needs.e2e-sdk.result }}"
+          DEMO_E2E="${{ needs.e2e-demo.result }}"
+
+          echo "unit=$UNIT" >> "$GITHUB_OUTPUT"
+          echo "sdk_e2e=$SDK_E2E" >> "$GITHUB_OUTPUT"
+          echo "demo_e2e=$DEMO_E2E" >> "$GITHUB_OUTPUT"
+
+          ALL_PASSED=true
+          for result in "$UNIT" "$SDK_E2E" "$DEMO_E2E"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              ALL_PASSED=false
+              break
+            fi
+          done
+          echo "all_passed=$ALL_PASSED" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update PR
+        run: |
+          BRANCH="chore/aztec-nightly-${NEW_VERSION}"
+          TITLE="chore: update @aztec/* to ${NEW_VERSION}"
+
+          STATUS_ICON() {
+            case "$1" in
+              success) echo "pass" ;;
+              skipped) echo "skip" ;;
+              *) echo "FAIL" ;;
+            esac
+          }
+
+          BODY="$(cat <<EOF
+          ## Aztec Nightly Update
+
+          **Version**: \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\`
+
+          ### Test Results
+
+          | Job | Status |
+          |---|---|
+          | Lint + Typecheck + Unit | $(STATUS_ICON "${{ steps.results.outputs.unit }}") |
+          | SDK E2E | $(STATUS_ICON "${{ steps.results.outputs.sdk_e2e }}") |
+          | Demo Fullstack E2E | $(STATUS_ICON "${{ steps.results.outputs.demo_e2e }}") |
+
+          [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          ---
+          *Automated by [Aztec Nightly Update](${{ github.server_url }}/${{ github.repository }}/actions/workflows/aztec-nightly.yml) workflow.*
+          EOF
+          )"
+
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Updating existing PR #$EXISTING_PR"
+            gh pr edit "$EXISTING_PR" --title "$TITLE" --body "$BODY"
+          else
+            echo "Creating new PR"
+            gh pr create \
+              --head "$BRANCH" \
+              --base main \
+              --title "$TITLE" \
+              --body "$BODY"
+          fi
+
+          # Get PR number (whether new or existing)
+          PR_NUM=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+
+          # Manage labels
+          if [ "${{ steps.results.outputs.all_passed }}" = "true" ]; then
+            gh pr edit "$PR_NUM" --remove-label "nightly-failing" 2>/dev/null || true
+          else
+            gh pr edit "$PR_NUM" --add-label "nightly-failing" 2>/dev/null || true
+          fi

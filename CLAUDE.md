@@ -322,30 +322,23 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ---
 
-## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow)
+## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow) — Dry-Run ✅ Complete
 
-**Goal**: Full CI/CD pipeline that automatically tracks Aztec nightly versions, updates everything, tests against real services (including TEE), and releases if green. Subsumes Phase 6 (next-net testing).
+**Goal**: CI pipeline that detects new Aztec nightly versions, updates deps, runs full test suite, and opens a PR.
 
-**Flow:**
-1. **Scheduled trigger** (daily cron) — check latest `@aztec/aztec.js` nightly on npm
-2. **Compare** against current version in workspace — skip if already up-to-date
-3. **Create branch** — `chore/aztec-nightly-{date}`
-4. **Update all `@aztec/*` dependencies** across all workspace packages, `bun install`
-5. **Update `AZTEC_VERSION`** in CI workflows to match new nightly
-6. **Run full test suite** — lint + typecheck + unit tests
-7. **Run SDK e2e** against local Aztec network
-8. **Build + deploy updated TEE** — push Docker image to ECR, redeploy Nitro enclave via SSM
-9. **Run demo fullstack e2e** against local network + TEE (`TEE_URL` pointing to deployed enclave)
-10. **If all green** — release npm package + deploy TEE officially + merge to main
-11. **If red** — open PR with "failing" label for manual investigation
+**Completed (dry-run mode):**
+- `scripts/check-aztec-nightly.ts` — checks npm `nightly` dist-tag, verifies all 11 `@aztec/*` packages exist at new version
+- `scripts/update-aztec-version.ts` — updates 3 package.json + 2 workflow files + runs `bun install`
+- `scripts/update-aztec-version.test.ts` — 10 unit tests for version validation, JSON/YAML update logic
+- `.github/workflows/aztec-nightly.yml` — 5-job pipeline: check → update + unit test → SDK e2e → demo fullstack e2e → create PR
+- Runs daily at 08:00 UTC (weekdays), plus manual dispatch with version override
+- PRs labeled `nightly-failing` when tests fail
+- `bun run aztec:check` and `bun run aztec:update <version>` for local use
 
-**Implementation notes:**
-- Use `npm view @aztec/aztec.js dist-tags` to find latest nightly
-- SDK version should track the Aztec nightly (e.g., `0.1.0-nightly.20260210`)
-- Need npm publish token as GitHub secret
-- Need AWS credentials as GitHub secret for TEE deployment
-- Start with "dry run" mode (PR only, no auto-merge/publish/deploy)
-- Depends on Phase 10 (E2E CI) being stable
+**Future additions:**
+- TEE deployment (build Docker → push ECR → deploy via SSM → run TEE e2e) — needs AWS secrets
+- npm publish — trigger after green tests
+- Auto-merge — merge PR automatically when all tests pass
 
 ---
 
