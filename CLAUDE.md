@@ -13,6 +13,7 @@ This document outlines the planned improvements for the tee-rex project.
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
 - **CI**: GitHub Actions (per-package, path-filtered workflows: `ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
+- **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
 - **Aztec version**: 4.0.0-nightly.20260204
 
 ---
@@ -368,15 +369,24 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ---
 
-## Phase 14: SDK E2E Test Improvements — TEE + Mode Switching
+## Phase 14: SDK E2E Test Improvements — TEE + Mode Switching ✅ Complete
 
 **Goal**: Restructure SDK e2e tests to match the demo's elegant pattern — test TEE mode and mode switching, with TEE tests skipping gracefully when `TEE_URL` isn't set.
 
-**What needs to happen:**
-1. Add TEE proving tests to SDK e2e (deploy + token flow via TEE)
-2. Add mode switching tests (remote→TEE, local→TEE, TEE→remote, TEE→local)
-3. Use `test.skipIf(!process.env.TEE_URL)` pattern — tests run when TEE is available, skip otherwise
-4. Consolidate into a clear structure like the demo: remote/local/TEE describe blocks, each owning its outbound switches
+**Completed:**
+- Consolidated `remote-proving.test.ts`, `local-proving.test.ts`, `tee-proving.test.ts` into a single `proving.test.ts` with nested describes: `TeeRexProver` > `Remote` / `Local` / `TEE`
+- Shared setup (prover + wallet created once), `deploySchnorrAccount()` helper eliminates boilerplate
+- TEE describe blocks use `describe.skipIf(!config.teeUrl)` — skip when `TEE_URL` not set
+- `mode-switching.test.ts` extended with TEE transitions: local→TEE, TEE→local, TEE→standard remote
+- `e2e-setup.ts` exports `teeUrl` from `TEE_URL` env var
+
+**SDK e2e test structure:**
+| File | Purpose |
+|---|---|
+| `e2e-setup.ts` | Preload — asserts services, exports config |
+| `connectivity.test.ts` | Service health checks |
+| `proving.test.ts` | One deploy per mode (Remote / Local / TEE) |
+| `mode-switching.test.ts` | Remote→Local + TEE transitions |
 
 ---
 

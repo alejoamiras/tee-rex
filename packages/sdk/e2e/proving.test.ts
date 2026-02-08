@@ -16,7 +16,7 @@ import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
 import { getLogger } from "@logtape/logtape";
-import { config } from "./e2e-setup";
+import { config } from "./e2e-setup.js";
 
 const logger = getLogger(["tee-rex", "sdk", "e2e", "proving"]);
 
