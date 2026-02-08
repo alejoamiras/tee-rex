@@ -1,9 +1,11 @@
 /**
  * Mode-switching e2e tests
  *
- * Validates that switching between remote and local proving modes mid-session
- * works correctly. Deploys one account with remote proving, then another with
- * local proving, using the same TeeRexProver instance.
+ * Validates that switching between proving modes mid-session works correctly.
+ * Deploys accounts with remote, local, and TEE proving using the same
+ * TeeRexProver instance.
+ *
+ * TEE transitions require TEE_URL env var — skipped when not set.
  *
  * Services must be running before tests start (asserted by e2e-setup.ts preload).
  */
@@ -108,6 +110,82 @@ describe("Mode Switching", () => {
 
       expect(deployedContract).toBeDefined();
       logger.info("Local deploy completed", { durationSec: elapsed });
+    }, 600000);
+  });
+
+  describe.skipIf(!config.teeUrl)("TEE Mode Transitions", () => {
+    test("should switch from local to TEE and deploy", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setApiUrl(config.teeUrl);
+      prover.setProvingMode(ProvingMode.remote);
+      logger.info("Switched to TEE mode", { teeUrl: config.teeUrl });
+
+      logger.debug("Creating Schnorr account (TEE mode)");
+      const secret = Fr.random();
+      const salt = Fr.random();
+      const accountManager = await wallet.createSchnorrAccount(secret, salt);
+
+      logger.debug("Deploying account (TEE mode)");
+      const startTime = Date.now();
+      const deployMethod = await accountManager.getDeployMethod();
+      const deployedContract = await deployMethod.send({
+        from: registeredAddresses[0],
+        skipClassPublication: true,
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      expect(deployedContract).toBeDefined();
+      logger.info("TEE deploy completed", { durationSec: elapsed });
+    }, 600000);
+
+    test("should switch from TEE to local and deploy", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setProvingMode(ProvingMode.local);
+      logger.info("Switched from TEE to local proving mode");
+
+      logger.debug("Creating Schnorr account (local after TEE)");
+      const secret = Fr.random();
+      const salt = Fr.random();
+      const accountManager = await wallet.createSchnorrAccount(secret, salt);
+
+      logger.debug("Deploying account (local after TEE)");
+      const startTime = Date.now();
+      const deployMethod = await accountManager.getDeployMethod();
+      const deployedContract = await deployMethod.send({
+        from: registeredAddresses[0],
+        skipClassPublication: true,
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      expect(deployedContract).toBeDefined();
+      logger.info("Local deploy after TEE completed", { durationSec: elapsed });
+    }, 600000);
+
+    test("should switch from local back to standard remote and deploy", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setApiUrl(config.teeRexUrl);
+      prover.setProvingMode(ProvingMode.remote);
+      logger.info("Switched from local back to standard remote", { apiUrl: config.teeRexUrl });
+
+      logger.debug("Creating Schnorr account (standard remote after TEE)");
+      const secret = Fr.random();
+      const salt = Fr.random();
+      const accountManager = await wallet.createSchnorrAccount(secret, salt);
+
+      logger.debug("Deploying account (standard remote after TEE)");
+      const startTime = Date.now();
+      const deployMethod = await accountManager.getDeployMethod();
+      const deployedContract = await deployMethod.send({
+        from: registeredAddresses[0],
+        skipClassPublication: true,
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      expect(deployedContract).toBeDefined();
+      logger.info("Standard remote deploy after TEE completed", { durationSec: elapsed });
     }, 600000);
   });
 });
