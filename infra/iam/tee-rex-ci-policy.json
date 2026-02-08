@@ -59,6 +59,26 @@
       "Resource": "arn:aws:ssm:eu-west-2::document/AWS-RunShellScript"
     },
     {
+      "Sid": "SSMStartSessionInstance",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:StartSession",
+        "ssm:TerminateSession"
+      ],
+      "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Environment": "ci"
+        }
+      }
+    },
+    {
+      "Sid": "SSMStartSessionDocument",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ssm:eu-west-2::document/AWS-StartPortForwardingSession"
+    },
+    {
       "Sid": "SSMReadResults",
       "Effect": "Allow",
       "Action": [

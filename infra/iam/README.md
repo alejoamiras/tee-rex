@@ -47,7 +47,7 @@ See `docs/nitro-deployment.md` for full instructions. Key requirements:
 - IAM instance profile with `AmazonSSMManagedInstanceCore` + `AmazonEC2ContainerRegistryReadOnly`
 - Tags: `Name: tee-rex-ci`, `Environment: ci`
 - Enclave support: enabled
-- Security group: inbound TCP 4000, SSH 22
+- Security group: inbound SSH 22 (CI uses SSM port forwarding — no public port 4000 needed)
 
 After creation, **stop the instance**. CI will start/stop it as needed.
 

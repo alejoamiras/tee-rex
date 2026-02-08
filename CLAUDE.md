@@ -347,10 +347,12 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 **AWS setup documentation:** `infra/iam/README.md` (OIDC provider, IAM role + policy, EC2 instance, GitHub variables)
 
+**SSM port forwarding:** CI reaches the enclave via SSM tunnel (`localhost:4001 → EC2:4000`) instead of public IP. No port 4000 exposed to the internet.
+
 **Future additions:**
 - npm publish — trigger after green tests
 - Auto-merge — merge PR automatically when all tests pass
-- SSM port forwarding — eliminate public port 4000 exposure
+- Deploy TEE once, pass `TEE_URL` to existing SDK/demo e2e workflows (avoid running e2e twice in nightly)
 
 ---
 

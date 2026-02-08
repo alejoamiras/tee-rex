@@ -32,6 +32,13 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
+      # ── Install SSM Plugin ─────────────────────────────────────
+      - name: Install SSM plugin
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
       # ── AWS Credentials via OIDC ─────────────────────────────────
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -76,14 +83,6 @@ jobs:
             fi
             sleep 10
           done
-
-          # Get public IP for TEE_URL
-          PUBLIC_IP=$(aws ec2 describe-instances \
-            --instance-ids "${INSTANCE_ID}" \
-            --query 'Reservations[0].Instances[0].PublicIpAddress' \
-            --output text)
-          echo "TEE_URL=http://${PUBLIC_IP}:4000" >> "$GITHUB_ENV"
-          echo "TEE instance: ${PUBLIC_IP}:4000"
 
       # ── Deploy Enclave via SSM ───────────────────────────────────
       - name: Deploy enclave
@@ -149,19 +148,25 @@ jobs:
             esac
           done
 
-      # ── Verify TEE Reachable from Runner ─────────────────────────
-      - name: Verify TEE reachable
+      # ── SSM Port Forwarding Tunnel ──────────────────────────────
+      - name: Start SSM tunnel
         run: |
-          echo "Checking ${TEE_URL}/attestation..."
-          for i in $(seq 1 12); do
-            if curl -sf "${TEE_URL}/attestation" > /dev/null 2>&1; then
-              echo "TEE server reachable from CI runner"
-              curl -s "${TEE_URL}/attestation" | jq '{mode, hasDoc: (.attestationDocument != null)}'
+          aws ssm start-session \
+            --target "${INSTANCE_ID}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+          echo "TEE_URL=http://localhost:4001" >> "$GITHUB_ENV"
+
+          echo "Waiting for SSM tunnel..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4001/attestation > /dev/null 2>&1; then
+              echo "SSM tunnel ready (attempt $i)"
+              curl -s http://localhost:4001/attestation | jq '{mode, hasDoc: (.attestationDocument != null)}'
               exit 0
             fi
-            sleep 5
+            sleep 2
           done
-          echo "TEE server not reachable at ${TEE_URL}"
+          echo "SSM tunnel failed to connect after 60s"
           exit 1
 
       # ── Setup Aztec + Local Services ─────────────────────────────
