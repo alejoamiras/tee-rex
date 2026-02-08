@@ -38,6 +38,8 @@ await configure({
 export const config = {
   nodeUrl: process.env.AZTEC_NODE_URL || "http://localhost:8080",
   teeRexUrl: process.env.TEEREX_URL || "http://localhost:4000",
+  /** Optional TEE server URL — TEE tests are skipped when not set. */
+  teeUrl: process.env.TEE_URL || "",
 };
 
 // Assert services are available — fail fast with a clear message
