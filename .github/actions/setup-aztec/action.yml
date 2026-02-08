@@ -1,0 +1,49 @@
+name: Setup Aztec
+description: Install Bun, Foundry, and Aztec CLI with caching
+
+inputs:
+  aztec_version:
+    description: Aztec CLI version to install
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+        restore-keys: ${{ runner.os }}-bun-
+
+    - run: bun install --frozen-lockfile
+      shell: bash
+
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+
+    - name: Cache Aztec CLI
+      id: cache-aztec
+      uses: actions/cache@v4
+      with:
+        path: ~/.aztec/versions/${{ inputs.aztec_version }}
+        key: ${{ runner.os }}-aztec-${{ inputs.aztec_version }}
+
+    - name: Install Aztec CLI
+      if: steps.cache-aztec.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        export CI=1
+        export FOUNDRY_DIR="$HOME/.foundry"
+        curl -fsSL "https://install.aztec.network/${{ inputs.aztec_version }}/install" \
+          | VERSION=${{ inputs.aztec_version }} bash
+        ls -la ~/.aztec/versions/${{ inputs.aztec_version }}/bin/
+
+    - name: Update PATH
+      shell: bash
+      run: |
+        echo "$HOME/.aztec/versions/${{ inputs.aztec_version }}/bin" >> $GITHUB_PATH
+        echo "$HOME/.aztec/versions/${{ inputs.aztec_version }}/node_modules/.bin" >> $GITHUB_PATH

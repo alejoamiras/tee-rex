@@ -1,0 +1,39 @@
+name: Start Services
+description: Start Aztec local network and tee-rex server, then wait for health checks
+
+runs:
+  using: composite
+  steps:
+    - name: Start Aztec local network
+      shell: bash
+      run: aztec start --local-network &
+
+    - name: Start tee-rex server
+      shell: bash
+      run: bun run start &
+
+    - name: Wait for Aztec node
+      shell: bash
+      run: |
+        for i in $(seq 1 60); do
+          if curl -sf http://localhost:8080/status > /dev/null 2>&1; then
+            echo "Aztec node ready (attempt $i)"
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "Aztec node failed to start within 5 minutes"
+        exit 1
+
+    - name: Wait for tee-rex server
+      shell: bash
+      run: |
+        for i in $(seq 1 30); do
+          if curl -sf http://localhost:4000/encryption-public-key > /dev/null 2>&1; then
+            echo "tee-rex server ready (attempt $i)"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "tee-rex server failed to start within 1 minute"
+        exit 1

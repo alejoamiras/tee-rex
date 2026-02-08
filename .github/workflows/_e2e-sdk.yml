@@ -1,0 +1,33 @@
+name: _SDK E2E (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      aztec_version:
+        description: Aztec CLI version
+        required: true
+        type: string
+      ref:
+        description: Git ref to checkout
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  e2e-sdk:
+    name: SDK E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: ./.github/actions/setup-aztec
+        with:
+          aztec_version: ${{ inputs.aztec_version }}
+
+      - uses: ./.github/actions/start-services
+
+      - name: Run SDK E2E tests
+        run: bun run --cwd packages/sdk test:e2e
