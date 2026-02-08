@@ -316,30 +316,17 @@ ci-server.yml:
 
 ---
 
-## Phase 10: E2E CI with Aztec Local Network
+## Phase 10: E2E CI with Aztec Local Network ✅ Complete
 
 **Goal**: Run SDK and Demo e2e tests in CI against a real Aztec local network.
 
-**Start with SDK** (simpler — just `bun test`, no browser), then tackle Demo (Playwright + Vite dev server).
-
-**What needs to happen:**
-1. Install Aztec CLI in CI (`VERSION={version} curl -fsSL https://install.aztec.network | bash`)
-   - Reference: `/Users/alejoamiras/Projects/aztec-packages/docs` for latest install instructions
-2. Start Aztec local network (`aztec start --local-network`) as a background service
-3. Start tee-rex server (`bun run start`) as a background service
-4. Wait for both services to be healthy
-5. Run `bun run --cwd packages/sdk test:e2e`
-6. (Phase 2) Run `bun run --cwd packages/demo test:e2e:fullstack` with Playwright
-
-**CI structure:**
-- Triggered via `workflow_dispatch` (manual) initially — e2e is slow and needs services
-- Consider a scheduled run (daily/weekly) once stable
-- Separate jobs for SDK e2e and Demo e2e (different runners/timeouts)
-
-**Risks:**
-- Aztec sandbox startup time (~1-2 min) adds to CI duration
-- Memory requirements — sandbox + tee-rex + test runner may need a larger runner
-- Flakiness from IndexedDB issues in Playwright (mitigated by retry loop in beforeAll)
+**Completed:**
+- SDK E2E job in `sdk.yml` — installs Foundry + Aztec CLI, starts local network + tee-rex, runs `bun test e2e/`
+- Demo Fullstack E2E job in `demo.yml` — same infra + Playwright with chromium, runs `test:e2e:fullstack`
+- Aztec CLI cached by version (`~/.aztec/versions/<VERSION>/`) — install step skipped on cache hit
+- `AZTEC_VERSION` env var as single source of truth per workflow
+- Both triggered on PRs and pushes to main (path-filtered)
+- Separate health-check steps for Aztec node and tee-rex server
 
 ---
 
