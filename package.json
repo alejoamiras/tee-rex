@@ -20,6 +20,8 @@
     "test:all": "bun run test && bun run test:e2e",
     "demo": "bun run --cwd packages/demo dev",
     "sdk:build": "bun run --cwd packages/sdk build",
+    "aztec:check": "bun scripts/check-aztec-nightly.ts",
+    "aztec:update": "bun scripts/update-aztec-version.ts",
     "prepare": "husky"
   },
   "lint-staged": {
