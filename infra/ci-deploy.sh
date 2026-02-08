@@ -23,19 +23,20 @@ echo "=== TEE-Rex CI Deploy ==="
 echo "Image: ${IMAGE_URI}"
 echo "Region: ${REGION}"
 
-# ── 1. Pull Docker image ──────────────────────────────────────────
+# ── 1. Tear down existing enclave + proxy + old images ───────────
+echo "=== Tearing down existing enclave ==="
+sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
+pkill socat 2>/dev/null || true
+rm -f "${EIF_PATH}"
+docker system prune -af --volumes 2>/dev/null || true
+
+# ── 2. Pull Docker image ──────────────────────────────────────────
 echo "=== Pulling image ==="
 aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
 docker pull "${IMAGE_URI}"
 
-# ── 2. Tear down existing enclave + proxy ─────────────────────────
-echo "=== Tearing down existing enclave ==="
-sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
-pkill socat 2>/dev/null || true
-rm -f "${EIF_PATH}"
-
-# ── 3. Build EIF (as ec2-user) ────────────────────────────────────
+# ── 3. Build EIF (as ec2-user — needs NITRO_CLI_ARTIFACTS) ───────
 echo "=== Building EIF ==="
 sudo -u ec2-user bash -lc \
   "NITRO_CLI_ARTIFACTS=/tmp/nitro-artifacts nitro-cli build-enclave \
