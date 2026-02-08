@@ -374,30 +374,28 @@ ci-server.yml:
 
 ---
 
-## Phase 13: Evaluate Encryption Necessity in TEE Mode
+## Phase 13: Evaluate OpenPGP Encryption Necessity ✅ Complete
 
-**Goal**: Investigate whether OpenPGP encryption of proving inputs is still necessary when the TEE server is accessed over HTTPS.
+**Goal**: Investigate whether OpenPGP encryption of proving inputs is justified and harden the crypto parameters.
 
-**Context**: Currently, the SDK always encrypts the proving payload with the enclave's public key (OpenPGP) before sending it via `POST /prove`. The encryption guarantees that only the enclave can decrypt. But when the server runs inside a Nitro Enclave and is accessed over HTTPS:
-- **HTTPS** already provides transport encryption (TLS)
-- **TEE isolation** already guarantees the server code hasn't been tampered with (attestation + PCRs)
+**Findings:**
+- **TEE mode**: Encryption is essential — vsock traffic between EC2 host and enclave is NOT encrypted. A compromised host kernel can read it. This matches industry practice (Evervault, Marlin, Secret Network, Phala all use app-level encryption).
+- **Non-TEE mode**: Encryption provides defense-in-depth (protects against logging middleware, network intermediaries) but doesn't protect against a malicious server operator who has memory access.
+- **Proving inputs**: Public function witnesses aren't deeply secret but pre-publication exposure enables front-running. Encryption overhead is negligible vs proving time.
+- **Decision**: Keep encryption everywhere. No code changes to the encryption flow.
 
-**Questions to answer:**
-1. Does HTTPS terminate at the EC2 host (before vsock) or inside the enclave? If at the host, the host could theoretically read the plaintext — so OpenPGP encryption IS still needed.
-2. If we add TLS termination inside the enclave, does that make OpenPGP redundant?
-3. What's the performance overhead of the OpenPGP encrypt/decrypt step? Is it significant compared to proving time?
-4. What do other TEE projects do? (e.g., Evervault, Marlin, EdgeBit)
-
-**Possible outcomes:**
-- Keep encryption (defense in depth, host can't snoop on vsock traffic)
-- Make encryption optional when attestation is verified + TLS terminates inside enclave
-- Remove encryption entirely if TLS-inside-enclave is sufficient
+**Security review of OpenPGP parameters (`TODO(security)` resolved):**
+- Curve: `nistP256` → `curve25519` (better side-channel resistance, auditable constants, OpenPGP.js recommended)
+- Key type: `type: "ecc"` → `type: "curve25519"` (v6 native Curve25519 support)
+- Integrity: SEIPD + MDC (SHA-1) → SEIPDv2 with AES-256-GCM (`aeadProtect: true`)
+- Session cipher: AES-256 (unchanged, strong default)
+- No passphrase: correct for in-memory TEE keys
+- Redeployed Nitro enclave with updated image, verified attestation + E2E tests pass
 
 ---
 
 ## Backlog
 
-- **Phase 5E**: Nitro deployment runbook & debugging guide (`docs/nitro-deployment.md`)
 - **Phase 6**: End-to-end testing on Aztec next-net (real network, not sandbox)
 
 ---
