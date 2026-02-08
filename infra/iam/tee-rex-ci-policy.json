@@ -1,0 +1,72 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRAuth",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ECRPush",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:CompleteLayerUpload",
+        "ecr:InitiateLayerUpload",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": "arn:aws:ecr:eu-west-2:<ACCOUNT_ID>:repository/tee-rex"
+    },
+    {
+      "Sid": "EC2StartStop",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:StartInstances",
+        "ec2:StopInstances"
+      ],
+      "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Environment": "ci"
+        }
+      }
+    },
+    {
+      "Sid": "EC2Describe",
+      "Effect": "Allow",
+      "Action": "ec2:DescribeInstances",
+      "Resource": "*"
+    },
+    {
+      "Sid": "SSMSendCommandInstance",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Environment": "ci"
+        }
+      }
+    },
+    {
+      "Sid": "SSMSendCommandDocument",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": "arn:aws:ssm:eu-west-2::document/AWS-RunShellScript"
+    },
+    {
+      "Sid": "SSMReadResults",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetCommandInvocation",
+        "ssm:ListCommandInvocations",
+        "ssm:DescribeInstanceInformation"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

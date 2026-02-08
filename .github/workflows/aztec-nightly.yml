@@ -22,6 +22,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   # ── Job 1: Check if a newer nightly exists ──────────────────────────
@@ -136,10 +137,21 @@ jobs:
       aztec_version: ${{ needs.check-update.outputs.new_version }}
       ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
 
-  # ── Job 5: Create or update PR ─────────────────────────────────────
+  # ── Job 5: TEE E2E tests ───────────────────────────────────────────
+  e2e-tee:
+    name: TEE E2E
+    needs: [check-update, update-and-test]
+    if: ${{ !inputs.skip_e2e }}
+    uses: ./.github/workflows/_e2e-tee.yml
+    secrets: inherit
+    with:
+      aztec_version: ${{ needs.check-update.outputs.new_version }}
+      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
+
+  # ── Job 6: Create or update PR ─────────────────────────────────────
   create-pr:
     name: Create PR
-    needs: [check-update, update-and-test, e2e-sdk, e2e-demo]
+    needs: [check-update, update-and-test, e2e-sdk, e2e-demo, e2e-tee]
     if: always() && needs.check-update.outputs.needs_update == 'true' && needs.update-and-test.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -156,13 +168,15 @@ jobs:
           UNIT="${{ needs.update-and-test.result }}"
           SDK_E2E="${{ needs.e2e-sdk.result }}"
           DEMO_E2E="${{ needs.e2e-demo.result }}"
+          TEE_E2E="${{ needs.e2e-tee.result }}"
 
           echo "unit=$UNIT" >> "$GITHUB_OUTPUT"
           echo "sdk_e2e=$SDK_E2E" >> "$GITHUB_OUTPUT"
           echo "demo_e2e=$DEMO_E2E" >> "$GITHUB_OUTPUT"
+          echo "tee_e2e=$TEE_E2E" >> "$GITHUB_OUTPUT"
 
           ALL_PASSED=true
-          for result in "$UNIT" "$SDK_E2E" "$DEMO_E2E"; do
+          for result in "$UNIT" "$SDK_E2E" "$DEMO_E2E" "$TEE_E2E"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               ALL_PASSED=false
               break
@@ -195,6 +209,7 @@ jobs:
           | Lint + Typecheck + Unit | $(STATUS_ICON "${{ steps.results.outputs.unit }}") |
           | SDK E2E | $(STATUS_ICON "${{ steps.results.outputs.sdk_e2e }}") |
           | Demo Fullstack E2E | $(STATUS_ICON "${{ steps.results.outputs.demo_e2e }}") |
+          | TEE E2E | $(STATUS_ICON "${{ steps.results.outputs.tee_e2e }}") |
 
           [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 

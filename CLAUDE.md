@@ -322,23 +322,35 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ---
 
-## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow) — Dry-Run ✅ Complete
+## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow) ✅ Complete
 
-**Goal**: CI pipeline that detects new Aztec nightly versions, updates deps, runs full test suite, and opens a PR.
+**Goal**: CI pipeline that detects new Aztec nightly versions, updates deps, runs full test suite (including TEE), and opens a PR.
 
-**Completed (dry-run mode):**
+**Completed:**
 - `scripts/check-aztec-nightly.ts` — checks npm `nightly` dist-tag, verifies all 11 `@aztec/*` packages exist at new version
 - `scripts/update-aztec-version.ts` — updates 3 package.json + 2 workflow files + runs `bun install`
-- `scripts/update-aztec-version.test.ts` — 10 unit tests for version validation, JSON/YAML update logic
-- `.github/workflows/aztec-nightly.yml` — 5-job pipeline: check → update + unit test → SDK e2e → demo fullstack e2e → create PR
+- `scripts/update-aztec-version.test.ts` — 12 unit tests for version validation, JSON/YAML update logic
+- `.github/workflows/aztec-nightly.yml` — 6-job pipeline: check → update + unit test → SDK e2e / demo e2e / TEE e2e → create PR
+- Reusable workflows (`_e2e-sdk.yml`, `_e2e-demo.yml`, `_e2e-tee.yml`) + composite actions (`setup-aztec`, `start-services`)
 - Runs daily at 08:00 UTC (weekdays), plus manual dispatch with version override
 - PRs labeled `nightly-failing` when tests fail
 - `bun run aztec:check` and `bun run aztec:update <version>` for local use
 
+**TEE E2E pipeline (`_e2e-tee.yml`):**
+- AWS OIDC authentication (no stored secrets) via `aws-actions/configure-aws-credentials`
+- Builds `Dockerfile.nitro` → pushes to ECR → starts pre-configured EC2 instance
+- Deploys enclave via SSM using `infra/ci-deploy.sh` (base64 upload to avoid escaping)
+- Runs SDK + demo e2e with `TEE_URL` pointing to EC2 public IP
+- Always stops EC2 instance on teardown (`if: always()`)
+- IAM policy: minimal permissions scoped by ECR repo ARN + EC2 `Environment: ci` tag
+- Cost: ~$5/month (compute + EBS + ECR storage)
+
+**AWS setup documentation:** `infra/iam/README.md` (OIDC provider, IAM role + policy, EC2 instance, GitHub variables)
+
 **Future additions:**
-- TEE deployment (build Docker → push ECR → deploy via SSM → run TEE e2e) — needs AWS secrets
 - npm publish — trigger after green tests
 - Auto-merge — merge PR automatically when all tests pass
+- SSM port forwarding — eliminate public port 4000 exposure
 
 ---
 
