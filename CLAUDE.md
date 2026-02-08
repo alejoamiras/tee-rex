@@ -374,33 +374,23 @@ ci-server.yml:
 
 ---
 
-## Phase 13: Evaluate OpenPGP Encryption Necessity
+## Phase 13: Evaluate OpenPGP Encryption Necessity ✅ Complete
 
-**Goal**: Investigate whether OpenPGP encryption of proving inputs is justified — both when the server runs inside a TEE and when it runs in standard (non-TEE) mode.
+**Goal**: Investigate whether OpenPGP encryption of proving inputs is justified and harden the crypto parameters.
 
-**Context**: The SDK always encrypts the proving payload with the server's public key (OpenPGP) before sending it via `POST /prove`. This applies regardless of whether the server is running in a Nitro Enclave or as a plain Express server.
+**Findings:**
+- **TEE mode**: Encryption is essential — vsock traffic between EC2 host and enclave is NOT encrypted. A compromised host kernel can read it. This matches industry practice (Evervault, Marlin, Secret Network, Phala all use app-level encryption).
+- **Non-TEE mode**: Encryption provides defense-in-depth (protects against logging middleware, network intermediaries) but doesn't protect against a malicious server operator who has memory access.
+- **Proving inputs**: Public function witnesses aren't deeply secret but pre-publication exposure enables front-running. Encryption overhead is negligible vs proving time.
+- **Decision**: Keep encryption everywhere. No code changes to the encryption flow.
 
-**Questions to answer:**
-
-*TEE mode:*
-1. Does HTTPS terminate at the EC2 host (before vsock) or inside the enclave? If at the host, the host could theoretically read the plaintext — so OpenPGP encryption IS still needed.
-2. If we add TLS termination inside the enclave, does that make OpenPGP redundant?
-3. What do other TEE projects do? (e.g., Evervault, Marlin, EdgeBit)
-
-*Non-TEE (standard remote) mode:*
-4. What threat does OpenPGP protect against that HTTPS doesn't? (e.g., server operator snooping, compromised TLS, logging middleware)
-5. Is there a trust model difference? In remote mode the server operator could already read memory — so is encryption theater?
-6. Does encryption add meaningful protection for the proving inputs specifically? (Are proving inputs even secret?)
-
-*Shared:*
-7. What's the performance overhead of the OpenPGP encrypt/decrypt step? Is it significant compared to proving time?
-8. Does the encryption add complexity that makes the SDK harder to use or debug?
-
-**Possible outcomes:**
-- Keep encryption everywhere (defense in depth)
-- Keep encryption only in TEE mode (where it prevents host snooping on vsock)
-- Make encryption optional / configurable
-- Remove encryption entirely if the threat model doesn't justify it
+**Security review of OpenPGP parameters (`TODO(security)` resolved):**
+- Curve: `nistP256` → `curve25519` (better side-channel resistance, auditable constants, OpenPGP.js recommended)
+- Key type: `type: "ecc"` → `type: "curve25519"` (v6 native Curve25519 support)
+- Integrity: SEIPD + MDC (SHA-1) → SEIPDv2 with AES-256-GCM (`aeadProtect: true`)
+- Session cipher: AES-256 (unchanged, strong default)
+- No passphrase: correct for in-memory TEE keys
+- Redeployed Nitro enclave with updated image, verified attestation + E2E tests pass
 
 ---
 
