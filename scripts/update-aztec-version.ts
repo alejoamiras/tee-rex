@@ -40,8 +40,8 @@ export function updatePackageJson(content: string, newVersion: string): string {
 
 export function updateWorkflowYaml(content: string, newVersion: string): string {
   return content.replace(
-    /AZTEC_VERSION:\s*"[\d.]+-nightly\.\d{8}"/g,
-    `AZTEC_VERSION: "${newVersion}"`,
+    /(aztec_version|AZTEC_VERSION):\s*"[\d.]+-nightly\.\d{8}"/g,
+    (_, key) => `${key}: "${newVersion}"`,
   );
 }
 

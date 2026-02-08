@@ -1,0 +1,36 @@
+name: _Demo Fullstack E2E (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      aztec_version:
+        description: Aztec CLI version
+        required: true
+        type: string
+      ref:
+        description: Git ref to checkout
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  e2e-demo:
+    name: Demo Fullstack E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: ./.github/actions/setup-aztec
+        with:
+          aztec_version: ${{ inputs.aztec_version }}
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - uses: ./.github/actions/start-services
+
+      - name: Run fullstack E2E tests
+        run: bun run --cwd packages/demo test:e2e:fullstack

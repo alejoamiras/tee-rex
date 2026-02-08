@@ -73,7 +73,7 @@ describe("updatePackageJson", () => {
 });
 
 describe("updateWorkflowYaml", () => {
-  const sampleYaml = `name: SDK
+  const sampleEnvYaml = `name: Nightly
 on: push
 
 jobs:
@@ -84,20 +84,45 @@ jobs:
     steps:
       - run: echo $AZTEC_VERSION`;
 
-  test("replaces AZTEC_VERSION value", () => {
-    const result = updateWorkflowYaml(sampleYaml, "4.0.0-nightly.20260208");
+  const sampleWithYaml = `name: SDK
+on: push
+
+jobs:
+  e2e:
+    uses: ./.github/workflows/_e2e-sdk.yml
+    with:
+      aztec_version: "4.0.0-nightly.20260204"`;
+
+  test("replaces AZTEC_VERSION env value", () => {
+    const result = updateWorkflowYaml(sampleEnvYaml, "4.0.0-nightly.20260208");
     expect(result).toContain('AZTEC_VERSION: "4.0.0-nightly.20260208"');
     expect(result).not.toContain("20260204");
   });
 
+  test("replaces aztec_version with: value", () => {
+    const result = updateWorkflowYaml(sampleWithYaml, "4.0.0-nightly.20260208");
+    expect(result).toContain('aztec_version: "4.0.0-nightly.20260208"');
+    expect(result).not.toContain("20260204");
+  });
+
+  test("preserves key casing", () => {
+    const envResult = updateWorkflowYaml(sampleEnvYaml, "4.0.0-nightly.20260208");
+    expect(envResult).toContain("AZTEC_VERSION:");
+    expect(envResult).not.toContain("aztec_version:");
+
+    const withResult = updateWorkflowYaml(sampleWithYaml, "4.0.0-nightly.20260208");
+    expect(withResult).toContain("aztec_version:");
+    expect(withResult).not.toContain("AZTEC_VERSION:");
+  });
+
   test("preserves other content", () => {
-    const result = updateWorkflowYaml(sampleYaml, "4.0.0-nightly.20260208");
-    expect(result).toContain("name: SDK");
+    const result = updateWorkflowYaml(sampleEnvYaml, "4.0.0-nightly.20260208");
+    expect(result).toContain("name: Nightly");
     expect(result).toContain("echo $AZTEC_VERSION");
   });
 
   test("is idempotent with current version", () => {
-    const result = updateWorkflowYaml(sampleYaml, "4.0.0-nightly.20260204");
-    expect(result).toBe(sampleYaml);
+    expect(updateWorkflowYaml(sampleEnvYaml, "4.0.0-nightly.20260204")).toBe(sampleEnvYaml);
+    expect(updateWorkflowYaml(sampleWithYaml, "4.0.0-nightly.20260204")).toBe(sampleWithYaml);
   });
 });
