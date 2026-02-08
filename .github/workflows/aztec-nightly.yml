@@ -101,7 +101,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           BRANCH="chore/aztec-nightly-${NEW_VERSION}"
           git checkout -b "$BRANCH"
-          git add -A
+          # GITHUB_TOKEN cannot push workflow file changes — exclude them.
+          # The nightly e2e jobs use dynamic AZTEC_VERSION from job outputs anyway.
+          git add packages/*/package.json bun.lock
           git commit -m "chore: update @aztec/* to ${NEW_VERSION}"
           git push -u origin "$BRANCH" --force
 
