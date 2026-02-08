@@ -374,30 +374,38 @@ ci-server.yml:
 
 ---
 
-## Phase 13: Evaluate Encryption Necessity in TEE Mode
+## Phase 13: Evaluate OpenPGP Encryption Necessity
 
-**Goal**: Investigate whether OpenPGP encryption of proving inputs is still necessary when the TEE server is accessed over HTTPS.
+**Goal**: Investigate whether OpenPGP encryption of proving inputs is justified — both when the server runs inside a TEE and when it runs in standard (non-TEE) mode.
 
-**Context**: Currently, the SDK always encrypts the proving payload with the enclave's public key (OpenPGP) before sending it via `POST /prove`. The encryption guarantees that only the enclave can decrypt. But when the server runs inside a Nitro Enclave and is accessed over HTTPS:
-- **HTTPS** already provides transport encryption (TLS)
-- **TEE isolation** already guarantees the server code hasn't been tampered with (attestation + PCRs)
+**Context**: The SDK always encrypts the proving payload with the server's public key (OpenPGP) before sending it via `POST /prove`. This applies regardless of whether the server is running in a Nitro Enclave or as a plain Express server.
 
 **Questions to answer:**
+
+*TEE mode:*
 1. Does HTTPS terminate at the EC2 host (before vsock) or inside the enclave? If at the host, the host could theoretically read the plaintext — so OpenPGP encryption IS still needed.
 2. If we add TLS termination inside the enclave, does that make OpenPGP redundant?
-3. What's the performance overhead of the OpenPGP encrypt/decrypt step? Is it significant compared to proving time?
-4. What do other TEE projects do? (e.g., Evervault, Marlin, EdgeBit)
+3. What do other TEE projects do? (e.g., Evervault, Marlin, EdgeBit)
+
+*Non-TEE (standard remote) mode:*
+4. What threat does OpenPGP protect against that HTTPS doesn't? (e.g., server operator snooping, compromised TLS, logging middleware)
+5. Is there a trust model difference? In remote mode the server operator could already read memory — so is encryption theater?
+6. Does encryption add meaningful protection for the proving inputs specifically? (Are proving inputs even secret?)
+
+*Shared:*
+7. What's the performance overhead of the OpenPGP encrypt/decrypt step? Is it significant compared to proving time?
+8. Does the encryption add complexity that makes the SDK harder to use or debug?
 
 **Possible outcomes:**
-- Keep encryption (defense in depth, host can't snoop on vsock traffic)
-- Make encryption optional when attestation is verified + TLS terminates inside enclave
-- Remove encryption entirely if TLS-inside-enclave is sufficient
+- Keep encryption everywhere (defense in depth)
+- Keep encryption only in TEE mode (where it prevents host snooping on vsock)
+- Make encryption optional / configurable
+- Remove encryption entirely if the threat model doesn't justify it
 
 ---
 
 ## Backlog
 
-- **Phase 5E**: Nitro deployment runbook & debugging guide (`docs/nitro-deployment.md`)
 - **Phase 6**: End-to-end testing on Aztec next-net (real network, not sandbox)
 
 ---
