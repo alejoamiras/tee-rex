@@ -3,10 +3,6 @@ name: _Demo Fullstack E2E (reusable)
 on:
   workflow_call:
     inputs:
-      aztec_version:
-        description: Aztec CLI version
-        required: true
-        type: string
       ref:
         description: Git ref to checkout
         required: false
@@ -67,8 +63,6 @@ jobs:
 
       # ── Setup & Run ───────────────────────────────────────────────
       - uses: ./.github/actions/setup-aztec
-        with:
-          aztec_version: ${{ inputs.aztec_version }}
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium

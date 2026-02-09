@@ -13,11 +13,6 @@ const PACKAGE_JSON_FILES = [
   "packages/demo/package.json",
 ];
 
-const WORKFLOW_FILES = [
-  ".github/workflows/sdk.yml",
-  ".github/workflows/demo.yml",
-];
-
 export function validateVersion(version: string): boolean {
   return VERSION_PATTERN.test(version);
 }
@@ -36,13 +31,6 @@ export function updatePackageJson(content: string, newVersion: string): string {
   }
 
   return `${JSON.stringify(pkg, null, 2)}\n`;
-}
-
-export function updateWorkflowYaml(content: string, newVersion: string): string {
-  return content.replace(
-    /(aztec_version|AZTEC_VERSION):\s*"[\d.]+-nightly\.\d{8}"/g,
-    (_, key) => `${key}: "${newVersion}"`,
-  );
 }
 
 async function main() {
@@ -66,18 +54,6 @@ async function main() {
     const file = Bun.file(filePath);
     const original = await file.text();
     const updated = updatePackageJson(original, newVersion);
-    if (updated !== original) {
-      await Bun.write(filePath, updated);
-      console.log(`Updated ${filePath}`);
-      updatedFiles++;
-    }
-  }
-
-  // Update workflow files
-  for (const filePath of WORKFLOW_FILES) {
-    const file = Bun.file(filePath);
-    const original = await file.text();
-    const updated = updateWorkflowYaml(original, newVersion);
     if (updated !== original) {
       await Bun.write(filePath, updated);
       console.log(`Updated ${filePath}`);

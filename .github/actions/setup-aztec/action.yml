@@ -1,10 +1,5 @@
 name: Setup Aztec
-description: Install Bun, Foundry, and Aztec CLI with caching
-
-inputs:
-  aztec_version:
-    description: Aztec CLI version to install
-    required: true
+description: Install Bun, Foundry, and Aztec CLI. Version auto-detected from packages/sdk/package.json.
 
 runs:
   using: composite
@@ -22,6 +17,14 @@ runs:
     - run: bun install --frozen-lockfile
       shell: bash
 
+    - name: Detect Aztec version
+      id: detect
+      shell: bash
+      run: |
+        VERSION=$(bun -e "console.log(JSON.parse(require('fs').readFileSync('packages/sdk/package.json','utf8')).devDependencies['@aztec/aztec.js'])")
+        echo "Aztec version: $VERSION"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
     - name: Install Foundry
       uses: foundry-rs/foundry-toolchain@v1
 
@@ -29,8 +32,8 @@ runs:
       id: cache-aztec
       uses: actions/cache@v4
       with:
-        path: ~/.aztec/versions/${{ inputs.aztec_version }}
-        key: ${{ runner.os }}-aztec-${{ inputs.aztec_version }}
+        path: ~/.aztec/versions/${{ steps.detect.outputs.version }}
+        key: ${{ runner.os }}-aztec-${{ steps.detect.outputs.version }}
 
     - name: Install Aztec CLI
       if: steps.cache-aztec.outputs.cache-hit != 'true'
@@ -38,12 +41,12 @@ runs:
       run: |
         export CI=1
         export FOUNDRY_DIR="$HOME/.foundry"
-        curl -fsSL "https://install.aztec.network/${{ inputs.aztec_version }}/install" \
-          | VERSION=${{ inputs.aztec_version }} bash
-        ls -la ~/.aztec/versions/${{ inputs.aztec_version }}/bin/
+        curl -fsSL "https://install.aztec.network/${{ steps.detect.outputs.version }}/install" \
+          | VERSION=${{ steps.detect.outputs.version }} bash
+        ls -la ~/.aztec/versions/${{ steps.detect.outputs.version }}/bin/
 
     - name: Update PATH
       shell: bash
       run: |
-        echo "$HOME/.aztec/versions/${{ inputs.aztec_version }}/bin" >> $GITHUB_PATH
-        echo "$HOME/.aztec/versions/${{ inputs.aztec_version }}/node_modules/.bin" >> $GITHUB_PATH
+        echo "$HOME/.aztec/versions/${{ steps.detect.outputs.version }}/bin" >> $GITHUB_PATH
+        echo "$HOME/.aztec/versions/${{ steps.detect.outputs.version }}/node_modules/.bin" >> $GITHUB_PATH

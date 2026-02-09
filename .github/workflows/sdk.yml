@@ -76,5 +76,3 @@ jobs:
   e2e:
     name: E2E Tests
     uses: ./.github/workflows/_e2e-sdk.yml
-    with:
-      aztec_version: "4.0.0-nightly.20260204"

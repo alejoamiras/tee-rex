@@ -9,11 +9,6 @@ on:
         description: "Force specific version (leave empty for auto-detect)"
         required: false
         type: string
-      skip_e2e:
-        description: "Skip e2e tests (faster, for debugging the workflow)"
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: aztec-nightly
@@ -22,7 +17,6 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
-  id-token: write
 
 jobs:
   # ── Job 1: Check if a newer nightly exists ──────────────────────────
@@ -66,13 +60,13 @@ jobs:
             fi
           fi
 
-  # ── Job 2: Update deps, commit, run fast tests ─────────────────────
-  update-and-test:
-    name: Update & unit tests
+  # ── Job 2: Update deps, commit, push ────────────────────────────────
+  update:
+    name: Update & push
     needs: check-update
     if: needs.check-update.outputs.needs_update == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       NEW_VERSION: ${{ needs.check-update.outputs.new_version }}
     steps:
@@ -102,84 +96,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           BRANCH="chore/aztec-nightly-${NEW_VERSION}"
           git checkout -b "$BRANCH"
-          # GITHUB_TOKEN cannot push workflow file changes — exclude them.
-          # The nightly e2e jobs use dynamic AZTEC_VERSION from job outputs anyway.
           git add packages/*/package.json bun.lock
           git commit -m "chore: update @aztec/* to ${NEW_VERSION}"
           git push -u origin "$BRANCH" --force
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Typecheck
-        run: bun run test:typecheck
-
-      - name: Unit tests
-        run: bun run test:unit
-
-  # ── Job 3: Deploy TEE enclave ──────────────────────────────────────
-  deploy-tee:
-    name: Deploy TEE
-    needs: [check-update, update-and-test]
-    if: ${{ !inputs.skip_e2e }}
-    uses: ./.github/workflows/_deploy-tee.yml
-    secrets: inherit
-    with:
-      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
-
-  # ── Job 4: SDK E2E tests (with TEE if deployed) ────────────────────
-  e2e-sdk:
-    name: SDK E2E
-    needs: [check-update, update-and-test, deploy-tee]
-    if: ${{ !cancelled() && !inputs.skip_e2e && needs.update-and-test.result == 'success' }}
-    uses: ./.github/workflows/_e2e-sdk.yml
-    secrets: inherit
-    with:
-      aztec_version: ${{ needs.check-update.outputs.new_version }}
-      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
-      tee_url: ${{ needs.deploy-tee.outputs.deployed == 'true' && 'http://localhost:4001' || '' }}
-
-  # ── Job 5: Demo fullstack E2E tests (with TEE if deployed) ─────────
-  e2e-demo:
-    name: Demo Fullstack E2E
-    needs: [check-update, update-and-test, deploy-tee]
-    if: ${{ !cancelled() && !inputs.skip_e2e && needs.update-and-test.result == 'success' }}
-    uses: ./.github/workflows/_e2e-demo.yml
-    secrets: inherit
-    with:
-      aztec_version: ${{ needs.check-update.outputs.new_version }}
-      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
-      tee_url: ${{ needs.deploy-tee.outputs.deployed == 'true' && 'http://localhost:4001' || '' }}
-
-  # ── Job 6: Teardown TEE ────────────────────────────────────────────
-  teardown-tee:
-    name: Teardown TEE
-    needs: [deploy-tee, e2e-sdk, e2e-demo]
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Stop EC2 instance
-        run: |
-          if [ -n "${{ secrets.TEE_INSTANCE_ID }}" ]; then
-            aws ec2 stop-instances --instance-ids "${{ secrets.TEE_INSTANCE_ID }}" || true
-            echo "EC2 instance stop requested"
-          fi
-
-  # ── Job 7: Create or update PR ─────────────────────────────────────
+  # ── Job 3: Create PR with label + auto-merge ───────────────────────
   create-pr:
     name: Create PR
-    needs: [check-update, update-and-test, deploy-tee, e2e-sdk, e2e-demo, teardown-tee]
-    if: always() && needs.check-update.outputs.needs_update == 'true' && needs.update-and-test.result != 'cancelled'
+    needs: [check-update, update]
+    if: needs.update.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -189,54 +114,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine results
-        id: results
-        run: |
-          UNIT="${{ needs.update-and-test.result }}"
-          DEPLOY_TEE="${{ needs.deploy-tee.result }}"
-          SDK_E2E="${{ needs.e2e-sdk.result }}"
-          DEMO_E2E="${{ needs.e2e-demo.result }}"
-
-          echo "unit=$UNIT" >> "$GITHUB_OUTPUT"
-          echo "deploy_tee=$DEPLOY_TEE" >> "$GITHUB_OUTPUT"
-          echo "sdk_e2e=$SDK_E2E" >> "$GITHUB_OUTPUT"
-          echo "demo_e2e=$DEMO_E2E" >> "$GITHUB_OUTPUT"
-
-          ALL_PASSED=true
-          for result in "$UNIT" "$DEPLOY_TEE" "$SDK_E2E" "$DEMO_E2E"; do
-            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-              ALL_PASSED=false
-              break
-            fi
-          done
-          echo "all_passed=$ALL_PASSED" >> "$GITHUB_OUTPUT"
-
       - name: Create or update PR
         run: |
           BRANCH="chore/aztec-nightly-${NEW_VERSION}"
           TITLE="chore: update @aztec/* to ${NEW_VERSION}"
 
-          STATUS_ICON() {
-            case "$1" in
-              success) echo "pass" ;;
-              skipped) echo "skip" ;;
-              *) echo "FAIL" ;;
-            esac
-          }
-
-          BODY="$(cat <<EOF
+          BODY="$(cat <<'EOF'
           ## Aztec Nightly Update
 
-          **Version**: \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\`
-
-          ### Test Results
-
-          | Job | Status |
-          |---|---|
-          | Lint + Typecheck + Unit | $(STATUS_ICON "${{ steps.results.outputs.unit }}") |
-          | Deploy TEE | $(STATUS_ICON "${{ steps.results.outputs.deploy_tee }}") |
-          | SDK E2E (with TEE) | $(STATUS_ICON "${{ steps.results.outputs.sdk_e2e }}") |
-          | Demo Fullstack E2E (with TEE) | $(STATUS_ICON "${{ steps.results.outputs.demo_e2e }}") |
+          Automated dependency bump. PR CI runs all tests (unit, e2e, TEE).
+          Auto-merge enabled — will merge when all required checks pass.
 
           [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
@@ -260,12 +147,11 @@ jobs:
               --body "$BODY"
           fi
 
-          # Get PR number (whether new or existing)
+          # Get PR number
           PR_NUM=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
 
-          # Manage labels
-          if [ "${{ steps.results.outputs.all_passed }}" = "true" ]; then
-            gh pr edit "$PR_NUM" --remove-label "nightly-failing" 2>/dev/null || true
-          else
-            gh pr edit "$PR_NUM" --add-label "nightly-failing" 2>/dev/null || true
-          fi
+          # Add test-tee label (triggers tee.yml)
+          gh pr edit "$PR_NUM" --add-label "test-tee" 2>/dev/null || true
+
+          # Enable auto-merge (merges when required status checks pass)
+          gh pr merge "$PR_NUM" --auto --squash --delete-branch

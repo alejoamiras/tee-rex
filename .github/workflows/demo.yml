@@ -80,5 +80,3 @@ jobs:
   fullstack-e2e:
     name: Fullstack E2E
     uses: ./.github/workflows/_e2e-demo.yml
-    with:
-      aztec_version: "4.0.0-nightly.20260204"

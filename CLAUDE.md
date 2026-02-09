@@ -328,31 +328,29 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 **Completed:**
 - `scripts/check-aztec-nightly.ts` — checks npm `nightly` dist-tag, verifies all 11 `@aztec/*` packages exist at new version
-- `scripts/update-aztec-version.ts` — updates 3 package.json + 2 workflow files + runs `bun install`
+- `scripts/update-aztec-version.ts` — updates 3 package.json + runs `bun install`
 - `scripts/update-aztec-version.test.ts` — 12 unit tests for version validation, JSON/YAML update logic
-- `.github/workflows/aztec-nightly.yml` — 7-job pipeline: check → update + unit test → deploy TEE → SDK e2e / demo e2e (with TEE) → teardown TEE → create PR
+- `.github/workflows/aztec-nightly.yml` — 3-job pipeline: check → update + unit test → create PR (with `test-tee` label + auto-merge)
+- PR CI handles all testing: `sdk.yml`, `demo.yml`, `server.yml` auto-trigger on the PR; `tee.yml` triggers on `test-tee` label
 - Reusable workflows (`_deploy-tee.yml`, `_e2e-sdk.yml`, `_e2e-demo.yml`) + composite actions (`setup-aztec`, `start-services`)
-- Runs daily at 08:00 UTC (weekdays), plus manual dispatch with version override
-- PRs labeled `nightly-failing` when tests fail
+- `setup-aztec` auto-detects Aztec version from `packages/sdk/package.json` — no hardcoded versions in workflow files
+- Auto-merge: `gh pr merge --auto --squash --delete-branch` merges when required status checks pass
 - `bun run aztec:check` and `bun run aztec:update <version>` for local use
 
-**TEE deployment pipeline (`_deploy-tee.yml`):**
-- AWS OIDC authentication (no stored secrets) via `aws-actions/configure-aws-credentials`
-- Builds `Dockerfile.nitro` with Docker layer caching (`docker/build-push-action` + `type=gha`) → pushes to ECR → starts pre-configured EC2 instance
-- Deploys enclave via SSM using `infra/ci-deploy.sh` (base64 upload to avoid escaping)
-- Health check via temporary SSM tunnel, outputs `deployed` boolean
+**TEE deployment (`_deploy-tee.yml` + `tee.yml`):**
+- `tee.yml` triggers on PRs with `test-tee` label or manual dispatch
+- `_deploy-tee.yml` builds `Dockerfile.nitro` with Docker layer caching (`docker/build-push-action` + `type=gha`) → pushes to ECR → starts EC2 → deploys enclave via SSM
 - SDK/demo e2e workflows accept optional `tee_url` input — each opens its own SSM tunnel to the already-running enclave
 - Teardown job stops EC2 instance with `if: always()`
-- IAM policy: minimal permissions scoped by ECR repo ARN + EC2 `Environment: ci` tag
+- AWS OIDC authentication (no stored secrets), IAM policy scoped by ECR repo ARN + EC2 `Environment: ci` tag
+- SSM port forwarding: `localhost:4001 → EC2:4000` — no public port exposed
 - Cost: ~$5/month (compute + EBS + ECR storage)
 
-**AWS setup documentation:** `infra/iam/README.md` (OIDC provider, IAM role + policy, EC2 instance, GitHub variables)
-
-**SSM port forwarding:** CI reaches the enclave via SSM tunnel (`localhost:4001 → EC2:4000`) instead of public IP. No port 4000 exposed to the internet.
+**AWS setup documentation:** `infra/iam/README.md` (OIDC provider, IAM role + policy, EC2 instance, GitHub secrets)
 
 **Future additions:**
 - npm publish — trigger after green tests
-- Auto-merge — merge PR automatically when all tests pass
+- Branch protection on `main` with required status checks (needed for auto-merge to work)
 
 ---
 
