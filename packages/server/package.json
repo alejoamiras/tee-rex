@@ -10,9 +10,9 @@
     "test:unit": "bun test"
   },
   "dependencies": {
-    "@aztec/bb-prover": "4.0.0-nightly.20260209",
-    "@aztec/simulator": "4.0.0-nightly.20260209",
-    "@aztec/stdlib": "4.0.0-nightly.20260209",
+    "@aztec/bb-prover": "4.0.0-nightly.20260208",
+    "@aztec/simulator": "4.0.0-nightly.20260208",
+    "@aztec/stdlib": "4.0.0-nightly.20260208",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "ms": "^2.1.3",
