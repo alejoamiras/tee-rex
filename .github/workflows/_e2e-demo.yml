@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: ""
+      aztec_node_url:
+        description: Aztec node URL (skips local CLI install when not localhost)
+        required: false
+        type: string
+        default: "http://localhost:8080"
 
 jobs:
   e2e-demo:
@@ -60,13 +65,18 @@ jobs:
 
       # ── Setup & Run ───────────────────────────────────────────────
       - uses: ./.github/actions/setup-aztec
+        with:
+          skip_cli: ${{ inputs.aztec_node_url != 'http://localhost:8080' }}
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
       - uses: ./.github/actions/start-services
+        with:
+          aztec_node_url: ${{ inputs.aztec_node_url }}
 
       - name: Run fullstack E2E tests
         env:
           TEE_URL: ${{ inputs.tee_url }}
+          AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
         run: bun run --cwd packages/demo test:e2e:fullstack

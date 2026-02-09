@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Aztec node has no CORS headers — proxy through Vite
         "/aztec": {
-          target: "http://localhost:8080",
+          target: env.AZTEC_NODE_URL || "http://localhost:8080",
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/aztec/, ""),
         },
