@@ -25,6 +25,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check paths
         id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Push/dispatch events already have paths filter — always relevant
           if [ "${{ github.event_name }}" != "pull_request" ]; then
@@ -32,8 +34,7 @@ jobs:
             exit 0
           fi
           PATHS="packages/server/ tsconfig.json biome.json package.json bun.lock .github/workflows/server.yml"
-          git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED=$(git diff --name-only FETCH_HEAD...HEAD)
+          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
           for path in $PATHS; do
             if echo "$CHANGED" | grep -q "^${path}"; then
               echo "relevant=true" >> "$GITHUB_OUTPUT"
