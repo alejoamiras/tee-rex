@@ -26,12 +26,9 @@
         "strict_required_status_checks_policy": false,
         "do_not_enforce_on_create": true,
         "required_status_checks": [
-          { "context": "Lint", "integration_id": 15368 },
-          { "context": "Typecheck", "integration_id": 15368 },
-          { "context": "Unit Tests", "integration_id": 15368 },
-          { "context": "Mocked E2E", "integration_id": 15368 },
-          { "context": "E2E Tests / SDK E2E", "integration_id": 15368 },
-          { "context": "Fullstack E2E / Demo Fullstack E2E", "integration_id": 15368 }
+          { "context": "SDK Status", "integration_id": 15368 },
+          { "context": "Demo Status", "integration_id": 15368 },
+          { "context": "Server Status", "integration_id": 15368 }
         ]
       }
     }

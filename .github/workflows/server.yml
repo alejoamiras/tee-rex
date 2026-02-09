@@ -13,17 +13,38 @@ on:
       - ".github/workflows/server.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "packages/server/**"
-      - "tsconfig.json"
-      - "biome.json"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/server.yml"
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check paths
+        id: filter
+        run: |
+          PATHS="packages/server/ tsconfig.json biome.json package.json bun.lock .github/workflows/server.yml"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          CHANGED=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "")
+          for path in $PATHS; do
+            if echo "$CHANGED" | grep -q "^${path}"; then
+              echo "relevant=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "relevant=false" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -41,6 +62,8 @@ jobs:
 
   typecheck:
     name: Typecheck
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -58,6 +81,8 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -72,3 +97,21 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run --cwd packages/server test:unit
+
+  server-status:
+    name: Server Status
+    if: always()
+    needs: [changes, lint, typecheck, unit-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check results
+        run: |
+          results="${{ needs.lint.result }} ${{ needs.typecheck.result }} ${{ needs.unit-tests.result }}"
+          for r in $results; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "Job failed or was cancelled: $r"
+              exit 1
+            fi
+          done
+          echo "All jobs passed or were skipped"
