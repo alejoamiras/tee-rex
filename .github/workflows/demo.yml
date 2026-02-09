@@ -80,3 +80,4 @@ jobs:
   fullstack-e2e:
     name: Fullstack E2E
     uses: ./.github/workflows/_e2e-demo.yml
+    secrets: inherit

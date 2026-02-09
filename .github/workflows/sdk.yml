@@ -76,3 +76,4 @@ jobs:
   e2e:
     name: E2E Tests
     uses: ./.github/workflows/_e2e-sdk.yml
+    secrets: inherit
