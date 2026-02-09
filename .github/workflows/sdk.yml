@@ -118,7 +118,7 @@ jobs:
     steps:
       - name: Check results
         run: |
-          results="${{ needs.lint.result }} ${{ needs.typecheck.result }} ${{ needs.unit-tests.result }} ${{ needs.e2e.result }}"
+          results="${{ needs.changes.result }} ${{ needs.lint.result }} ${{ needs.typecheck.result }} ${{ needs.unit-tests.result }} ${{ needs.e2e.result }}"
           for r in $results; do
             if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
               echo "Job failed or was cancelled: $r"
