@@ -11,19 +11,43 @@ on:
       - "package.json"
       - "bun.lock"
       - ".github/workflows/sdk.yml"
+      - ".github/workflows/_e2e-sdk.yml"
+      - ".github/actions/setup-aztec/**"
+      - ".github/actions/start-services/**"
   pull_request:
     branches: [main]
-    paths:
-      - "packages/sdk/**"
-      - "tsconfig.json"
-      - "biome.json"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/sdk.yml"
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check paths
+        id: filter
+        run: |
+          PATHS="packages/sdk/ tsconfig.json biome.json package.json bun.lock .github/workflows/sdk.yml .github/workflows/_e2e-sdk.yml .github/actions/setup-aztec/ .github/actions/start-services/"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          CHANGED=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "")
+          for path in $PATHS; do
+            if echo "$CHANGED" | grep -q "^${path}"; then
+              echo "relevant=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "relevant=false" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -41,6 +65,8 @@ jobs:
 
   typecheck:
     name: Typecheck
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -58,6 +84,8 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -75,5 +103,25 @@ jobs:
 
   e2e:
     name: E2E Tests
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     uses: ./.github/workflows/_e2e-sdk.yml
     secrets: inherit
+
+  sdk-status:
+    name: SDK Status
+    if: always()
+    needs: [changes, lint, typecheck, unit-tests, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check results
+        run: |
+          results="${{ needs.lint.result }} ${{ needs.typecheck.result }} ${{ needs.unit-tests.result }} ${{ needs.e2e.result }}"
+          for r in $results; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "Job failed or was cancelled: $r"
+              exit 1
+            fi
+          done
+          echo "All jobs passed or were skipped"
