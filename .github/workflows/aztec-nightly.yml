@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       NEW_VERSION: ${{ needs.check-update.outputs.new_version }}
       CURRENT_VERSION: ${{ needs.check-update.outputs.current_version }}
     steps:
