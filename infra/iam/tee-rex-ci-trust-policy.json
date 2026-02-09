@@ -13,7 +13,8 @@
         },
         "StringLike": {
           "token.actions.githubusercontent.com:sub": [
-            "repo:alejoamiras/tee-rex:ref:refs/heads/*"
+            "repo:alejoamiras/tee-rex:ref:refs/heads/*",
+            "repo:alejoamiras/tee-rex:pull_request"
           ]
         }
       }

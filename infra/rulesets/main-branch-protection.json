@@ -1,0 +1,39 @@
+{
+  "name": "Main branch protection",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": true,
+        "required_status_checks": [
+          { "context": "Lint", "integration_id": 15368 },
+          { "context": "Typecheck", "integration_id": 15368 },
+          { "context": "Unit Tests", "integration_id": 15368 },
+          { "context": "Mocked E2E", "integration_id": 15368 },
+          { "context": "E2E Tests / SDK E2E", "integration_id": 15368 },
+          { "context": "Fullstack E2E / Demo Fullstack E2E", "integration_id": 15368 }
+        ]
+      }
+    }
+  ]
+}
