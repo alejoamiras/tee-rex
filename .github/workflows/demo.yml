@@ -27,18 +27,17 @@ jobs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
       - name: Check paths
         id: filter
         run: |
-          # Push events already have paths filter — always relevant
+          # Push/dispatch events already have paths filter — always relevant
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           PATHS="packages/demo/ packages/sdk/ tsconfig.json biome.json package.json bun.lock .github/workflows/demo.yml .github/workflows/_e2e-demo.yml .github/actions/setup-aztec/ .github/actions/start-services/"
-          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD...HEAD)
           for path in $PATHS; do
             if echo "$CHANGED" | grep -q "^${path}"; then
               echo "relevant=true" >> "$GITHUB_OUTPUT"
