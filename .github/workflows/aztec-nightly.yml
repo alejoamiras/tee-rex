@@ -117,41 +117,68 @@ jobs:
       - name: Unit tests
         run: bun run test:unit
 
-  # ── Job 3: SDK E2E tests ───────────────────────────────────────────
+  # ── Job 3: Deploy TEE enclave ──────────────────────────────────────
+  deploy-tee:
+    name: Deploy TEE
+    needs: [check-update, update-and-test]
+    if: ${{ !inputs.skip_e2e }}
+    uses: ./.github/workflows/_deploy-tee.yml
+    secrets: inherit
+    with:
+      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
+
+  # ── Job 4: SDK E2E tests (with TEE if deployed) ────────────────────
   e2e-sdk:
     name: SDK E2E
-    needs: [check-update, update-and-test]
-    if: ${{ !inputs.skip_e2e }}
+    needs: [check-update, update-and-test, deploy-tee]
+    if: ${{ !cancelled() && !inputs.skip_e2e && needs.update-and-test.result == 'success' }}
     uses: ./.github/workflows/_e2e-sdk.yml
-    with:
-      aztec_version: ${{ needs.check-update.outputs.new_version }}
-      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
-
-  # ── Job 4: Demo fullstack E2E tests ────────────────────────────────
-  e2e-demo:
-    name: Demo Fullstack E2E
-    needs: [check-update, update-and-test]
-    if: ${{ !inputs.skip_e2e }}
-    uses: ./.github/workflows/_e2e-demo.yml
-    with:
-      aztec_version: ${{ needs.check-update.outputs.new_version }}
-      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
-
-  # ── Job 5: TEE E2E tests ───────────────────────────────────────────
-  e2e-tee:
-    name: TEE E2E
-    needs: [check-update, update-and-test]
-    if: ${{ !inputs.skip_e2e }}
-    uses: ./.github/workflows/_e2e-tee.yml
     secrets: inherit
     with:
       aztec_version: ${{ needs.check-update.outputs.new_version }}
       ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
+      tee_url: ${{ needs.deploy-tee.outputs.deployed == 'true' && 'http://localhost:4001' || '' }}
 
-  # ── Job 6: Create or update PR ─────────────────────────────────────
+  # ── Job 5: Demo fullstack E2E tests (with TEE if deployed) ─────────
+  e2e-demo:
+    name: Demo Fullstack E2E
+    needs: [check-update, update-and-test, deploy-tee]
+    if: ${{ !cancelled() && !inputs.skip_e2e && needs.update-and-test.result == 'success' }}
+    uses: ./.github/workflows/_e2e-demo.yml
+    secrets: inherit
+    with:
+      aztec_version: ${{ needs.check-update.outputs.new_version }}
+      ref: chore/aztec-nightly-${{ needs.check-update.outputs.new_version }}
+      tee_url: ${{ needs.deploy-tee.outputs.deployed == 'true' && 'http://localhost:4001' || '' }}
+
+  # ── Job 6: Teardown TEE ────────────────────────────────────────────
+  teardown-tee:
+    name: Teardown TEE
+    needs: [deploy-tee, e2e-sdk, e2e-demo]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Stop EC2 instance
+        run: |
+          if [ -n "${{ secrets.TEE_INSTANCE_ID }}" ]; then
+            aws ec2 stop-instances --instance-ids "${{ secrets.TEE_INSTANCE_ID }}" || true
+            echo "EC2 instance stop requested"
+          fi
+
+  # ── Job 7: Create or update PR ─────────────────────────────────────
   create-pr:
     name: Create PR
-    needs: [check-update, update-and-test, e2e-sdk, e2e-demo, e2e-tee]
+    needs: [check-update, update-and-test, deploy-tee, e2e-sdk, e2e-demo, teardown-tee]
     if: always() && needs.check-update.outputs.needs_update == 'true' && needs.update-and-test.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -166,17 +193,17 @@ jobs:
         id: results
         run: |
           UNIT="${{ needs.update-and-test.result }}"
+          DEPLOY_TEE="${{ needs.deploy-tee.result }}"
           SDK_E2E="${{ needs.e2e-sdk.result }}"
           DEMO_E2E="${{ needs.e2e-demo.result }}"
-          TEE_E2E="${{ needs.e2e-tee.result }}"
 
           echo "unit=$UNIT" >> "$GITHUB_OUTPUT"
+          echo "deploy_tee=$DEPLOY_TEE" >> "$GITHUB_OUTPUT"
           echo "sdk_e2e=$SDK_E2E" >> "$GITHUB_OUTPUT"
           echo "demo_e2e=$DEMO_E2E" >> "$GITHUB_OUTPUT"
-          echo "tee_e2e=$TEE_E2E" >> "$GITHUB_OUTPUT"
 
           ALL_PASSED=true
-          for result in "$UNIT" "$SDK_E2E" "$DEMO_E2E" "$TEE_E2E"; do
+          for result in "$UNIT" "$DEPLOY_TEE" "$SDK_E2E" "$DEMO_E2E"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
               ALL_PASSED=false
               break
@@ -207,9 +234,9 @@ jobs:
           | Job | Status |
           |---|---|
           | Lint + Typecheck + Unit | $(STATUS_ICON "${{ steps.results.outputs.unit }}") |
-          | SDK E2E | $(STATUS_ICON "${{ steps.results.outputs.sdk_e2e }}") |
-          | Demo Fullstack E2E | $(STATUS_ICON "${{ steps.results.outputs.demo_e2e }}") |
-          | TEE E2E | $(STATUS_ICON "${{ steps.results.outputs.tee_e2e }}") |
+          | Deploy TEE | $(STATUS_ICON "${{ steps.results.outputs.deploy_tee }}") |
+          | SDK E2E (with TEE) | $(STATUS_ICON "${{ steps.results.outputs.sdk_e2e }}") |
+          | Demo Fullstack E2E (with TEE) | $(STATUS_ICON "${{ steps.results.outputs.demo_e2e }}") |
 
           [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 

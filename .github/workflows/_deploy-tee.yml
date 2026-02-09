@@ -1,26 +1,28 @@
-name: _TEE E2E (reusable)
+name: _Deploy TEE (reusable)
 
 on:
   workflow_call:
     inputs:
-      aztec_version:
-        description: Aztec CLI version
-        required: true
-        type: string
       ref:
         description: Git ref to checkout
         required: false
         type: string
         default: ""
+    outputs:
+      deployed:
+        description: Whether the TEE enclave was deployed successfully
+        value: ${{ jobs.deploy.outputs.deployed }}
 
 jobs:
-  e2e-tee:
-    name: TEE E2E
+  deploy:
+    name: Deploy TEE Enclave
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     permissions:
       id-token: write
       contents: read
+    outputs:
+      deployed: ${{ steps.health.outputs.deployed }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       INSTANCE_ID: ${{ secrets.TEE_INSTANCE_ID }}
@@ -32,13 +34,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # ── Install SSM Plugin ─────────────────────────────────────
-      - name: Install SSM plugin
-        run: |
-          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
-            -o /tmp/session-manager-plugin.deb
-          sudo dpkg -i /tmp/session-manager-plugin.deb
-
       # ── AWS Credentials via OIDC ─────────────────────────────────
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -46,16 +41,22 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # ── Build & Push Docker Image ────────────────────────────────
+      # ── Build & Push Docker Image (with layer caching) ──────────
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push Docker image
-        run: |
-          IMAGE="${ECR_REGISTRY}/tee-rex:${IMAGE_TAG}"
-          docker build -f Dockerfile.nitro -t "${IMAGE}" .
-          docker push "${IMAGE}"
-          echo "IMAGE_URI=${IMAGE}" >> "$GITHUB_ENV"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.nitro
+          push: true
+          tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # ── Start EC2 Instance ───────────────────────────────────────
       - name: Start EC2 instance
@@ -87,6 +88,8 @@ jobs:
       # ── Deploy Enclave via SSM ───────────────────────────────────
       - name: Deploy enclave
         run: |
+          IMAGE_URI="${ECR_REGISTRY}/tee-rex:${IMAGE_TAG}"
+
           # Upload ci-deploy.sh via base64 to avoid SSM escaping issues
           SCRIPT_B64=$(base64 -w0 infra/ci-deploy.sh)
 
@@ -148,54 +151,30 @@ jobs:
             esac
           done
 
-      # ── SSM Port Forwarding Tunnel ──────────────────────────────
-      - name: Start SSM tunnel
+      # ── Health Check via SSM Tunnel ──────────────────────────────
+      - name: Health check
+        id: health
         run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
           aws ssm start-session \
             --target "${INSTANCE_ID}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
-          echo "TEE_URL=http://localhost:4001" >> "$GITHUB_ENV"
+          TUNNEL_PID=$!
 
-          echo "Waiting for SSM tunnel..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:4001/attestation > /dev/null 2>&1; then
-              echo "SSM tunnel ready (attempt $i)"
+              echo "Enclave healthy (attempt $i)"
               curl -s http://localhost:4001/attestation | jq '{mode, hasDoc: (.attestationDocument != null)}'
+              echo "deployed=true" >> "$GITHUB_OUTPUT"
+              kill $TUNNEL_PID 2>/dev/null || true
               exit 0
             fi
             sleep 2
           done
-          echo "SSM tunnel failed to connect after 60s"
+          echo "Health check failed after 60s"
+          echo "deployed=false" >> "$GITHUB_OUTPUT"
           exit 1
-
-      # ── Setup Aztec + Local Services ─────────────────────────────
-      - uses: ./.github/actions/setup-aztec
-        with:
-          aztec_version: ${{ inputs.aztec_version }}
-
-      - uses: ./.github/actions/start-services
-
-      # ── Run SDK E2E with TEE_URL ─────────────────────────────────
-      - name: SDK E2E (with TEE)
-        env:
-          TEE_URL: ${{ env.TEE_URL }}
-        run: bun run --cwd packages/sdk test:e2e
-
-      # ── Run Demo Fullstack E2E with TEE_URL ──────────────────────
-      - name: Install Playwright browsers
-        run: bunx playwright install --with-deps chromium
-
-      - name: Demo Fullstack E2E (with TEE)
-        env:
-          TEE_URL: ${{ env.TEE_URL }}
-        run: bun run --cwd packages/demo test:e2e:fullstack
-
-      # ── Teardown: Always stop instance ───────────────────────────
-      - name: Stop EC2 instance
-        if: always()
-        run: |
-          if [ -n "${INSTANCE_ID}" ]; then
-            aws ec2 stop-instances --instance-ids "${INSTANCE_ID}" || true
-            echo "EC2 instance stop requested"
-          fi
