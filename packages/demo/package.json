@@ -13,17 +13,17 @@
     "test:e2e:all": "bun run test:e2e && bun run test:e2e:fullstack"
   },
   "dependencies": {
-    "@aztec/accounts": "4.0.0-nightly.20260209",
-    "@aztec/aztec.js": "4.0.0-nightly.20260209",
-    "@aztec/bb-prover": "4.0.0-nightly.20260209",
-    "@aztec/foundation": "4.0.0-nightly.20260209",
-    "@aztec/noir-acvm_js": "4.0.0-nightly.20260209",
-    "@aztec/noir-contracts.js": "4.0.0-nightly.20260209",
-    "@aztec/noir-noirc_abi": "4.0.0-nightly.20260209",
-    "@aztec/pxe": "4.0.0-nightly.20260209",
-    "@aztec/simulator": "4.0.0-nightly.20260209",
-    "@aztec/stdlib": "4.0.0-nightly.20260209",
-    "@aztec/test-wallet": "4.0.0-nightly.20260209",
+    "@aztec/accounts": "4.0.0-nightly.20260208",
+    "@aztec/aztec.js": "4.0.0-nightly.20260208",
+    "@aztec/bb-prover": "4.0.0-nightly.20260208",
+    "@aztec/foundation": "4.0.0-nightly.20260208",
+    "@aztec/noir-acvm_js": "4.0.0-nightly.20260208",
+    "@aztec/noir-contracts.js": "4.0.0-nightly.20260208",
+    "@aztec/noir-noirc_abi": "4.0.0-nightly.20260208",
+    "@aztec/pxe": "4.0.0-nightly.20260208",
+    "@aztec/simulator": "4.0.0-nightly.20260208",
+    "@aztec/stdlib": "4.0.0-nightly.20260208",
+    "@aztec/test-wallet": "4.0.0-nightly.20260208",
     "@alejoamiras/tee-rex": "workspace:*"
   },
   "devDependencies": {
