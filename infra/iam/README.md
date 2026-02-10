@@ -65,9 +65,19 @@ Add these in Settings > Secrets and variables > Actions > Secrets:
 No long-lived AWS keys needed — OIDC provides credentials dynamically.
 These values are stored as secrets to avoid exposing infrastructure details in logs.
 
+## Updating the Trust Policy
+
+When the allowed branch patterns change (e.g., after renaming auto-update branches), update the trust policy:
+
+```bash
+aws iam update-assume-role-policy \
+  --role-name tee-rex-ci-github \
+  --policy-document file://infra/iam/tee-rex-ci-trust-policy.json
+```
+
 ## Security Notes
 
 - **No long-lived AWS keys** stored anywhere. OIDC tokens are short-lived (1 hour).
-- **Trust policy** restricts role assumption to `main` and `chore/aztec-spartan-*` branches only.
+- **Trust policy** restricts role assumption to `main`, `chore/aztec-spartan-*`, and `pull_request` only.
 - **EC2 permissions** scoped to instances tagged `Environment: ci` — cannot touch other instances.
 - **ECR permissions** scoped to the `tee-rex` repository only.
