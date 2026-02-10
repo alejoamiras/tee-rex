@@ -334,9 +334,15 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - Updated root `package.json` script, IAM README, test expectations
 - First run: trigger spartan workflow manually with `version: 4.0.0-spartan.20260210` to bootstrap from nightly to spartan
 
-**12C — Spartan E2E on nextnet:**
-- Spartan workflow runs E2E tests against `https://nextnet.aztec-labs.com`
-- Validates that the new Aztec spartan version works against the real nextnet
+**12C — Nextnet support in demo frontend: ✅ Complete (nextnet manual test pending)**
+- Demo auto-detects live network via `nodeInfo.l1ChainId !== 31337`
+- Sponsored FPC (Fee Paying Contract) set up on all networks — derives canonical address from artifact + salt=0, registers in PXE
+- `deployTestAccount()`: uses `from: AztecAddress.ZERO` + sponsored fee on live networks (self-deploy path), sandbox uses pre-registered accounts
+- `runTokenFlow()`: all `.send()` calls include sponsored fee; deploys bob inline if only 1 account exists
+- `proverEnabled: true` passed to PXE config on live networks (real proofs required)
+- Network indicator in services panel ("sandbox" / "live")
+- Auto-clears stale IndexedDB on init failure (handles Aztec version upgrades gracefully, retries up to 3 times)
+- Validated on local sandbox. Nextnet manual test blocked — nextnet currently broken, will test when fixed
 - Uses `aztec_node_url` input wired in 12B to skip local CLI install and point tests at nextnet
 
 **12D — npm publish + git tags:**
@@ -411,7 +417,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
-- **IAM trust policy audit**: If the deployed AWS trust policy for `tee-rex-ci-github` was tightened to `chore/aztec-nightly-*`, update it to `chore/aztec-spartan-*`. Tighten to only allow `main`, `chore/aztec-spartan-*`, and `pull_request` instead of `refs/heads/*` — principle of least privilege. Update `infra/iam/tee-rex-ci-trust-policy.json` template to match.
+- ~~**IAM trust policy audit**~~ ✅ Done — tightened `tee-rex-ci-trust-policy.json` from `refs/heads/*` to `refs/heads/main` + `refs/heads/chore/aztec-spartan-*` + `pull_request`. **Note**: apply the updated policy to AWS with `aws iam update-assume-role-policy --role-name tee-rex-ci-github --policy-document file://infra/iam/tee-rex-ci-trust-policy.json`
 
 ---
 
