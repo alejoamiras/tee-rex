@@ -39,12 +39,12 @@ jobs:
     with:
       tee_url: http://localhost:4001
 
-  # ── Demo Fullstack E2E with TEE ───────────────────────────────────
-  e2e-demo:
-    name: Demo E2E (TEE)
+  # ── App Fullstack E2E with TEE ────────────────────────────────────
+  e2e-app:
+    name: App E2E (TEE)
     needs: deploy-tee
     if: ${{ !cancelled() && needs.deploy-tee.outputs.deployed == 'true' }}
-    uses: ./.github/workflows/_e2e-demo.yml
+    uses: ./.github/workflows/_e2e-app.yml
     secrets: inherit
     with:
       tee_url: http://localhost:4001
@@ -52,7 +52,7 @@ jobs:
   # ── Teardown: Always stop EC2 instance ────────────────────────────
   teardown:
     name: Teardown
-    needs: [deploy-tee, e2e-sdk, e2e-demo]
+    needs: [deploy-tee, e2e-sdk, e2e-app]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

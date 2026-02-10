@@ -3,7 +3,7 @@
   "workspaces": [
     "packages/sdk",
     "packages/server",
-    "packages/demo"
+    "packages/app"
   ],
   "scripts": {
     "build": "docker build -t tee-rex --platform linux/amd64 .",
@@ -15,10 +15,10 @@
     "format": "biome format --write .",
     "test": "bun run lint && bun run test:typecheck && bun run test:unit",
     "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
-    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/demo test:unit",
-    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/demo test:e2e:all",
+    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/app test:unit",
+    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/app test:e2e:all",
     "test:all": "bun run test && bun run test:e2e",
-    "demo": "bun run --cwd packages/demo dev",
+    "app": "bun run --cwd packages/app dev",
     "sdk:build": "bun run --cwd packages/sdk build",
     "aztec:check": "bun scripts/check-aztec-spartan.ts",
     "aztec:update": "bun scripts/update-aztec-version.ts",
