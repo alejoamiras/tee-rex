@@ -11,10 +11,10 @@ This document outlines the planned improvements for the tee-rex project.
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/demo`)
 - **Linting/Formatting**: Biome (lint + format in one tool)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
-- **CI**: GitHub Actions (per-package, path-filtered workflows: `ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml`)
+- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `demo.yml`, `server.yml`; nightly: `aztec-nightly.yml`; TEE: `tee.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Aztec version**: 4.0.0-nightly.20260204
+- **Aztec version**: 4.0.0-nightly.20260209
 
 ---
 
@@ -197,63 +197,20 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 ---
 
-## Phase 5: TEE Attestation & Nitro Enclave Deployment (In Progress)
+## Phase 5: TEE Attestation & Nitro Enclave Deployment ✅ Complete
 
 **Goal**: Real TEE attestation via AWS Nitro Enclaves — SDK verifies COSE_Sign1 attestation documents, server generates them via libnsm.so FFI.
 
-**Parts:**
+**Completed:**
 - **A** ✅ — Attestation verification in SDK (`verifyNitroAttestation`, COSE_Sign1/CBOR parsing, cert chain validation)
 - **B** ✅ — Server `NitroAttestationService` with Bun FFI calls to libnsm.so
 - **C** ✅ — `Dockerfile.nitro` multi-stage build (Rust → libnsm.so, Bun builder, runtime with socat/vsock bridge)
 - **D** ✅ — AWS Nitro Enclave deployment on EC2 — working! Real attestation documents returned.
+- **E** ✅ — Deployment runbook & debugging guide (`docs/nitro-deployment.md`)
 
 **Lessons learned**: See `lessons/phase-5d-nitro-enclave-deployment.md`
 
 **Key fix**: `ifconfig lo 127.0.0.1` (not just `ip link set lo up`) — must assign the IP address, not just bring the link up.
-
-- **E** — Deployment runbook & debugging guide (`docs/nitro-deployment.md`)
-
-**Phase 5E Details**:
-
-Write a complete step-by-step runbook so any team member can deploy, debug, and tear down the Nitro Enclave from scratch. Should cover:
-
-1. **Prerequisites**: AWS CLI configured, Docker with buildx, region/account info
-2. **Infrastructure setup**: Create ECR repo, security group, IAM role + instance profile, key pair (or reuse existing)
-3. **Build & push**: `docker buildx build` for linux/amd64, ECR login, push
-4. **Launch EC2**: Instance type, AMI, user-data script, enclave options, wait for bootstrap
-5. **Build & run enclave**: `nitro-cli build-enclave`, `nitro-cli run-enclave` with correct memory/CPU, socat proxy setup
-6. **Test**: curl the attestation endpoint, verify `mode: "nitro"`
-7. **Debugging**: SSH into host, `nitro-cli console`, `nitro-cli describe-enclaves`, reading `/var/log/nitro_enclaves/`, common errors (E11, E26, E45, E51)
-8. **Iterating**: How to rebuild after code changes (push new image, terminate old enclave, rebuild EIF, relaunch)
-9. **Teardown**: Terminate instance, optionally delete infra
-10. **Cost awareness**: Instance pricing, spot instance option, don't leave running overnight
-
-Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad `user-data.sh` + this session's commands
-
----
-
-## Phase 6: End-to-End Testing on Next-Net
-
-**Goal**: Validate the full proving flow against Aztec's next-net (nightly network) — both locally and from inside the Nitro Enclave.
-
-**Context**: So far, all testing uses `--local-network` (sandbox). We haven't tested with a real proving payload against a real network. Next-net runs the same nightly version we depend on (`4.0.0-nightly.20260204`), so it's the right target.
-
-**Parts:**
-- **A** — Local client → next-net proving (verify the SDK + local prover works against next-net)
-- **B** — Local client → TEE server (EC2 enclave) → next-net proving (full remote flow)
-- **C** — Demo frontend pointing at next-net + TEE server (visual end-to-end)
-
-**What needs to happen:**
-1. Configure `AZTEC_NODE_URL` to point at next-net (URL TBD — check with Aztec team)
-2. Test account deployment + transaction proving against next-net from local machine
-3. Test same flow but with `provingMode: "remote"` pointing at the EC2 enclave
-4. Verify attestation documents are checked in the remote flow
-5. Measure proving times: local WASM vs remote native (enclave) — this is the key metric for the show-and-tell
-
-**Risks:**
-- Next-net may have different contract class requirements or gas settings
-- Network latency (client → EC2 → next-net) could affect timeouts
-- Proving payload size over the wire (encrypted witness data) — may need to tune body size limits
 
 ---
 
@@ -348,9 +305,47 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 **AWS setup documentation:** `infra/iam/README.md` (OIDC provider, IAM role + policy, EC2 instance, GitHub secrets)
 
-**Future additions:**
-- npm publish — trigger after green tests
-- Branch protection on `main` with required status checks (needed for auto-merge to work)
+**PR-based CI architecture (gate job pattern):**
+- Workflows always trigger on PRs (no `paths:` filter on `pull_request`) — avoids GitHub's "pending forever" problem with required checks
+- Each workflow has a `changes` detection job using `gh pr diff` (API-based, works in shallow clones)
+- Downstream jobs conditional on `needs.changes.outputs.relevant == 'true'`
+- Gate jobs (`SDK Status`, `Demo Status`, `Server Status`) always run and check all results including `changes.result`
+- GitHub ruleset requires only the 3 gate jobs — they pass (skipped = ok) when no relevant files changed
+- For push/dispatch events, `changes` always returns `relevant=true` (path filter on `push:` trigger handles filtering)
+- PRs created by nightly use `PAT_TOKEN` (not `GITHUB_TOKEN`) to trigger other workflows
+
+**Branch protection:** `infra/rulesets/main-branch-protection.json` — 3 required checks (SDK Status, Demo Status, Server Status). Import via GitHub Settings > Rules > Rulesets.
+
+**Verified end-to-end:** Nightly detected update → created PR #15 → all workflows triggered → SDK/Demo/Server/TEE passed → auto-merged.
+
+**12B — Multi-network support: ✅ Complete**
+- `AZTEC_NODE_URL` env var configurable across demo (Vite proxy target), e2e fixtures (health check), and CI
+- `setup-aztec` action: `skip_cli` input skips Foundry + Aztec CLI install when targeting remote node
+- `start-services` action: `aztec_node_url` input — local Aztec startup conditional, health check uses configured URL
+- `_e2e-sdk.yml` / `_e2e-demo.yml`: accept and propagate `aztec_node_url` to setup-aztec, start-services, and test env
+- Demo frontend: no longer blocks on tee-rex server being down — defaults to local mode, wallet init proceeds with just the Aztec node
+- Demo services panel: `#aztec-url` display updates dynamically from `AZTEC_NODE_URL` env var
+
+**12B' — Nightly → Spartan migration (prerequisite for 12C):**
+- Aztec nextnet now follows the `spartan` dist-tag instead of `nightly`
+- Nextnet RPC URL: `https://nextnet.aztec-labs.com`
+- Migration scope:
+  - `scripts/check-aztec-nightly.ts` → check `spartan` dist-tag (not `nightly`)
+  - `scripts/update-aztec-version.ts` → handle spartan versioning scheme
+  - `.github/workflows/aztec-nightly.yml` → rename/update to track spartan releases
+  - `bun run aztec:check` / `bun run aztec:update` — update root package.json scripts if names change
+  - Unit tests in `scripts/update-aztec-version.test.ts` — update expectations
+- Must land on main before 12C work begins
+
+**12C — Spartan E2E on nextnet:**
+- Spartan workflow runs E2E tests against `https://nextnet.aztec-labs.com`
+- Validates that the new Aztec spartan version works against the real nextnet
+- Uses `aztec_node_url` input wired in 12B to skip local CLI install and point tests at nextnet
+
+**12D — npm publish + git tags:**
+- After green tests on main, automatically publish `@alejoamiras/tee-rex` (SDK only) to npm (public)
+- Tag the release with the version number
+- Triggered after spartan auto-merge or manual dispatch
 
 ---
 
@@ -417,7 +412,9 @@ Source material: `lessons/phase-5d-nitro-enclave-deployment.md` + the scratchpad
 
 ## Backlog
 
-- Phase 6 (next-net testing) is now part of Phase 12 (Golden Bow)
+- Phase 6 (next-net testing) absorbed into Phase 12B/12C
+- Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
+- Rename `aztec-nightly.yml` and related scripts to reflect spartan branding (cosmetic, low priority)
 
 ---
 

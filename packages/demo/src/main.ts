@@ -1,5 +1,6 @@
 import "./style.css";
 import {
+  AZTEC_DISPLAY_URL,
   checkAztecNode,
   checkTeeAttestation,
   checkTeeRexServer,
@@ -212,20 +213,23 @@ $("token-flow-btn").addEventListener("click", async () => {
 
 // ── Init ──
 async function init(): Promise<void> {
+  $("aztec-url").textContent = AZTEC_DISPLAY_URL;
+
   appendLog("Checking services...");
   const { aztec, teerex } = await checkServices();
 
   if (!aztec) {
-    appendLog("Aztec node not reachable at localhost:8080", "error");
-  }
-  if (!teerex) {
-    appendLog("TEE-Rex server not reachable at localhost:4000", "error");
-  }
-  if (!aztec || !teerex) {
-    appendLog("Start services before using the demo", "warn");
-    $("wallet-state").textContent = "services unavailable";
+    appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
+    appendLog("Start the Aztec node before using the demo", "warn");
+    $("wallet-state").textContent = "aztec unavailable";
     setStatus("wallet-dot", false);
     return;
+  }
+
+  if (!teerex) {
+    appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
+    setUiMode("local");
+    updateModeUI("local");
   }
 
   appendLog("Initializing wallet...");

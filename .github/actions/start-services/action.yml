@@ -1,10 +1,17 @@
 name: Start Services
-description: Start Aztec local network and tee-rex server, then wait for health checks
+description: Start Aztec local network (unless remote) and tee-rex server, then wait for health checks
+
+inputs:
+  aztec_node_url:
+    description: Aztec node URL (local network started only when localhost)
+    required: false
+    default: "http://localhost:8080"
 
 runs:
   using: composite
   steps:
     - name: Start Aztec local network
+      if: inputs.aztec_node_url == 'http://localhost:8080'
       shell: bash
       run: aztec start --local-network &
 
@@ -14,15 +21,17 @@ runs:
 
     - name: Wait for Aztec node
       shell: bash
+      env:
+        AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
       run: |
         for i in $(seq 1 60); do
-          if curl -sf http://localhost:8080/status > /dev/null 2>&1; then
+          if curl -sf "${AZTEC_NODE_URL}/status" > /dev/null 2>&1; then
             echo "Aztec node ready (attempt $i)"
             exit 0
           fi
           sleep 5
         done
-        echo "Aztec node failed to start within 5 minutes"
+        echo "Aztec node failed to respond at ${AZTEC_NODE_URL} within 5 minutes"
         exit 1
 
     - name: Wait for tee-rex server
