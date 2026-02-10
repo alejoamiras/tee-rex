@@ -2,10 +2,11 @@
  * Update all @aztec/* version references across the repo.
  *
  * Usage: bun scripts/update-aztec-version.ts <version>
- * Example: bun scripts/update-aztec-version.ts 4.0.0-nightly.20260208
+ * Example: bun scripts/update-aztec-version.ts 4.0.0-spartan.20260210
  */
 
-const VERSION_PATTERN = /^\d+\.\d+\.\d+-nightly\.\d{8}$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+-spartan\.\d{8}$/;
+const AZTEC_VERSION_PATTERN = /^\d+\.\d+\.\d+-(nightly|spartan)\.\d{8}$/;
 
 const PACKAGE_JSON_FILES = [
   "packages/sdk/package.json",
@@ -24,7 +25,7 @@ export function updatePackageJson(content: string, newVersion: string): string {
     const deps = pkg[section];
     if (!deps) continue;
     for (const [key, value] of Object.entries(deps)) {
-      if (key.startsWith("@aztec/") && typeof value === "string" && VERSION_PATTERN.test(value)) {
+      if (key.startsWith("@aztec/") && typeof value === "string" && AZTEC_VERSION_PATTERN.test(value)) {
         deps[key] = newVersion;
       }
     }
@@ -38,12 +39,12 @@ async function main() {
 
   if (!newVersion) {
     console.error("Usage: bun scripts/update-aztec-version.ts <version>");
-    console.error("Example: bun scripts/update-aztec-version.ts 4.0.0-nightly.20260208");
+    console.error("Example: bun scripts/update-aztec-version.ts 4.0.0-spartan.20260210");
     process.exit(1);
   }
 
   if (!validateVersion(newVersion)) {
-    console.error(`Invalid version format: "${newVersion}". Expected: X.Y.Z-nightly.YYYYMMDD`);
+    console.error(`Invalid version format: "${newVersion}". Expected: X.Y.Z-spartan.YYYYMMDD`);
     process.exit(1);
   }
 

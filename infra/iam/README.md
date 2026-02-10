@@ -68,6 +68,6 @@ These values are stored as secrets to avoid exposing infrastructure details in l
 ## Security Notes
 
 - **No long-lived AWS keys** stored anywhere. OIDC tokens are short-lived (1 hour).
-- **Trust policy** restricts role assumption to `main` and `chore/aztec-nightly-*` branches only.
+- **Trust policy** restricts role assumption to `main` and `chore/aztec-spartan-*` branches only.
 - **EC2 permissions** scoped to instances tagged `Environment: ci` — cannot touch other instances.
 - **ECR permissions** scoped to the `tee-rex` repository only.
