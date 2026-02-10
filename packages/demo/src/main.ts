@@ -242,7 +242,17 @@ async function init(): Promise<void> {
     $("wallet-state").className = "text-emerald-500/80 ml-auto font-light";
     setStatus("wallet-dot", true);
     setActionButtonsDisabled(false);
-    appendLog("Ready — deploy a test account or run the token flow", "success");
+
+    const networkLabel = $("network-label");
+    if (state.isLiveNetwork) {
+      networkLabel.textContent = "live";
+      networkLabel.className = "text-amber-500/80 text-[10px] uppercase tracking-wider ml-2";
+      appendLog("Ready — deploy a test account to get started (live network)", "success");
+    } else {
+      networkLabel.textContent = "local network";
+      networkLabel.className = "text-gray-600 text-[10px] uppercase tracking-wider ml-2";
+      appendLog("Ready — deploy a test account or run the token flow", "success");
+    }
   } else {
     $("wallet-state").textContent = "failed";
     $("wallet-state").className = "text-red-400/80 ml-auto font-light";

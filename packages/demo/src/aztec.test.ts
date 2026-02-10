@@ -11,6 +11,8 @@ afterEach(() => {
   state.provingMode = "remote";
   state.uiMode = "remote";
   state.teeServerUrl = "";
+  state.isLiveNetwork = false;
+  state.feePaymentMethod = undefined;
 });
 
 // ── checkAztecNode ──
