@@ -67,12 +67,17 @@ These values are stored as secrets to avoid exposing infrastructure details in l
 
 ## Updating the Trust Policy
 
-When the allowed branch patterns change (e.g., after renaming auto-update branches), update the trust policy:
+When the allowed branch patterns change (e.g., after renaming auto-update branches), update the trust policy.
+
+> **Note**: The template file uses `<ACCOUNT_ID>` as a placeholder. Substitute your real account ID before applying.
 
 ```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+sed "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" infra/iam/tee-rex-ci-trust-policy.json \
+  > /tmp/trust-policy.json
 aws iam update-assume-role-policy \
   --role-name tee-rex-ci-github \
-  --policy-document file://infra/iam/tee-rex-ci-trust-policy.json
+  --policy-document file:///tmp/trust-policy.json
 ```
 
 ## Security Notes
