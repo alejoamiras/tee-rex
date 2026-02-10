@@ -11,10 +11,10 @@ This document outlines the planned improvements for the tee-rex project.
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/demo`)
 - **Linting/Formatting**: Biome (lint + format in one tool)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
-- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `demo.yml`, `server.yml`; nightly: `aztec-nightly.yml`; TEE: `tee.yml`)
+- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `demo.yml`, `server.yml`; spartan: `aztec-spartan.yml`; TEE: `tee.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Aztec version**: 4.0.0-nightly.20260209
+- **Aztec version**: 4.0.0-nightly.20260210 (migrating to `spartan` dist-tag)
 
 ---
 
@@ -279,15 +279,15 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 ---
 
-## Phase 12: Aztec Nightly Auto-Update CI (Golden Bow) ✅ Complete
+## Phase 12: Aztec Auto-Update CI (Golden Bow) ✅ Complete
 
-**Goal**: CI pipeline that detects new Aztec nightly versions, updates deps, runs full test suite (including TEE), and opens a PR.
+**Goal**: CI pipeline that detects new Aztec spartan versions, updates deps, runs full test suite (including TEE), and opens a PR.
 
 **Completed:**
-- `scripts/check-aztec-nightly.ts` — checks npm `nightly` dist-tag, verifies all 11 `@aztec/*` packages exist at new version
+- `scripts/check-aztec-spartan.ts` — checks npm `spartan` dist-tag, verifies all 11 `@aztec/*` packages exist at new version
 - `scripts/update-aztec-version.ts` — updates 3 package.json + runs `bun install`
 - `scripts/update-aztec-version.test.ts` — 12 unit tests for version validation, JSON/YAML update logic
-- `.github/workflows/aztec-nightly.yml` — 3-job pipeline: check → update + unit test → create PR (with `test-tee` label + auto-merge)
+- `.github/workflows/aztec-spartan.yml` — 3-job pipeline: check → update + unit test → create PR (with `test-tee` label + auto-merge)
 - PR CI handles all testing: `sdk.yml`, `demo.yml`, `server.yml` auto-trigger on the PR; `tee.yml` triggers on `test-tee` label
 - Reusable workflows (`_deploy-tee.yml`, `_e2e-sdk.yml`, `_e2e-demo.yml`) + composite actions (`setup-aztec`, `start-services`)
 - `setup-aztec` auto-detects Aztec version from `packages/sdk/package.json` — no hardcoded versions in workflow files
@@ -312,11 +312,11 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - Gate jobs (`SDK Status`, `Demo Status`, `Server Status`) always run and check all results including `changes.result`
 - GitHub ruleset requires only the 3 gate jobs — they pass (skipped = ok) when no relevant files changed
 - For push/dispatch events, `changes` always returns `relevant=true` (path filter on `push:` trigger handles filtering)
-- PRs created by nightly use `PAT_TOKEN` (not `GITHUB_TOKEN`) to trigger other workflows
+- PRs created by spartan workflow use `PAT_TOKEN` (not `GITHUB_TOKEN`) to trigger other workflows
 
 **Branch protection:** `infra/rulesets/main-branch-protection.json` — 3 required checks (SDK Status, Demo Status, Server Status). Import via GitHub Settings > Rules > Rulesets.
 
-**Verified end-to-end:** Nightly detected update → created PR #15 → all workflows triggered → SDK/Demo/Server/TEE passed → auto-merged.
+**Verified end-to-end:** Auto-update detected new version → created PR #15 → all workflows triggered → SDK/Demo/Server/TEE passed → auto-merged.
 
 **12B — Multi-network support: ✅ Complete**
 - `AZTEC_NODE_URL` env var configurable across demo (Vite proxy target), e2e fixtures (health check), and CI
@@ -326,16 +326,13 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - Demo frontend: no longer blocks on tee-rex server being down — defaults to local mode, wallet init proceeds with just the Aztec node
 - Demo services panel: `#aztec-url` display updates dynamically from `AZTEC_NODE_URL` env var
 
-**12B' — Nightly → Spartan migration (prerequisite for 12C):**
-- Aztec nextnet now follows the `spartan` dist-tag instead of `nightly`
-- Nextnet RPC URL: `https://nextnet.aztec-labs.com`
-- Migration scope:
-  - `scripts/check-aztec-nightly.ts` → check `spartan` dist-tag (not `nightly`)
-  - `scripts/update-aztec-version.ts` → handle spartan versioning scheme
-  - `.github/workflows/aztec-nightly.yml` → rename/update to track spartan releases
-  - `bun run aztec:check` / `bun run aztec:update` — update root package.json scripts if names change
-  - Unit tests in `scripts/update-aztec-version.test.ts` — update expectations
-- Must land on main before 12C work begins
+**12B' — Nightly → Spartan migration: ✅ Complete**
+- Renamed `scripts/check-aztec-nightly.ts` → `scripts/check-aztec-spartan.ts` (checks `spartan` dist-tag)
+- `scripts/update-aztec-version.ts` — dual patterns: `VERSION_PATTERN` (spartan only, for validation) + `AZTEC_VERSION_PATTERN` (nightly|spartan, for matching deps to replace during transition)
+- Renamed `.github/workflows/aztec-nightly.yml` → `.github/workflows/aztec-spartan.yml`
+- Branch names: `chore/aztec-nightly-*` → `chore/aztec-spartan-*`
+- Updated root `package.json` script, IAM README, test expectations
+- First run: trigger spartan workflow manually with `version: 4.0.0-spartan.20260210` to bootstrap from nightly to spartan
 
 **12C — Spartan E2E on nextnet:**
 - Spartan workflow runs E2E tests against `https://nextnet.aztec-labs.com`
@@ -414,7 +411,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
-- Rename `aztec-nightly.yml` and related scripts to reflect spartan branding (cosmetic, low priority)
+- **IAM trust policy audit**: If the deployed AWS trust policy for `tee-rex-ci-github` was tightened to `chore/aztec-nightly-*`, update it to `chore/aztec-spartan-*`. Tighten to only allow `main`, `chore/aztec-spartan-*`, and `pull_request` instead of `refs/heads/*` — principle of least privilege. Update `infra/iam/tee-rex-ci-trust-policy.json` template to match.
 
 ---
 
