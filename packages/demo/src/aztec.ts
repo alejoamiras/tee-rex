@@ -14,6 +14,9 @@ export type UiMode = "local" | "remote" | "tee";
 const AZTEC_NODE_URL = "/aztec"; // Proxied via Vite dev server
 const LOCAL_TEEREX_URL = "http://localhost:4000";
 
+/** Display-friendly Aztec node URL for the services panel (reads env set by Vite define). */
+export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
+
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;

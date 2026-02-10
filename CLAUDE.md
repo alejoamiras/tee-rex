@@ -318,21 +318,34 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 **Verified end-to-end:** Nightly detected update → created PR #15 → all workflows triggered → SDK/Demo/Server/TEE passed → auto-merged.
 
-**Remaining work (Phase 12B–12D):**
+**12B — Multi-network support: ✅ Complete**
+- `AZTEC_NODE_URL` env var configurable across demo (Vite proxy target), e2e fixtures (health check), and CI
+- `setup-aztec` action: `skip_cli` input skips Foundry + Aztec CLI install when targeting remote node
+- `start-services` action: `aztec_node_url` input — local Aztec startup conditional, health check uses configured URL
+- `_e2e-sdk.yml` / `_e2e-demo.yml`: accept and propagate `aztec_node_url` to setup-aztec, start-services, and test env
+- Demo frontend: no longer blocks on tee-rex server being down — defaults to local mode, wallet init proceeds with just the Aztec node
+- Demo services panel: `#aztec-url` display updates dynamically from `AZTEC_NODE_URL` env var
 
-**12B — Multi-network support:**
-- Make services/tests configurable to target either localhost (local sandbox) or next-net (`https://next.devnet.aztec-labs.com`)
-- `AZTEC_NODE_URL` as a first-class config across SDK, server, demo, and CI
-- E2E tests should be runnable against both targets
+**12B' — Nightly → Spartan migration (prerequisite for 12C):**
+- Aztec nextnet now follows the `spartan` dist-tag instead of `nightly`
+- Nextnet RPC URL: `https://nextnet.aztec-labs.com`
+- Migration scope:
+  - `scripts/check-aztec-nightly.ts` → check `spartan` dist-tag (not `nightly`)
+  - `scripts/update-aztec-version.ts` → handle spartan versioning scheme
+  - `.github/workflows/aztec-nightly.yml` → rename/update to track spartan releases
+  - `bun run aztec:check` / `bun run aztec:update` — update root package.json scripts if names change
+  - Unit tests in `scripts/update-aztec-version.test.ts` — update expectations
+- Must land on main before 12C work begins
 
-**12C — Nightly E2E on next-net:**
-- Nightly workflow runs E2E tests against next-net (not just local sandbox)
-- Validates that the new Aztec version works against the real nightly network
+**12C — Spartan E2E on nextnet:**
+- Spartan workflow runs E2E tests against `https://nextnet.aztec-labs.com`
+- Validates that the new Aztec spartan version works against the real nextnet
+- Uses `aztec_node_url` input wired in 12B to skip local CLI install and point tests at nextnet
 
 **12D — npm publish + git tags:**
 - After green tests on main, automatically publish `@alejoamiras/tee-rex` (SDK only) to npm (public)
 - Tag the release with the version number
-- Triggered after nightly auto-merge or manual dispatch
+- Triggered after spartan auto-merge or manual dispatch
 
 ---
 
@@ -401,6 +414,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
+- Rename `aztec-nightly.yml` and related scripts to reflect spartan branding (cosmetic, low priority)
 
 ---
 
