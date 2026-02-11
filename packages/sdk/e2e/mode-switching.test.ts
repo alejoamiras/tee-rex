@@ -30,7 +30,7 @@ let registeredAddresses: any[];
 describe("Mode Switching", () => {
   describe("Setup", () => {
     test("should create TeeRexProver starting in remote mode", () => {
-      prover = new TeeRexProver(config.teeRexUrl, new WASMSimulator());
+      prover = new TeeRexProver(config.proverUrl, new WASMSimulator());
       prover.setProvingMode(ProvingMode.remote);
 
       expect(prover).toBeDefined();
@@ -166,9 +166,9 @@ describe("Mode Switching", () => {
     test("should switch from local back to standard remote and deploy", async () => {
       expect(wallet).toBeDefined();
 
-      prover.setApiUrl(config.teeRexUrl);
+      prover.setApiUrl(config.proverUrl);
       prover.setProvingMode(ProvingMode.remote);
-      logger.info("Switched from local back to standard remote", { apiUrl: config.teeRexUrl });
+      logger.info("Switched from local back to standard remote", { apiUrl: config.proverUrl });
 
       logger.debug("Creating Schnorr account (standard remote after TEE)");
       const secret = Fr.random();

@@ -7,7 +7,7 @@ async function mockServicesOffline(page: import("@playwright/test").Page) {
   await page.route("**/aztec/status", (route) =>
     route.fulfill({ status: 503, body: "Service Unavailable" }),
   );
-  await page.route("http://localhost:4000/**", (route) =>
+  await page.route("**/prover/**", (route) =>
     route.fulfill({ status: 503, body: "Service Unavailable" }),
   );
 }
@@ -15,7 +15,7 @@ async function mockServicesOffline(page: import("@playwright/test").Page) {
 /** Mock both services as healthy. Wallet init will still fail (no real Aztec node). */
 async function mockServicesOnline(page: import("@playwright/test").Page) {
   await page.route("**/aztec/status", (route) => route.fulfill({ status: 200, body: "OK" }));
-  await page.route("http://localhost:4000/encryption-public-key", (route) =>
+  await page.route("**/prover/encryption-public-key", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",

@@ -29,7 +29,7 @@ let registeredAddresses: any[];
 describe("TeeRexProver", () => {
   describe("Setup", () => {
     test("should create prover and connect to Aztec node", async () => {
-      prover = new TeeRexProver(config.teeRexUrl, new WASMSimulator());
+      prover = new TeeRexProver(config.proverUrl, new WASMSimulator());
       prover.setProvingMode(ProvingMode.remote);
 
       node = createAztecNodeClient(config.nodeUrl);
@@ -66,7 +66,7 @@ describe("TeeRexProver", () => {
       expect(wallet).toBeDefined();
 
       prover.setProvingMode(ProvingMode.remote);
-      prover.setApiUrl(config.teeRexUrl);
+      prover.setApiUrl(config.proverUrl);
 
       const deployed = await deploySchnorrAccount();
       expect(deployed).toBeDefined();

@@ -25,7 +25,7 @@ describe("Service Connectivity", () => {
 
   describe("Tee-Rex Server", () => {
     test("should return encryption public key", async () => {
-      const response = await fetch(`${config.teeRexUrl}/encryption-public-key`);
+      const response = await fetch(`${config.proverUrl}/encryption-public-key`);
       const data = await response.json();
 
       expect(data.publicKey).toBeDefined();

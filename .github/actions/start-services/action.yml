@@ -6,6 +6,10 @@ inputs:
     description: Aztec node URL (local network started only when localhost)
     required: false
     default: "http://localhost:8080"
+  prover_url:
+    description: Prover URL for health check (local server started only when localhost)
+    required: false
+    default: "http://localhost:4000"
 
 runs:
   using: composite
@@ -16,6 +20,7 @@ runs:
       run: aztec start --local-network &
 
     - name: Start tee-rex server
+      if: inputs.prover_url == 'http://localhost:4000'
       shell: bash
       run: bun run start &
 
@@ -36,13 +41,15 @@ runs:
 
     - name: Wait for tee-rex server
       shell: bash
+      env:
+        PROVER_URL: ${{ inputs.prover_url }}
       run: |
         for i in $(seq 1 30); do
-          if curl -sf http://localhost:4000/encryption-public-key > /dev/null 2>&1; then
+          if curl -sf "${PROVER_URL}/encryption-public-key" > /dev/null 2>&1; then
             echo "tee-rex server ready (attempt $i)"
             exit 0
           fi
           sleep 2
         done
-        echo "tee-rex server failed to start within 1 minute"
+        echo "tee-rex server failed to respond at ${PROVER_URL} within 1 minute"
         exit 1

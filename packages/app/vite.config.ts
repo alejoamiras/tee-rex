@@ -27,6 +27,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/aztec/, ""),
         },
+        "/prover": {
+          target: env.PROVER_URL || "http://localhost:4000",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/prover/, ""),
+        },
       },
       fs: {
         // Allow serving files from the monorepo root (WASM files in node_modules)
@@ -43,6 +48,7 @@ export default defineConfig(({ mode }) => {
     define: {
       "process.env": JSON.stringify({
         AZTEC_NODE_URL: env.AZTEC_NODE_URL,
+        PROVER_URL: env.PROVER_URL,
       }),
     },
   };

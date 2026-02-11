@@ -37,7 +37,7 @@ await configure({
 // Environment configuration
 export const config = {
   nodeUrl: process.env.AZTEC_NODE_URL || "http://localhost:8080",
-  teeRexUrl: process.env.TEEREX_URL || "http://localhost:4000",
+  proverUrl: process.env.PROVER_URL || "http://localhost:4000",
   /** Optional TEE server URL — TEE tests are skipped when not set. */
   teeUrl: process.env.TEE_URL || "",
 };
@@ -48,7 +48,7 @@ async function assertServicesAvailable(): Promise<void> {
     fetch(`${config.nodeUrl}/status`, { signal: AbortSignal.timeout(5000) })
       .then((r) => r.ok)
       .catch(() => false),
-    fetch(`${config.teeRexUrl}/encryption-public-key`, { signal: AbortSignal.timeout(5000) })
+    fetch(`${config.proverUrl}/encryption-public-key`, { signal: AbortSignal.timeout(5000) })
       .then((r) => r.ok)
       .catch(() => false),
   ]);

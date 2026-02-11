@@ -1,5 +1,6 @@
 const AZTEC_STATUS_URL = `${process.env.AZTEC_NODE_URL || "http://localhost:8080"}/status`;
-const TEEREX_KEY_URL = "http://localhost:4000/encryption-public-key";
+const PROVER_URL = process.env.PROVER_URL || "http://localhost:4000";
+const TEEREX_KEY_URL = `${PROVER_URL}/encryption-public-key`;
 
 async function isServiceHealthy(url: string): Promise<boolean> {
   try {
