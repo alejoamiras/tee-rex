@@ -493,18 +493,22 @@ aztec-spartan.yml detects new version
 
 **Completed:** Spartan workflow now adds both `test-tee` and `test-remote` labels to auto-generated PRs.
 
-### 17D — Production EC2 instances + `deploy-prod.yml`
+### 17D — Production EC2 instances + `deploy-prod.yml` ✅ Complete
 
-Provision production infrastructure and deploy on merge to main:
+**Completed:**
+- **IAM policy** — `Environment` tag condition expanded from `"ci"` to `["ci", "prod"]` in EC2StartStop, SSMSendCommandInstance, SSMStartSessionInstance
+- **`_deploy-tee.yml`** — parameterized with `environment` (default: `ci`) and `image_tag` (default: `nightly`) inputs; instance ID selected conditionally (`PROD_TEE_INSTANCE_ID` for prod, `TEE_INSTANCE_ID` for CI)
+- **`_deploy-prover.yml`** — same pattern; `image_tag` default: `prover`; `PROD_PROVER_INSTANCE_ID` for prod
+- **`deploy-prod.yml`** — triggers on push to `main` or `workflow_dispatch`; two parallel jobs calling reusable workflows with `environment: prod`, `image_tag: prod`; no teardown (prod stays running)
+- **`infra/iam/README.md`** — added prod EC2 setup instructions (TEE: `m5.xlarge`, prover: `t3.xlarge`), Elastic IP allocation, and expanded GitHub secrets table with `PROD_TEE_INSTANCE_ID` + `PROD_PROVER_INSTANCE_ID`
+- Existing callers (`tee.yml`, `remote.yml`) unaffected — default inputs preserve CI behavior
 
-1. **Production EC2 for TEE** — Nitro-capable, `m5.xlarge` or bigger, tagged `Environment: prod`
-2. **Production EC2 for prover** — Standard instance, smaller (`t3.xlarge` or `c6a.xlarge`), tagged `Environment: prod`
-3. **Elastic IPs** on both (stable addresses for CloudFront origins)
-4. **IAM policy update** — Allow deploying to `Environment: prod` tagged instances (trust policy already allows `main` branch)
-5. **`deploy-prod.yml`** — Triggers on push to main. Three parallel jobs:
-   - Deploy TEE: `Dockerfile.nitro` → ECR → prod TEE EC2 → deploy enclave
-   - Deploy Prover: `Dockerfile` → ECR → prod prover EC2 → start container
-   - Publish SDK: npm publish (existing `publish-sdk.yml` logic)
+**Manual steps required:**
+1. Provision prod TEE EC2 (`m5.xlarge`, `Environment: prod`, `Service: tee`, enclave-enabled)
+2. Provision prod prover EC2 (`t3.xlarge`, `Environment: prod`, `Service: prover`)
+3. Allocate + associate Elastic IPs for both
+4. Set GitHub secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID`
+5. Apply IAM policy: `aws iam put-role-policy --role-name tee-rex-ci-github --policy-name tee-rex-ci-policy --policy-document file://infra/iam/tee-rex-ci-policy.json` (substitute `<ACCOUNT_ID>` first)
 
 ### 17E — CloudFront + S3 for production app
 

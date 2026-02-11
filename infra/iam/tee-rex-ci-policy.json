@@ -31,7 +31,7 @@
       "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Environment": "ci"
+          "aws:ResourceTag/Environment": ["ci", "prod"]
         }
       }
     },
@@ -48,7 +48,7 @@
       "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Environment": "ci"
+          "aws:ResourceTag/Environment": ["ci", "prod"]
         }
       }
     },
@@ -68,7 +68,7 @@
       "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Environment": "ci"
+          "aws:ResourceTag/Environment": ["ci", "prod"]
         }
       }
     },
