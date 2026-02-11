@@ -1,5 +1,8 @@
+import { createRequire } from "node:module";
 import { defineConfig, loadEnv } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
+
+const require = createRequire(import.meta.url);
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -7,6 +10,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       nodePolyfills({
         include: ["buffer", "path"],
+        globals: { Buffer: true },
       }),
     ],
     // Exclude WASM-containing packages from pre-bundling so their
@@ -32,6 +36,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/prover/, ""),
         },
+        "/tee": {
+          target: env.TEE_URL || "http://localhost:4001",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/tee/, ""),
+        },
       },
       fs: {
         // Allow serving files from the monorepo root (WASM files in node_modules)
@@ -42,6 +51,13 @@ export default defineConfig(({ mode }) => {
       target: "esnext",
     },
     resolve: {
+      alias: {
+        // Bun hoists vite-plugin-node-polyfills under .bun/ which Rollup can't
+        // resolve when the plugin injects its buffer shim into SDK source files.
+        "vite-plugin-node-polyfills/shims/buffer": require.resolve(
+          "vite-plugin-node-polyfills/shims/buffer",
+        ),
+      },
       // Ensure single class instances for instanceof checks across packages
       dedupe: ["@aztec/bb-prover"],
     },

@@ -14,8 +14,8 @@ export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success")
 
 export type UiMode = "local" | "remote" | "tee";
 
-const AZTEC_NODE_URL = "/aztec"; // Proxied via Vite dev server
-const PROVER_URL = "/prover"; // Proxied via Vite dev server
+const AZTEC_NODE_URL = process.env.AZTEC_NODE_URL || "/aztec";
+const PROVER_URL = "/prover"; // Proxied via Vite dev server / CloudFront
 
 /** Display-friendly Aztec node URL for the services panel (reads env set by Vite define). */
 export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
@@ -42,7 +42,7 @@ export const state: AztecState = {
   registeredAddresses: [],
   provingMode: "remote",
   uiMode: "remote",
-  teeServerUrl: "",
+  teeServerUrl: "/tee",
   isLiveNetwork: false,
   feePaymentMethod: undefined,
 };

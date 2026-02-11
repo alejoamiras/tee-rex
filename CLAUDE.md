@@ -99,297 +99,34 @@ bun run build
 
 ---
 
-## Phase 1: Monorepo Migration to Bun ✅ Complete
+## Completed Phases (1–14, 16)
 
-**Goal**: Migrate from pnpm/turbo to Bun workspaces for faster builds and simpler tooling.
-
-**Completed:**
-- Replaced pnpm with Bun as package manager
-- Removed Turbo, using Bun workspace commands instead
-- Migrated SDK tests from vitest to bun:test
-- Updated Dockerfile to use oven/bun:1.3-debian base image
-- All commands now use `bun run`
-- Restructured into `packages/` layout (sdk, server, integration)
-
----
-
-## Phase 2: Integration Testing with Bun ✅ Complete
-
-**Goal**: Create a proper integration test suite that runs with `bun test`.
-
-**Completed:**
-- Integration tests for connectivity, remote proving, local proving, and mode switching
-- Full proving flow tests (TeeRexProver → TestWallet → Account deployment)
-- Proper timeouts for long-running proving operations
-
-**Note:** Originally a separate `packages/integration` workspace. Later restructured into `packages/sdk/e2e/` (see Phase 7).
-
----
-
-## Phase 3: Structured Logging ✅ Complete
-
-**Goal**: Replace all `console.log` with structured logging using LogTape.
-
-**Completed:**
-- Added LogTape (`@logtape/logtape`) across SDK, server, and integration packages
-- SDK uses library-first pattern (silent by default, consumers configure)
-- Server uses `@logtape/express` for request logging, `@logtape/pretty` for dev, JSON Lines for production
-- Error handling middleware on all Express routes
-- Integration tests quiet by default (`LOG_LEVEL=warning`), verbose with `LOG_LEVEL=debug`
-- Zero `console.log` calls remaining in codebase
-
----
-
-## Phase 4: Testing & Demo Frontend
-
-**Goal**: Proper unit/E2E test coverage + a demo frontend to showcase local vs remote proving speed.
-
-**Parts:**
-- **A** ✅ — Unit tests for server (`lazyValue`, `EncryptionService`, endpoints) and SDK (`encrypt`, expanded `TeeRexProver`) — 20 tests
-- **B** ✅ — E2E tests for local proving, remote proving, and mode switching — 21 tests
-- **C** ✅ — Demo page with three proving modes (Local/Remote/TEE) and attestation indicator
-- **D** ✅ — Full token flow demo: deploy token + mint to private + private transfer + check balances in one click
-
-**Status**: A, B, C & D complete
-
-**Phase 4C Details**:
-
-The app (`packages/app`) already has a working Vite + Tailwind frontend with local/remote mode toggle, timing display, and log output. It needs to be extended with a **third mode button** and TEE awareness:
-
-1. **Three buttons**: Local | Remote | Remote + TEE
-   - **Local**: Proves using in-browser WASM Barretenberg (current `local` mode)
-   - **Remote**: Proves via local tee-rex server at `localhost:4000` (current `remote` mode, standard attestation)
-   - **Remote + TEE**: Proves via the Nitro Enclave server (configurable URL, requires Nitro attestation)
-2. **TEE indicator**: When using Remote + TEE, show attestation status — verified/unverified, mode (nitro/standard), PCR0 snippet
-3. **Server URL config**: Input field or env var for the TEE server URL (since it's on EC2, not localhost)
-4. **Attestation badge**: Fetch `/attestation` and display `mode: "nitro"` vs `mode: "standard"` with a visual indicator
-
-**Implementation notes**:
-- `aztec.ts` currently hardcodes `TEEREX_URL = "http://localhost:4000"` — needs to become configurable per mode
-- The SDK's `setAttestationConfig()` should be called when switching to TEE mode
-- Results panel already has local/remote cards — add a third "tee" card for side-by-side timing comparison
-
-**Planning document**: See `/plans/phase-4-testing-and-demo.md`
-
-**Phase 4D Details — Full Token Flow Demo**:
-
-Currently the demo only deploys a Schnorr account (one proving step). A more compelling demo would execute a full token lifecycle in one click, logging each step with timing:
-
-1. **Deploy TokenContract** — `TokenContract.deploy(wallet, admin, 'TeeRexToken', 'TREX', 18)`
-2. **Mint to private** — `token.methods.mint_to_private(alice, 1000n)` (mints directly into private balance, avoids shield/redeem complexity)
-3. **Private transfer** — `token.methods.transfer(bob, 500n)` (fully private token send)
-4. **Check balances** — `balance_of_private(alice)` + `balance_of_private(bob)` (simulate calls, proves state is correct)
-
-Each step generates ZK proofs, so the demo shows multiple proving rounds per mode. This is more representative of real usage and more impressive for the show-and-tell.
-
-**Key imports:**
-```typescript
-import { TokenContract } from '@aztec/noir-contracts.js/Token';
-```
-
-**Implementation notes:**
-- Add a second action button ("Run Token Flow") alongside the existing "Deploy Test Account"
-- Each step logs to the log panel with its own timing
-- Total time shown in the result card
-- The existing account deploy is still useful as a quick sanity check; the token flow is the "full demo"
-- Reference: `aztec-packages/docs/examples/ts/aztecjs_advanced/index.ts` and `aztec-packages/yarn-project/end-to-end/src/fixtures/token_utils.ts`
-- Uses `mint_to_private` (simpler than `mint_to_public` → `shield` → `redeem_shield`)
-
----
-
-## Phase 5: TEE Attestation & Nitro Enclave Deployment ✅ Complete
-
-**Goal**: Real TEE attestation via AWS Nitro Enclaves — SDK verifies COSE_Sign1 attestation documents, server generates them via libnsm.so FFI.
-
-**Completed:**
-- **A** ✅ — Attestation verification in SDK (`verifyNitroAttestation`, COSE_Sign1/CBOR parsing, cert chain validation)
-- **B** ✅ — Server `NitroAttestationService` with Bun FFI calls to libnsm.so
-- **C** ✅ — `Dockerfile.nitro` multi-stage build (Rust → libnsm.so, Bun builder, runtime with socat/vsock bridge)
-- **D** ✅ — AWS Nitro Enclave deployment on EC2 — working! Real attestation documents returned.
-- **E** ✅ — Deployment runbook & debugging guide (`docs/nitro-deployment.md`)
-
-**Lessons learned**: See `lessons/phase-5d-nitro-enclave-deployment.md`
-
-**Key fix**: `ifconfig lo 127.0.0.1` (not just `ip link set lo up`) — must assign the IP address, not just bring the link up.
-
----
-
-## Phase 7: App Frontend Testing ✅ Complete
-
-**Goal**: Proper test coverage for the app + restructure all test infrastructure.
-
-**Completed:**
-- **Unit tests**: 6 tests for app utility functions (`ui.ts`, `aztec.ts` state management)
-- **Mocked E2E**: 8 Playwright tests (mode switching, TEE config panel, service dots, log panel) — no services needed
-- **Fullstack E2E**: 12 Playwright tests (deploy, token flow, all 6 mode-switch combinations across remote/local/TEE) — requires Aztec + tee-rex
-- **Test restructuring**: Eliminated `packages/integration/` — SDK owns its e2e in `packages/sdk/e2e/`, app owns its e2e in `packages/app/e2e/`
-- **Playwright projects**: Single `playwright.config.ts` with `mocked` and `fullstack` projects (different timeouts, test patterns)
-- **Assert-or-throw**: E2e tests fail (not skip) when services unavailable. TEE tests skip only when `TEE_URL` env var is not set.
-- **Per-package CI**: `ci-sdk.yml`, `ci-app.yml`, `ci-server.yml` — no monolithic test workflow
-
----
-
-## Phase 8: Repo Rename & Reference Update ✅ Complete
-
-**Goal**: Update all references from `nemi-fi` to `alejoamiras` throughout the codebase.
-
-**Completed:** Updated 15+ files — package names, imports, npm badges, CI workflows, docs. Biome auto-fixed import ordering (`@alejoamiras` sorts before `@aztec`).
-
----
-
-## Phase 9: CI Granular Jobs ✅ Complete
-
-**Goal**: Split each CI workflow into granular, parallel checks.
-
-**Completed:** Each workflow now has separate jobs (Lint, Typecheck, Unit Tests, E2E) that run in parallel. Failures are immediately visible (e.g., "SDK/Typecheck failed").
-
----
-
-## Phase 10: E2E CI with Aztec Local Network ✅ Complete
-
-**Goal**: Run SDK and Demo e2e tests in CI against a real Aztec local network.
-
-**Completed:**
-- SDK E2E job in `sdk.yml` — installs Foundry + Aztec CLI, starts local network + tee-rex, runs `bun test e2e/`
-- App Fullstack E2E job in `app.yml` — same infra + Playwright with chromium, runs `test:e2e:fullstack`
-- Aztec CLI cached by version (`~/.aztec/versions/<VERSION>/`) — install step skipped on cache hit
-- `AZTEC_VERSION` env var as single source of truth per workflow
-- Both triggered on PRs and pushes to main (path-filtered)
-- Separate health-check steps for Aztec node and tee-rex server
-
----
-
-## Phase 11: AWS TEE Infrastructure Research & Scaling (Research ✅, Benchmarking Pending)
-
-**Goal**: Research and deploy tee-rex on a beefier AWS instance for faster proving, with a clear understanding of costs.
-
-**Research completed:**
-- Compute-optimized c-family is best for Barretenberg (CPU-bound)
-- Top 3 candidates to benchmark:
-  - **c6a.2xlarge** ($0.306/hr) — 6 enclave vCPUs, AMD EPYC Milan, cheapest 3x upgrade
-  - **c6i.2xlarge** ($0.340/hr) — 6 enclave vCPUs, Intel Ice Lake, test AVX-512 optimizations
-  - **c6a.4xlarge** ($0.612/hr) — 14 enclave vCPUs, test scaling ceiling
-- Current m5.xlarge gives only 2 enclave vCPUs; any `.2xlarge` gives 6 (3x)
-
-**Remaining (tackle last):**
-1. Benchmark current proving times on m5.xlarge (baseline)
-2. Deploy on 2-3 candidate instance types, measure proving times
-3. Pick the best price/performance option
-4. Update deployment docs and allocator config
-
----
-
-## Phase 12: Aztec Auto-Update CI (Golden Bow) ✅ Complete
-
-**Goal**: CI pipeline that detects new Aztec spartan versions, updates deps, runs full test suite (including TEE), and opens a PR.
-
-**Completed:**
-- `scripts/check-aztec-spartan.ts` — checks npm `spartan` dist-tag, verifies all 11 `@aztec/*` packages exist at new version
-- `scripts/update-aztec-version.ts` — updates 3 package.json + runs `bun install`
-- `scripts/update-aztec-version.test.ts` — 12 unit tests for version validation, JSON/YAML update logic
-- `.github/workflows/aztec-spartan.yml` — 3-job pipeline: check → update + unit test → create PR (with `test-tee` label + auto-merge)
-- PR CI handles all testing: `sdk.yml`, `app.yml`, `server.yml` auto-trigger on the PR; `tee.yml` triggers on `test-tee` label
-- Reusable workflows (`_deploy-tee.yml`, `_e2e-sdk.yml`, `_e2e-app.yml`) + composite actions (`setup-aztec`, `start-services`)
-- `setup-aztec` auto-detects Aztec version from `packages/sdk/package.json` — no hardcoded versions in workflow files
-- Auto-merge: `gh pr merge --auto --squash --delete-branch` merges when required status checks pass
-- `bun run aztec:check` and `bun run aztec:update <version>` for local use
-
-**TEE deployment (`_deploy-tee.yml` + `tee.yml`):**
-- `tee.yml` triggers on PRs with `test-tee` label or manual dispatch
-- `_deploy-tee.yml` builds `Dockerfile.nitro` with Docker layer caching (`docker/build-push-action` + `type=gha`) → pushes to ECR → starts EC2 → deploys enclave via SSM
-- SDK/app e2e workflows accept optional `tee_url` input — each opens its own SSM tunnel to the already-running enclave
-- Teardown job stops EC2 instance with `if: always()`
-- AWS OIDC authentication (no stored secrets), IAM policy scoped by ECR repo ARN + EC2 `Environment: ci` tag
-- SSM port forwarding: `localhost:4001 → EC2:4000` — no public port exposed
-- Cost: ~$5/month (compute + EBS + ECR storage)
-
-**AWS setup documentation:** `infra/iam/README.md` (OIDC provider, IAM role + policy, EC2 instance, GitHub secrets)
-
-**PR-based CI architecture (gate job pattern):**
-- Workflows always trigger on PRs (no `paths:` filter on `pull_request`) — avoids GitHub's "pending forever" problem with required checks
-- Each workflow has a `changes` detection job using `gh pr diff` (API-based, works in shallow clones)
-- Downstream jobs conditional on `needs.changes.outputs.relevant == 'true'`
-- Gate jobs (`SDK Status`, `App Status`, `Server Status`) always run and check all results including `changes.result`
-- GitHub ruleset requires only the 3 gate jobs — they pass (skipped = ok) when no relevant files changed
-- For push/dispatch events, `changes` always returns `relevant=true` (path filter on `push:` trigger handles filtering)
-- PRs created by spartan workflow use `PAT_TOKEN` (not `GITHUB_TOKEN`) to trigger other workflows
-
-**Branch protection:** `infra/rulesets/main-branch-protection.json` — 3 required checks (SDK Status, App Status, Server Status). Import via GitHub Settings > Rules > Rulesets.
-
-**Verified end-to-end:** Auto-update detected new version → created PR #15 → all workflows triggered → SDK/App/Server/TEE passed → auto-merged.
-
-**12B — Multi-network support: ✅ Complete**
-- `AZTEC_NODE_URL` env var configurable across app (Vite proxy target), e2e fixtures (health check), and CI
-- `setup-aztec` action: `skip_cli` input skips Foundry + Aztec CLI install when targeting remote node
-- `start-services` action: `aztec_node_url` input — local Aztec startup conditional, health check uses configured URL
-- `_e2e-sdk.yml` / `_e2e-app.yml`: accept and propagate `aztec_node_url` to setup-aztec, start-services, and test env
-- App frontend: no longer blocks on tee-rex server being down — defaults to local mode, wallet init proceeds with just the Aztec node
-- App services panel: `#aztec-url` display updates dynamically from `AZTEC_NODE_URL` env var
-
-**12B' — Nightly → Spartan migration: ✅ Complete**
-- Renamed `scripts/check-aztec-nightly.ts` → `scripts/check-aztec-spartan.ts` (checks `spartan` dist-tag)
-- `scripts/update-aztec-version.ts` — dual patterns: `VERSION_PATTERN` (spartan only, for validation) + `AZTEC_VERSION_PATTERN` (nightly|spartan, for matching deps to replace during transition)
-- Renamed `.github/workflows/aztec-nightly.yml` → `.github/workflows/aztec-spartan.yml`
-- Branch names: `chore/aztec-nightly-*` → `chore/aztec-spartan-*`
-- Updated root `package.json` script, IAM README, test expectations
-- First run: trigger spartan workflow manually with `version: 4.0.0-spartan.20260210` to bootstrap from nightly to spartan
-
-**12C — Nextnet support in app frontend: ✅ Complete (nextnet manual test pending)**
-- App auto-detects live network via `nodeInfo.l1ChainId !== 31337`
-- Sponsored FPC (Fee Paying Contract) set up on all networks — derives canonical address from artifact + salt=0, registers in PXE
-- `deployTestAccount()`: uses `from: AztecAddress.ZERO` + sponsored fee on live networks (self-deploy path), sandbox uses pre-registered accounts
-- `runTokenFlow()`: all `.send()` calls include sponsored fee; deploys bob inline if only 1 account exists
-- `proverEnabled: true` passed to PXE config on live networks (real proofs required)
-- Network indicator in services panel ("sandbox" / "live")
-- Auto-clears stale IndexedDB on init failure (handles Aztec version upgrades gracefully, retries up to 3 times)
-- Validated on local sandbox. Nextnet manual test blocked — nextnet currently broken, will test when fixed
-- Uses `aztec_node_url` input wired in 12B to skip local CLI install and point tests at nextnet
-
-**12D — npm publish + git tags:**
-- After green tests on main, automatically publish `@alejoamiras/tee-rex` (SDK only) to npm (public)
-- Tag the release with the version number
-- Triggered after spartan auto-merge or manual dispatch
-
----
-
-## Phase 13: Evaluate OpenPGP Encryption Necessity ✅ Complete
-
-**Goal**: Investigate whether OpenPGP encryption of proving inputs is justified and harden the crypto parameters.
-
-**Findings:**
-- **TEE mode**: Encryption is essential — vsock traffic between EC2 host and enclave is NOT encrypted. A compromised host kernel can read it. This matches industry practice (Evervault, Marlin, Secret Network, Phala all use app-level encryption).
-- **Non-TEE mode**: Encryption provides defense-in-depth (protects against logging middleware, network intermediaries) but doesn't protect against a malicious server operator who has memory access.
-- **Proving inputs**: Public function witnesses aren't deeply secret but pre-publication exposure enables front-running. Encryption overhead is negligible vs proving time.
-- **Decision**: Keep encryption everywhere. No code changes to the encryption flow.
-
-**Security review of OpenPGP parameters (`TODO(security)` resolved):**
-- Curve: `nistP256` → `curve25519` (better side-channel resistance, auditable constants, OpenPGP.js recommended)
-- Key type: `type: "ecc"` → `type: "curve25519"` (v6 native Curve25519 support)
-- Integrity: SEIPD + MDC (SHA-1) → SEIPDv2 with AES-256-GCM (`aeadProtect: true`)
-- Session cipher: AES-256 (unchanged, strong default)
-- No passphrase: correct for in-memory TEE keys
-- Redeployed Nitro enclave with updated image, verified attestation + E2E tests pass
-
----
-
-## Phase 14: SDK E2E Test Improvements — TEE + Mode Switching ✅ Complete
-
-**Goal**: Restructure SDK e2e tests to match the app's elegant pattern — test TEE mode and mode switching, with TEE tests skipping gracefully when `TEE_URL` isn't set.
-
-**Completed:**
-- Consolidated `remote-proving.test.ts`, `local-proving.test.ts`, `tee-proving.test.ts` into a single `proving.test.ts` with nested describes: `TeeRexProver` > `Remote` / `Local` / `TEE`
-- Shared setup (prover + wallet created once), `deploySchnorrAccount()` helper eliminates boilerplate
-- TEE describe blocks use `describe.skipIf(!config.teeUrl)` — skip when `TEE_URL` not set
-- `mode-switching.test.ts` extended with TEE transitions: local→TEE, TEE→local, TEE→standard remote
-- `e2e-setup.ts` exports `teeUrl` from `TEE_URL` env var
-
-**SDK e2e test structure:**
-| File | Purpose |
+| Phase | Summary |
 |---|---|
-| `e2e-setup.ts` | Preload — asserts services, exports config |
-| `connectivity.test.ts` | Service health checks |
-| `proving.test.ts` | One deploy per mode (Remote / Local / TEE) |
-| `mode-switching.test.ts` | Remote→Local + TEE transitions |
+| **1** | Monorepo migration to Bun workspaces (from pnpm/turbo) |
+| **2** | Integration test suite with `bun test` (later moved to `packages/sdk/e2e/`) |
+| **3** | Structured logging with LogTape (zero `console.log`, library-first SDK pattern) |
+| **4A-D** | Unit tests (20), E2E tests (21), demo frontend (3 proving modes), full token flow demo |
+| **5A-E** | Nitro Enclave attestation — SDK verifies COSE_Sign1, server FFI to libnsm.so, Dockerfile.nitro, deployed on EC2. Key fix: `ifconfig lo 127.0.0.1`. Lessons: `lessons/phase-5d-nitro-enclave-deployment.md` |
+| **7** | App frontend testing — 6 unit, 8 mocked Playwright, 12 fullstack Playwright. Test restructure: SDK e2e in `packages/sdk/e2e/`, app e2e in `packages/app/e2e/` |
+| **8** | Repo rename `nemi-fi` → `alejoamiras` (15+ files) |
+| **9** | CI granular parallel jobs (Lint, Typecheck, Unit, E2E per package) |
+| **10** | E2E CI with Aztec local network (Foundry + Aztec CLI, cached by version) |
+| **12** | Aztec auto-update CI — spartan version detection → PR → full test suite (incl. TEE) → auto-merge. Gate job pattern, reusable workflows, composite actions. `PAT_TOKEN` for PR-triggered workflows. Branch protection: 3 gate jobs. |
+| **12B** | Multi-network support (`AZTEC_NODE_URL` configurable across app/CI/e2e) |
+| **12B'** | Nightly → Spartan dist-tag migration |
+| **12C** | Nextnet/live network support — sponsored FPC, auto-detect chain ID, `proverEnabled: true` |
+| **13** | OpenPGP encryption review — keep everywhere, upgraded to curve25519 + AES-256-GCM (SEIPDv2) |
+| **14** | SDK e2e restructure — single `proving.test.ts` with nested describes, TEE `describe.skipIf`, mode-switching tests |
+| **16** | `PROVER_URL` abstraction (like `AZTEC_NODE_URL`) — configurable everywhere, Vite proxy, CI inputs |
+
+**Key architectural decisions (from completed phases):**
+- CI gate job pattern: workflows always trigger on PRs, `changes` job detects relevant files via `gh pr diff`, gate jobs (`SDK/App/Server Status`) always run. Ruleset: `infra/rulesets/main-branch-protection.json`
+- AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. Setup: `infra/iam/README.md`
+- **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
+- SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
+- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`
+- App e2e: Playwright with `mocked` + `fullstack` projects
 
 ---
 
@@ -410,21 +147,6 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - Define the interface but only implement Nitro (clean extensibility without over-engineering)
 - Keep Nitro-only if the abstraction is too leaky
 - Identify a few quick wins (e.g., make attestation verification pluggable)
-
----
-
-## Phase 16: Abstract `PROVER_URL` (like `AZTEC_NODE_URL`) ✅ Complete
-
-**Goal**: Make the non-TEE tee-rex server URL configurable everywhere, following the same pattern as `AZTEC_NODE_URL`. Rename from the hardcoded `LOCAL_TEEREX_URL` to `PROVER_URL`.
-
-**Completed:**
-- **`packages/app/vite.config.ts`** — `/prover` proxy route using `env.PROVER_URL || "http://localhost:4000"`
-- **`packages/app/src/aztec.ts`** — `PROVER_URL = "/prover"` (proxied) + `PROVER_DISPLAY_URL` for services panel
-- **`packages/app/e2e/fullstack.fixture.ts`** — Uses `process.env.PROVER_URL || "http://localhost:4000"`
-- **`packages/sdk/e2e/e2e-setup.ts`** — `proverUrl` from `process.env.PROVER_URL || "http://localhost:4000"`
-- **`.github/actions/start-services/action.yml`** — `prover_url` input with configurable health check
-- **`.github/workflows/_e2e-sdk.yml` / `_e2e-app.yml`** — `prover_url` input propagated to `start-services` and test env
-- `LOCAL_TEEREX_URL` and `TEEREX_URL` fully removed from codebase
 
 ---
 
@@ -463,78 +185,15 @@ aztec-spartan.yml detects new version
       └── /tee/*       → TEE EC2 (http, port 4000)
 ```
 
-**Parts (ordered for incremental delivery):**
+**Completed parts:**
 
-### 17A — Validate non-TEE `Dockerfile` ✅ Complete
-
-**Completed:**
-- Fixed missing `packages/app/package.json` COPY in Dockerfile (was breaking `bun install --frozen-lockfile` because root workspace references app)
-- Added `curl` to system dependencies for healthcheck
-- Added `HEALTHCHECK --interval=30s --timeout=5s --retries=3` that pings `/attestation`
-- Built image (`docker build -t tee-rex --platform linux/amd64 .`) — succeeds
-- Verified `GET /encryption-public-key` returns `{publicKey: "-----BEGIN PGP PUBLIC KEY BLOCK-----..."}`
-- Verified `GET /attestation` returns `{mode: "standard", publicKey: "..."}`
-- Docker healthcheck reports `healthy`
-
-**Fix applied:** The Nitro Dockerfile already had `COPY packages/app/package.json ./packages/app/` — the standard Dockerfile was missing it.
-
-### 17B — `test-remote` label + `remote.yml` workflow ✅ Complete
-
-**Completed:**
-- **`infra/ci-deploy-prover.sh`** — Simple deploy script: stop container → ECR login → pull → `docker run -d -p 80:80` → health check (5 min)
-- **`.github/workflows/_deploy-prover.yml`** — Reusable workflow: build `Dockerfile` → ECR (`tee-rex:prover`) → start EC2 → SSM deploy → health check (local:4002 → EC2:80)
-- **`.github/workflows/remote.yml`** — Trigger on `test-remote` label or `workflow_dispatch`. Jobs: check → deploy-prover → e2e-sdk + e2e-app → teardown
-- **`.github/workflows/_e2e-sdk.yml` + `_e2e-app.yml`** — Added `setup_prover_tunnel` input; SSM plugin/credentials install on either TEE or prover tunnel; separate tunnel steps for TEE (local:4001) and prover (local:4002)
-- **CI EC2 instance** — `t3.xlarge` (4 vCPU, 16 GiB), Amazon Linux 2023, Docker + SSM, tagged `Environment: ci` / `Service: prover`
-- **`PROVER_INSTANCE_ID`** GitHub secret set
-- **Port convention**: TEE local:4001 → EC2:4000, Prover local:4002 → EC2:80
-
-### 17C — `aztec-spartan.yml` adds labels ✅ Complete
-
-**Completed:** Spartan workflow now adds both `test-tee` and `test-remote` labels to auto-generated PRs.
-
-### 17D — Production EC2 instances + `deploy-prod.yml` ✅ Complete
-
-**Completed:**
-- **IAM policy** — `Environment` tag condition expanded from `"ci"` to `["ci", "prod"]` in EC2StartStop, SSMSendCommandInstance, SSMStartSessionInstance
-- **`_deploy-tee.yml`** — parameterized with `environment` (default: `ci`) and `image_tag` (default: `nightly`) inputs; instance ID selected conditionally (`PROD_TEE_INSTANCE_ID` for prod, `TEE_INSTANCE_ID` for CI)
-- **`_deploy-prover.yml`** — same pattern; `image_tag` default: `prover`; `PROD_PROVER_INSTANCE_ID` for prod
-- **`deploy-prod.yml`** — triggers on push to `main` or `workflow_dispatch`; two parallel jobs calling reusable workflows with `environment: prod`, `image_tag: prod`; no teardown (prod stays running)
-- **`infra/iam/README.md`** — added prod EC2 setup instructions (TEE: `m5.xlarge`, prover: `t3.xlarge`), Elastic IP allocation, and expanded GitHub secrets table with `PROD_TEE_INSTANCE_ID` + `PROD_PROVER_INSTANCE_ID`
-- Existing callers (`tee.yml`, `remote.yml`) unaffected — default inputs preserve CI behavior
-
-**Manual steps required:**
-1. Provision prod TEE EC2 (`m5.xlarge`, `Environment: prod`, `Service: tee`, enclave-enabled)
-2. Provision prod prover EC2 (`t3.xlarge`, `Environment: prod`, `Service: prover`)
-3. Allocate + associate Elastic IPs for both
-4. Set GitHub secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID`
-5. Apply IAM policy: `aws iam put-role-policy --role-name tee-rex-ci-github --policy-name tee-rex-ci-policy --policy-document file://infra/iam/tee-rex-ci-policy.json` (substitute `<ACCOUNT_ID>` first)
-
-### 17E — CloudFront + S3 for production app
-
-Last step — wire up the public-facing infrastructure:
-
-1. **S3 bucket** for the static Vite build (`packages/app/dist`)
-2. **CloudFront distribution** with three origins:
-   - Default (`/*`) → S3 bucket (static files)
-   - `/prover/*` → Prover EC2 Elastic IP (HTTP, port 80). Origin response timeout: 180s (proving is slow)
-   - `/tee/*` → TEE EC2 Elastic IP (HTTP, port 4000). Origin response timeout: 180s
-3. **App build** uses relative paths (`/prover/prove`, `/tee/attestation`) — same as dev mode with Vite proxies
-4. **`deploy-prod.yml`** adds a fourth job: `bun run --cwd packages/app build && aws s3 sync dist/ s3://<bucket>`
-5. CloudFront invalidation after S3 sync to bust cache
-
-**CloudFront benefits:**
-- `https://d1234abcd.cloudfront.net` — free HTTPS, no domain, no certs to manage
-- Same-origin for all requests — no CORS, no mixed content
-- Free tier: 1TB transfer + 10M requests/month
-- Origin timeout up to 180s (handles proving requests)
-- Global CDN for the static app
-
-**Cost estimate:**
-- CloudFront: Free tier covers demo usage; ~$0.085/GB beyond 1TB
-- S3: Pennies/month for a static site
-- EC2 prod instances: Same as CI instances (stopped when not deploying — or kept running for live access)
-- Total additional cost: ~$5-15/month on top of existing EC2 costs
+| Part | Summary |
+|---|---|
+| **17A** | Fixed non-TEE `Dockerfile` (missing `packages/app/package.json` COPY, added healthcheck + curl) |
+| **17B** | `remote.yml` + `_deploy-prover.yml` — CI prover deploy on `test-remote` label. `infra/ci-deploy-prover.sh`. CI EC2: `t3.xlarge` |
+| **17C** | Spartan workflow adds `test-tee` + `test-remote` labels to auto PRs |
+| **17D** | `deploy-prod.yml` (push to main → deploy TEE + prover to prod). `_deploy-tee.yml` / `_deploy-prover.yml` parameterized with `environment` + `image_tag` inputs. IAM: `Environment: ["ci", "prod"]`. Prod EC2: TEE `m5.xlarge` + prover `t3.xlarge` with Elastic IPs. Secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID` |
+| **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
 
 ---
 

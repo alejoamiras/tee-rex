@@ -10,7 +10,7 @@ afterEach(() => {
   state.prover = null;
   state.provingMode = "remote";
   state.uiMode = "remote";
-  state.teeServerUrl = "";
+  state.teeServerUrl = "/tee";
   state.isLiveNetwork = false;
   state.feePaymentMethod = undefined;
 });
@@ -126,7 +126,7 @@ describe("setUiMode", () => {
     } as any;
     state.provingMode = "remote";
     state.uiMode = "remote";
-    state.teeServerUrl = "";
+    state.teeServerUrl = "/tee";
   });
 
   test("does nothing when prover is null", () => {
