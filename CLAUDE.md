@@ -413,6 +413,136 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 ---
 
+## Phase 16: Abstract `PROVER_URL` (like `AZTEC_NODE_URL`)
+
+**Goal**: Make the non-TEE tee-rex server URL configurable everywhere, following the same pattern as `AZTEC_NODE_URL`. Rename from the hardcoded `LOCAL_TEEREX_URL` to `PROVER_URL`.
+
+**Current state** — inconsistent:
+
+| URL | App frontend | App e2e | SDK e2e | CI workflows |
+|-----|-------------|---------|---------|-------------|
+| `AZTEC_NODE_URL` | Configurable (Vite proxy) | Configurable (env var) | Configurable (env var) | Configurable (workflow input) |
+| Prover (non-TEE) | **Hardcoded** `localhost:4000` | **Hardcoded** `localhost:4000` | Configurable (`TEEREX_URL` env var) | **Hardcoded** in `start-services` |
+| `TEE_URL` | Configurable (input field) | Configurable (env var) | Configurable (env var) | Configurable (workflow input) |
+
+**Naming convention:**
+- `PROVER_URL` = standard remote prover (no TEE attestation)
+- `TEE_URL` = TEE prover (with Nitro attestation)
+
+**Changes needed:**
+
+1. **`packages/app/vite.config.ts`** — Add proxy route: `/prover` → `env.PROVER_URL || "http://localhost:4000"`
+2. **`packages/app/src/aztec.ts`** — Replace `LOCAL_TEEREX_URL = "http://localhost:4000"` with `PROVER_URL = "/prover"` (proxied), add `PROVER_DISPLAY_URL` (like `AZTEC_DISPLAY_URL`)
+3. **`packages/app/e2e/fullstack.fixture.ts`** — Use `process.env.PROVER_URL || "http://localhost:4000"` instead of hardcoded URL
+4. **`packages/app/e2e/demo.mocked.spec.ts`** — Update hardcoded `localhost:4000` route mocks
+5. **`packages/sdk/e2e/e2e-setup.ts`** — Rename `teeRexUrl` → `proverUrl`, env var `TEEREX_URL` → `PROVER_URL`
+6. **`.github/actions/start-services/action.yml`** — Make prover health check URL configurable via input (default `http://localhost:4000`)
+7. **`.github/workflows/_e2e-sdk.yml` / `_e2e-app.yml`** — Add `prover_url` input (like `aztec_node_url`), propagate to `start-services` and test env
+8. **`packages/app/index.html`** — Update services panel to show `PROVER_URL` display value
+
+---
+
+## Phase 17: Auto-Deploy Pipeline
+
+**Goal**: After the aztec-spartan auto-update PR passes all tests (including deployed prover + TEE), auto-merge and deploy everything to production. Nightly auto-updates keep the live system current with zero manual intervention.
+
+**Decision**: No custom domain. Use **CloudFront** as the single entry point — serves the static app from S3 and proxies to EC2 backends. One `https://d1234abcd.cloudfront.net` URL, same-origin, no CORS, no mixed content, no domain needed.
+
+**Architecture:**
+
+```
+aztec-spartan.yml detects new version
+         │
+         ▼
+    Creates PR with labels: test-tee + test-remote
+         │
+    ┌────┴──────────────────────────────────┐
+    │  CI runs on PR:                        │
+    │  sdk.yml, app.yml, server.yml (unit)   │
+    │  tee.yml (deploy CI TEE, run e2e)      │
+    │  remote.yml (deploy CI prover, e2e)    │  ← NEW
+    └────┬──────────────────────────────────┘
+         │ all green → auto-merge to main
+         ▼
+    deploy-prod.yml (triggers on push to main)
+    ┌────┬────┬────┐
+    │    │    │    │
+    ▼    ▼    ▼    ▼
+  TEE   Prover  App   SDK
+  EC2   EC2     S3    npm
+
+    CloudFront (https://d1234abcd.cloudfront.net)
+      ├── /*           → S3 bucket (static Vite build)
+      ├── /prover/*    → Prover EC2 (http, port 80)
+      └── /tee/*       → TEE EC2 (http, port 4000)
+```
+
+**Parts (ordered for incremental delivery):**
+
+### 17A — Validate non-TEE `Dockerfile`
+
+The standard `Dockerfile` has never been tested. Before building deployment pipelines, verify it works:
+
+1. Build the image locally, start it, hit `/encryption-public-key` and `/attestation`
+2. Fix any issues (port mapping, missing deps, startup failures)
+3. Add a CI job that builds + smoke-tests the image
+4. Once validated, push to ECR alongside the Nitro image (separate tag: `tee-rex:latest` vs `tee-rex:nightly`)
+
+### 17B — `test-remote` label + `remote.yml` workflow
+
+Mirror `tee.yml` but for the non-TEE prover. Pre-production testing of the prover container on a real EC2:
+
+1. **`remote.yml`** — Triggers on PR with `test-remote` label or manual dispatch
+2. **`_deploy-prover.yml`** (reusable) — Build standard `Dockerfile` → push to ECR → start CI EC2 → deploy container → health check
+3. SDK + App e2e run against the deployed prover via SSM tunnel (same pattern as TEE: `localhost:4002 → EC2:80`)
+4. Teardown stops EC2 instance
+5. Uses a second EC2 instance (tagged `Environment: ci`, `Service: prover`) — no Nitro needed, can be smaller/cheaper
+
+### 17C — `aztec-spartan.yml` adds labels
+
+Update the spartan workflow to add both `test-tee` and `test-remote` labels to auto-generated PRs. This ensures every Aztec version update gets full pre-production testing against both deployed servers before merging.
+
+### 17D — Production EC2 instances + `deploy-prod.yml`
+
+Provision production infrastructure and deploy on merge to main:
+
+1. **Production EC2 for TEE** — Nitro-capable, `m5.xlarge` or bigger, tagged `Environment: prod`
+2. **Production EC2 for prover** — Standard instance, smaller (`t3.xlarge` or `c6a.xlarge`), tagged `Environment: prod`
+3. **Elastic IPs** on both (stable addresses for CloudFront origins)
+4. **IAM policy update** — Allow deploying to `Environment: prod` tagged instances (trust policy already allows `main` branch)
+5. **`deploy-prod.yml`** — Triggers on push to main. Three parallel jobs:
+   - Deploy TEE: `Dockerfile.nitro` → ECR → prod TEE EC2 → deploy enclave
+   - Deploy Prover: `Dockerfile` → ECR → prod prover EC2 → start container
+   - Publish SDK: npm publish (existing `publish-sdk.yml` logic)
+
+### 17E — CloudFront + S3 for production app
+
+Last step — wire up the public-facing infrastructure:
+
+1. **S3 bucket** for the static Vite build (`packages/app/dist`)
+2. **CloudFront distribution** with three origins:
+   - Default (`/*`) → S3 bucket (static files)
+   - `/prover/*` → Prover EC2 Elastic IP (HTTP, port 80). Origin response timeout: 180s (proving is slow)
+   - `/tee/*` → TEE EC2 Elastic IP (HTTP, port 4000). Origin response timeout: 180s
+3. **App build** uses relative paths (`/prover/prove`, `/tee/attestation`) — same as dev mode with Vite proxies
+4. **`deploy-prod.yml`** adds a fourth job: `bun run --cwd packages/app build && aws s3 sync dist/ s3://<bucket>`
+5. CloudFront invalidation after S3 sync to bust cache
+
+**CloudFront benefits:**
+- `https://d1234abcd.cloudfront.net` — free HTTPS, no domain, no certs to manage
+- Same-origin for all requests — no CORS, no mixed content
+- Free tier: 1TB transfer + 10M requests/month
+- Origin timeout up to 180s (handles proving requests)
+- Global CDN for the static app
+
+**Cost estimate:**
+- CloudFront: Free tier covers demo usage; ~$0.085/GB beyond 1TB
+- S3: Pennies/month for a static site
+- EC2 prod instances: Same as CI instances (stopped when not deploying — or kept running for live access)
+- Total additional cost: ~$5-15/month on top of existing EC2 costs
+
+---
+
 ## Backlog
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C
