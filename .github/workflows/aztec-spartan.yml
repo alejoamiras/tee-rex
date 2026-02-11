@@ -95,10 +95,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           BRANCH="chore/aztec-spartan-${NEW_VERSION}"
+
+          # If the branch already exists on the remote, skip — a prior run
+          # already pushed it. Force-pushing would orphan the commit that
+          # CI workflows are running against, causing the PR to show no checks.
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH already exists on remote — skipping push"
+            exit 0
+          fi
+
           git checkout -b "$BRANCH"
           git add packages/*/package.json bun.lock
           git commit -m "chore: update @aztec/* to ${NEW_VERSION}"
-          git push -u origin "$BRANCH" --force
+          git push -u origin "$BRANCH"
 
   # ── Job 3: Create PR with label + auto-merge ───────────────────────
   create-pr:
