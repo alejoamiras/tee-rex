@@ -478,19 +478,20 @@ aztec-spartan.yml detects new version
 
 **Fix applied:** The Nitro Dockerfile already had `COPY packages/app/package.json ./packages/app/` — the standard Dockerfile was missing it.
 
-### 17B — `test-remote` label + `remote.yml` workflow
+### 17B — `test-remote` label + `remote.yml` workflow ✅ Complete
 
-Mirror `tee.yml` but for the non-TEE prover. Pre-production testing of the prover container on a real EC2:
+**Completed:**
+- **`infra/ci-deploy-prover.sh`** — Simple deploy script: stop container → ECR login → pull → `docker run -d -p 80:80` → health check (5 min)
+- **`.github/workflows/_deploy-prover.yml`** — Reusable workflow: build `Dockerfile` → ECR (`tee-rex:prover`) → start EC2 → SSM deploy → health check (local:4002 → EC2:80)
+- **`.github/workflows/remote.yml`** — Trigger on `test-remote` label or `workflow_dispatch`. Jobs: check → deploy-prover → e2e-sdk + e2e-app → teardown
+- **`.github/workflows/_e2e-sdk.yml` + `_e2e-app.yml`** — Added `setup_prover_tunnel` input; SSM plugin/credentials install on either TEE or prover tunnel; separate tunnel steps for TEE (local:4001) and prover (local:4002)
+- **CI EC2 instance** — `t3.xlarge` (4 vCPU, 16 GiB), Amazon Linux 2023, Docker + SSM, tagged `Environment: ci` / `Service: prover`
+- **`PROVER_INSTANCE_ID`** GitHub secret set
+- **Port convention**: TEE local:4001 → EC2:4000, Prover local:4002 → EC2:80
 
-1. **`remote.yml`** — Triggers on PR with `test-remote` label or manual dispatch
-2. **`_deploy-prover.yml`** (reusable) — Build standard `Dockerfile` → push to ECR → start CI EC2 → deploy container → health check
-3. SDK + App e2e run against the deployed prover via SSM tunnel (same pattern as TEE: `localhost:4002 → EC2:80`)
-4. Teardown stops EC2 instance
-5. Uses a second EC2 instance (tagged `Environment: ci`, `Service: prover`) — no Nitro needed, can be smaller/cheaper
+### 17C — `aztec-spartan.yml` adds labels ✅ Complete
 
-### 17C — `aztec-spartan.yml` adds labels
-
-Update the spartan workflow to add both `test-tee` and `test-remote` labels to auto-generated PRs. This ensures every Aztec version update gets full pre-production testing against both deployed servers before merging.
+**Completed:** Spartan workflow now adds both `test-tee` and `test-remote` labels to auto-generated PRs.
 
 ### 17D — Production EC2 instances + `deploy-prod.yml`
 

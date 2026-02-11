@@ -1,0 +1,180 @@
+name: _Deploy Prover (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to checkout
+        required: false
+        type: string
+        default: ""
+    outputs:
+      deployed:
+        description: Whether the prover was deployed successfully
+        value: ${{ jobs.deploy.outputs.deployed }}
+
+jobs:
+  deploy:
+    name: Deploy Prover
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      deployed: ${{ steps.health.outputs.deployed }}
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      INSTANCE_ID: ${{ secrets.PROVER_INSTANCE_ID }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+      IMAGE_TAG: prover
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # ── AWS Credentials via OIDC ─────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # ── Build & Push Docker Image (with layer caching) ──────────
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Start EC2 Instance ───────────────────────────────────────
+      - name: Start EC2 instance
+        run: |
+          echo "Starting instance ${INSTANCE_ID}..."
+          aws ec2 start-instances --instance-ids "${INSTANCE_ID}"
+
+          echo "Waiting for instance to be running..."
+          aws ec2 wait instance-running --instance-ids "${INSTANCE_ID}"
+
+          # Wait for SSM agent to come online
+          echo "Waiting for SSM agent..."
+          for i in $(seq 1 30); do
+            STATUS=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=${INSTANCE_ID}" \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null || echo "None")
+            if [ "$STATUS" = "Online" ]; then
+              echo "SSM agent online (attempt $i)"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "SSM agent not online after 5 minutes"
+              exit 1
+            fi
+            sleep 10
+          done
+
+      # ── Deploy Container via SSM ─────────────────────────────────
+      - name: Deploy container
+        run: |
+          IMAGE_URI="${ECR_REGISTRY}/tee-rex:${IMAGE_TAG}"
+
+          # Upload ci-deploy-prover.sh via base64 to avoid SSM escaping issues
+          SCRIPT_B64=$(base64 -w0 infra/ci-deploy-prover.sh)
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${INSTANCE_ID}" \
+            --document-name "AWS-RunShellScript" \
+            --timeout-seconds 600 \
+            --parameters "commands=[
+              \"echo '${SCRIPT_B64}' | base64 -d > /tmp/ci-deploy-prover.sh\",
+              \"chmod +x /tmp/ci-deploy-prover.sh\",
+              \"/tmp/ci-deploy-prover.sh ${IMAGE_URI}\"
+            ]" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "SSM Command: ${COMMAND_ID}"
+          echo "Waiting for container deployment..."
+
+          for i in $(seq 1 120); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "${COMMAND_ID}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query 'Status' \
+              --output text 2>/dev/null || echo "Pending")
+
+            case "${STATUS}" in
+              Success)
+                echo "Container deployed successfully"
+                aws ssm get-command-invocation \
+                  --command-id "${COMMAND_ID}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --query 'StandardOutputContent' \
+                  --output text | tail -20
+                break
+                ;;
+              Failed|TimedOut|Cancelled)
+                echo "Container deployment ${STATUS}"
+                echo "=== stdout ==="
+                aws ssm get-command-invocation \
+                  --command-id "${COMMAND_ID}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --query 'StandardOutputContent' \
+                  --output text | tail -30
+                echo "=== stderr ==="
+                aws ssm get-command-invocation \
+                  --command-id "${COMMAND_ID}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --query 'StandardErrorContent' \
+                  --output text | tail -30
+                exit 1
+                ;;
+              *)
+                if [ "$i" = "120" ]; then
+                  echo "Timed out waiting for SSM command (10 min)"
+                  exit 1
+                fi
+                sleep 5
+                ;;
+            esac
+          done
+
+      # ── Health Check via SSM Tunnel ──────────────────────────────
+      - name: Health check
+        id: health
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+          aws ssm start-session \
+            --target "${INSTANCE_ID}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          TUNNEL_PID=$!
+
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4002/attestation > /dev/null 2>&1; then
+              echo "Prover healthy (attempt $i)"
+              curl -s http://localhost:4002/attestation | jq '{mode}'
+              echo "deployed=true" >> "$GITHUB_OUTPUT"
+              kill $TUNNEL_PID 2>/dev/null || true
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Health check failed after 60s"
+          echo "deployed=false" >> "$GITHUB_OUTPUT"
+          exit 1

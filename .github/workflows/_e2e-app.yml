@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: "http://localhost:4000"
+      setup_prover_tunnel:
+        description: Set up SSM tunnel to deployed prover instance
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   e2e-app:
@@ -34,22 +39,22 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # ── SSM Tunnel (only when TEE requested) ──────────────────────
+      # ── SSM Tunnels (TEE and/or prover) ──────────────────────────
       - name: Install SSM plugin
-        if: inputs.tee_url != ''
+        if: inputs.tee_url != '' || inputs.setup_prover_tunnel
         run: |
           curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
             -o /tmp/session-manager-plugin.deb
           sudo dpkg -i /tmp/session-manager-plugin.deb
 
       - name: Configure AWS credentials
-        if: inputs.tee_url != ''
+        if: inputs.tee_url != '' || inputs.setup_prover_tunnel
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Start SSM tunnel
+      - name: Start SSM tunnel to TEE
         if: inputs.tee_url != ''
         run: |
           aws ssm start-session \
@@ -57,15 +62,34 @@ jobs:
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
 
-          echo "Waiting for SSM tunnel..."
+          echo "Waiting for TEE SSM tunnel..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:4001/attestation > /dev/null 2>&1; then
-              echo "SSM tunnel ready (attempt $i)"
+              echo "TEE SSM tunnel ready (attempt $i)"
               exit 0
             fi
             sleep 2
           done
-          echo "SSM tunnel failed to connect after 60s"
+          echo "TEE SSM tunnel failed to connect after 60s"
+          exit 1
+
+      - name: Start SSM tunnel to prover
+        if: inputs.setup_prover_tunnel
+        run: |
+          aws ssm start-session \
+            --target "${{ secrets.PROVER_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+
+          echo "Waiting for prover SSM tunnel..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4002/attestation > /dev/null 2>&1; then
+              echo "Prover SSM tunnel ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Prover SSM tunnel failed to connect after 60s"
           exit 1
 
       # ── Setup & Run ───────────────────────────────────────────────
