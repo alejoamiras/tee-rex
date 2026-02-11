@@ -13,17 +13,17 @@
     "test:e2e:all": "bun run test:e2e && bun run test:e2e:fullstack"
   },
   "dependencies": {
-    "@aztec/accounts": "4.0.0-spartan.20260210",
-    "@aztec/aztec.js": "4.0.0-spartan.20260210",
-    "@aztec/bb-prover": "4.0.0-spartan.20260210",
-    "@aztec/foundation": "4.0.0-spartan.20260210",
-    "@aztec/noir-acvm_js": "4.0.0-spartan.20260210",
-    "@aztec/noir-contracts.js": "4.0.0-spartan.20260210",
-    "@aztec/noir-noirc_abi": "4.0.0-spartan.20260210",
-    "@aztec/pxe": "4.0.0-spartan.20260210",
-    "@aztec/simulator": "4.0.0-spartan.20260210",
-    "@aztec/stdlib": "4.0.0-spartan.20260210",
-    "@aztec/test-wallet": "4.0.0-spartan.20260210",
+    "@aztec/accounts": "4.0.0-spartan.20260211",
+    "@aztec/aztec.js": "4.0.0-spartan.20260211",
+    "@aztec/bb-prover": "4.0.0-spartan.20260211",
+    "@aztec/foundation": "4.0.0-spartan.20260211",
+    "@aztec/noir-acvm_js": "4.0.0-spartan.20260211",
+    "@aztec/noir-contracts.js": "4.0.0-spartan.20260211",
+    "@aztec/noir-noirc_abi": "4.0.0-spartan.20260211",
+    "@aztec/pxe": "4.0.0-spartan.20260211",
+    "@aztec/simulator": "4.0.0-spartan.20260211",
+    "@aztec/stdlib": "4.0.0-spartan.20260211",
+    "@aztec/test-wallet": "4.0.0-spartan.20260211",
     "@alejoamiras/tee-rex": "workspace:*"
   },
   "devDependencies": {
