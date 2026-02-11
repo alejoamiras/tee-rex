@@ -413,32 +413,18 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 ---
 
-## Phase 16: Abstract `PROVER_URL` (like `AZTEC_NODE_URL`)
+## Phase 16: Abstract `PROVER_URL` (like `AZTEC_NODE_URL`) ✅ Complete
 
 **Goal**: Make the non-TEE tee-rex server URL configurable everywhere, following the same pattern as `AZTEC_NODE_URL`. Rename from the hardcoded `LOCAL_TEEREX_URL` to `PROVER_URL`.
 
-**Current state** — inconsistent:
-
-| URL | App frontend | App e2e | SDK e2e | CI workflows |
-|-----|-------------|---------|---------|-------------|
-| `AZTEC_NODE_URL` | Configurable (Vite proxy) | Configurable (env var) | Configurable (env var) | Configurable (workflow input) |
-| Prover (non-TEE) | **Hardcoded** `localhost:4000` | **Hardcoded** `localhost:4000` | Configurable (`TEEREX_URL` env var) | **Hardcoded** in `start-services` |
-| `TEE_URL` | Configurable (input field) | Configurable (env var) | Configurable (env var) | Configurable (workflow input) |
-
-**Naming convention:**
-- `PROVER_URL` = standard remote prover (no TEE attestation)
-- `TEE_URL` = TEE prover (with Nitro attestation)
-
-**Changes needed:**
-
-1. **`packages/app/vite.config.ts`** — Add proxy route: `/prover` → `env.PROVER_URL || "http://localhost:4000"`
-2. **`packages/app/src/aztec.ts`** — Replace `LOCAL_TEEREX_URL = "http://localhost:4000"` with `PROVER_URL = "/prover"` (proxied), add `PROVER_DISPLAY_URL` (like `AZTEC_DISPLAY_URL`)
-3. **`packages/app/e2e/fullstack.fixture.ts`** — Use `process.env.PROVER_URL || "http://localhost:4000"` instead of hardcoded URL
-4. **`packages/app/e2e/demo.mocked.spec.ts`** — Update hardcoded `localhost:4000` route mocks
-5. **`packages/sdk/e2e/e2e-setup.ts`** — Rename `teeRexUrl` → `proverUrl`, env var `TEEREX_URL` → `PROVER_URL`
-6. **`.github/actions/start-services/action.yml`** — Make prover health check URL configurable via input (default `http://localhost:4000`)
-7. **`.github/workflows/_e2e-sdk.yml` / `_e2e-app.yml`** — Add `prover_url` input (like `aztec_node_url`), propagate to `start-services` and test env
-8. **`packages/app/index.html`** — Update services panel to show `PROVER_URL` display value
+**Completed:**
+- **`packages/app/vite.config.ts`** — `/prover` proxy route using `env.PROVER_URL || "http://localhost:4000"`
+- **`packages/app/src/aztec.ts`** — `PROVER_URL = "/prover"` (proxied) + `PROVER_DISPLAY_URL` for services panel
+- **`packages/app/e2e/fullstack.fixture.ts`** — Uses `process.env.PROVER_URL || "http://localhost:4000"`
+- **`packages/sdk/e2e/e2e-setup.ts`** — `proverUrl` from `process.env.PROVER_URL || "http://localhost:4000"`
+- **`.github/actions/start-services/action.yml`** — `prover_url` input with configurable health check
+- **`.github/workflows/_e2e-sdk.yml` / `_e2e-app.yml`** — `prover_url` input propagated to `start-services` and test env
+- `LOCAL_TEEREX_URL` and `TEEREX_URL` fully removed from codebase
 
 ---
 
@@ -479,28 +465,33 @@ aztec-spartan.yml detects new version
 
 **Parts (ordered for incremental delivery):**
 
-### 17A — Validate non-TEE `Dockerfile`
+### 17A — Validate non-TEE `Dockerfile` ✅ Complete
 
-The standard `Dockerfile` has never been tested. Before building deployment pipelines, verify it works:
+**Completed:**
+- Fixed missing `packages/app/package.json` COPY in Dockerfile (was breaking `bun install --frozen-lockfile` because root workspace references app)
+- Added `curl` to system dependencies for healthcheck
+- Added `HEALTHCHECK --interval=30s --timeout=5s --retries=3` that pings `/attestation`
+- Built image (`docker build -t tee-rex --platform linux/amd64 .`) — succeeds
+- Verified `GET /encryption-public-key` returns `{publicKey: "-----BEGIN PGP PUBLIC KEY BLOCK-----..."}`
+- Verified `GET /attestation` returns `{mode: "standard", publicKey: "..."}`
+- Docker healthcheck reports `healthy`
 
-1. Build the image locally, start it, hit `/encryption-public-key` and `/attestation`
-2. Fix any issues (port mapping, missing deps, startup failures)
-3. Add a CI job that builds + smoke-tests the image
-4. Once validated, push to ECR alongside the Nitro image (separate tag: `tee-rex:latest` vs `tee-rex:nightly`)
+**Fix applied:** The Nitro Dockerfile already had `COPY packages/app/package.json ./packages/app/` — the standard Dockerfile was missing it.
 
-### 17B — `test-remote` label + `remote.yml` workflow
+### 17B — `test-remote` label + `remote.yml` workflow ✅ Complete
 
-Mirror `tee.yml` but for the non-TEE prover. Pre-production testing of the prover container on a real EC2:
+**Completed:**
+- **`infra/ci-deploy-prover.sh`** — Simple deploy script: stop container → ECR login → pull → `docker run -d -p 80:80` → health check (5 min)
+- **`.github/workflows/_deploy-prover.yml`** — Reusable workflow: build `Dockerfile` → ECR (`tee-rex:prover`) → start EC2 → SSM deploy → health check (local:4002 → EC2:80)
+- **`.github/workflows/remote.yml`** — Trigger on `test-remote` label or `workflow_dispatch`. Jobs: check → deploy-prover → e2e-sdk + e2e-app → teardown
+- **`.github/workflows/_e2e-sdk.yml` + `_e2e-app.yml`** — Added `setup_prover_tunnel` input; SSM plugin/credentials install on either TEE or prover tunnel; separate tunnel steps for TEE (local:4001) and prover (local:4002)
+- **CI EC2 instance** — `t3.xlarge` (4 vCPU, 16 GiB), Amazon Linux 2023, Docker + SSM, tagged `Environment: ci` / `Service: prover`
+- **`PROVER_INSTANCE_ID`** GitHub secret set
+- **Port convention**: TEE local:4001 → EC2:4000, Prover local:4002 → EC2:80
 
-1. **`remote.yml`** — Triggers on PR with `test-remote` label or manual dispatch
-2. **`_deploy-prover.yml`** (reusable) — Build standard `Dockerfile` → push to ECR → start CI EC2 → deploy container → health check
-3. SDK + App e2e run against the deployed prover via SSM tunnel (same pattern as TEE: `localhost:4002 → EC2:80`)
-4. Teardown stops EC2 instance
-5. Uses a second EC2 instance (tagged `Environment: ci`, `Service: prover`) — no Nitro needed, can be smaller/cheaper
+### 17C — `aztec-spartan.yml` adds labels ✅ Complete
 
-### 17C — `aztec-spartan.yml` adds labels
-
-Update the spartan workflow to add both `test-tee` and `test-remote` labels to auto-generated PRs. This ensures every Aztec version update gets full pre-production testing against both deployed servers before merging.
+**Completed:** Spartan workflow now adds both `test-tee` and `test-remote` labels to auto-generated PRs.
 
 ### 17D — Production EC2 instances + `deploy-prod.yml`
 
