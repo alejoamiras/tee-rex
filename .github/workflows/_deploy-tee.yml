@@ -8,6 +8,16 @@ on:
         required: false
         type: string
         default: ""
+      environment:
+        description: Deployment environment (ci or prod)
+        required: false
+        type: string
+        default: "ci"
+      image_tag:
+        description: Docker image tag to build and deploy
+        required: false
+        type: string
+        default: "nightly"
     outputs:
       deployed:
         description: Whether the TEE enclave was deployed successfully
@@ -25,9 +35,9 @@ jobs:
       deployed: ${{ steps.health.outputs.deployed }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      INSTANCE_ID: ${{ secrets.TEE_INSTANCE_ID }}
+      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_TEE_INSTANCE_ID || secrets.TEE_INSTANCE_ID }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-      IMAGE_TAG: nightly
+      IMAGE_TAG: ${{ inputs.image_tag }}
     steps:
       # ── Checkout ──────────────────────────────────────────────────
       - uses: actions/checkout@v4

@@ -1,0 +1,33 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # ── Deploy TEE enclave to production ─────────────────────────────
+  deploy-tee:
+    name: Deploy TEE (prod)
+    uses: ./.github/workflows/_deploy-tee.yml
+    secrets: inherit
+    with:
+      environment: prod
+      image_tag: prod
+
+  # ── Deploy prover container to production ────────────────────────
+  deploy-prover:
+    name: Deploy Prover (prod)
+    uses: ./.github/workflows/_deploy-prover.yml
+    secrets: inherit
+    with:
+      environment: prod
+      image_tag: prod
