@@ -27,7 +27,7 @@
         "do_not_enforce_on_create": true,
         "required_status_checks": [
           { "context": "SDK Status", "integration_id": 15368 },
-          { "context": "Demo Status", "integration_id": 15368 },
+          { "context": "App Status", "integration_id": 15368 },
           { "context": "Server Status", "integration_id": 15368 }
         ]
       }

@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "devDependencies": {
@@ -13,8 +12,8 @@
         "typescript": "^5.8.3",
       },
     },
-    "packages/demo": {
-      "name": "@alejoamiras/tee-rex-demo",
+    "packages/app": {
+      "name": "@alejoamiras/tee-rex-app",
       "dependencies": {
         "@alejoamiras/tee-rex": "workspace:*",
         "@aztec/accounts": "4.0.0-spartan.20260210",
@@ -98,7 +97,7 @@
 
     "@alejoamiras/tee-rex": ["@alejoamiras/tee-rex@workspace:packages/sdk"],
 
-    "@alejoamiras/tee-rex-demo": ["@alejoamiras/tee-rex-demo@workspace:packages/demo"],
+    "@alejoamiras/tee-rex-app": ["@alejoamiras/tee-rex-app@workspace:packages/app"],
 
     "@alejoamiras/tee-rex-server": ["@alejoamiras/tee-rex-server@workspace:packages/server"],
 

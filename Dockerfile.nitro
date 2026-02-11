@@ -25,7 +25,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/server/package.json ./packages/server/
-COPY packages/demo/package.json ./packages/demo/
+COPY packages/app/package.json ./packages/app/
 
 # Install dependencies
 RUN bun install --frozen-lockfile

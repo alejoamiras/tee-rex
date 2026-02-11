@@ -7,11 +7,11 @@ This document outlines the planned improvements for the tee-rex project.
 - **Repo**: `alejoamiras/tee-rex` (GitHub)
 - **SDK** (`/packages/sdk`): TypeScript package `@alejoamiras/tee-rex` - Remote proving client for Aztec
 - **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
-- **Demo** (`/packages/demo`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow
-- **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/demo`)
+- **App** (`/packages/app`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow
+- **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
 - **Linting/Formatting**: Biome (lint + format in one tool)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
-- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `demo.yml`, `server.yml`; spartan: `aztec-spartan.yml`; TEE: `tee.yml`)
+- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; spartan: `aztec-spartan.yml`; TEE: `tee.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
 - **Aztec version**: 4.0.0-nightly.20260210 (migrating to `spartan` dist-tag)
@@ -154,7 +154,7 @@ bun run build
 
 **Phase 4C Details**:
 
-The demo (`packages/demo`) already has a working Vite + Tailwind frontend with local/remote mode toggle, timing display, and log output. It needs to be extended with a **third mode button** and TEE awareness:
+The app (`packages/app`) already has a working Vite + Tailwind frontend with local/remote mode toggle, timing display, and log output. It needs to be extended with a **third mode button** and TEE awareness:
 
 1. **Three buttons**: Local | Remote | Remote + TEE
    - **Local**: Proves using in-browser WASM Barretenberg (current `local` mode)
@@ -214,18 +214,18 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 ---
 
-## Phase 7: Demo Frontend Testing ✅ Complete
+## Phase 7: App Frontend Testing ✅ Complete
 
-**Goal**: Proper test coverage for the demo app + restructure all test infrastructure.
+**Goal**: Proper test coverage for the app + restructure all test infrastructure.
 
 **Completed:**
-- **Unit tests**: 6 tests for demo utility functions (`ui.ts`, `aztec.ts` state management)
+- **Unit tests**: 6 tests for app utility functions (`ui.ts`, `aztec.ts` state management)
 - **Mocked E2E**: 8 Playwright tests (mode switching, TEE config panel, service dots, log panel) — no services needed
 - **Fullstack E2E**: 12 Playwright tests (deploy, token flow, all 6 mode-switch combinations across remote/local/TEE) — requires Aztec + tee-rex
-- **Test restructuring**: Eliminated `packages/integration/` — SDK owns its e2e in `packages/sdk/e2e/`, demo owns its e2e in `packages/demo/e2e/`
+- **Test restructuring**: Eliminated `packages/integration/` — SDK owns its e2e in `packages/sdk/e2e/`, app owns its e2e in `packages/app/e2e/`
 - **Playwright projects**: Single `playwright.config.ts` with `mocked` and `fullstack` projects (different timeouts, test patterns)
 - **Assert-or-throw**: E2e tests fail (not skip) when services unavailable. TEE tests skip only when `TEE_URL` env var is not set.
-- **Per-package CI**: `ci-sdk.yml`, `ci-demo.yml`, `ci-server.yml` — no monolithic test workflow
+- **Per-package CI**: `ci-sdk.yml`, `ci-app.yml`, `ci-server.yml` — no monolithic test workflow
 
 ---
 
@@ -251,7 +251,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 **Completed:**
 - SDK E2E job in `sdk.yml` — installs Foundry + Aztec CLI, starts local network + tee-rex, runs `bun test e2e/`
-- Demo Fullstack E2E job in `demo.yml` — same infra + Playwright with chromium, runs `test:e2e:fullstack`
+- App Fullstack E2E job in `app.yml` — same infra + Playwright with chromium, runs `test:e2e:fullstack`
 - Aztec CLI cached by version (`~/.aztec/versions/<VERSION>/`) — install step skipped on cache hit
 - `AZTEC_VERSION` env var as single source of truth per workflow
 - Both triggered on PRs and pushes to main (path-filtered)
@@ -288,8 +288,8 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - `scripts/update-aztec-version.ts` — updates 3 package.json + runs `bun install`
 - `scripts/update-aztec-version.test.ts` — 12 unit tests for version validation, JSON/YAML update logic
 - `.github/workflows/aztec-spartan.yml` — 3-job pipeline: check → update + unit test → create PR (with `test-tee` label + auto-merge)
-- PR CI handles all testing: `sdk.yml`, `demo.yml`, `server.yml` auto-trigger on the PR; `tee.yml` triggers on `test-tee` label
-- Reusable workflows (`_deploy-tee.yml`, `_e2e-sdk.yml`, `_e2e-demo.yml`) + composite actions (`setup-aztec`, `start-services`)
+- PR CI handles all testing: `sdk.yml`, `app.yml`, `server.yml` auto-trigger on the PR; `tee.yml` triggers on `test-tee` label
+- Reusable workflows (`_deploy-tee.yml`, `_e2e-sdk.yml`, `_e2e-app.yml`) + composite actions (`setup-aztec`, `start-services`)
 - `setup-aztec` auto-detects Aztec version from `packages/sdk/package.json` — no hardcoded versions in workflow files
 - Auto-merge: `gh pr merge --auto --squash --delete-branch` merges when required status checks pass
 - `bun run aztec:check` and `bun run aztec:update <version>` for local use
@@ -297,7 +297,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 **TEE deployment (`_deploy-tee.yml` + `tee.yml`):**
 - `tee.yml` triggers on PRs with `test-tee` label or manual dispatch
 - `_deploy-tee.yml` builds `Dockerfile.nitro` with Docker layer caching (`docker/build-push-action` + `type=gha`) → pushes to ECR → starts EC2 → deploys enclave via SSM
-- SDK/demo e2e workflows accept optional `tee_url` input — each opens its own SSM tunnel to the already-running enclave
+- SDK/app e2e workflows accept optional `tee_url` input — each opens its own SSM tunnel to the already-running enclave
 - Teardown job stops EC2 instance with `if: always()`
 - AWS OIDC authentication (no stored secrets), IAM policy scoped by ECR repo ARN + EC2 `Environment: ci` tag
 - SSM port forwarding: `localhost:4001 → EC2:4000` — no public port exposed
@@ -309,22 +309,22 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - Workflows always trigger on PRs (no `paths:` filter on `pull_request`) — avoids GitHub's "pending forever" problem with required checks
 - Each workflow has a `changes` detection job using `gh pr diff` (API-based, works in shallow clones)
 - Downstream jobs conditional on `needs.changes.outputs.relevant == 'true'`
-- Gate jobs (`SDK Status`, `Demo Status`, `Server Status`) always run and check all results including `changes.result`
+- Gate jobs (`SDK Status`, `App Status`, `Server Status`) always run and check all results including `changes.result`
 - GitHub ruleset requires only the 3 gate jobs — they pass (skipped = ok) when no relevant files changed
 - For push/dispatch events, `changes` always returns `relevant=true` (path filter on `push:` trigger handles filtering)
 - PRs created by spartan workflow use `PAT_TOKEN` (not `GITHUB_TOKEN`) to trigger other workflows
 
-**Branch protection:** `infra/rulesets/main-branch-protection.json` — 3 required checks (SDK Status, Demo Status, Server Status). Import via GitHub Settings > Rules > Rulesets.
+**Branch protection:** `infra/rulesets/main-branch-protection.json` — 3 required checks (SDK Status, App Status, Server Status). Import via GitHub Settings > Rules > Rulesets.
 
-**Verified end-to-end:** Auto-update detected new version → created PR #15 → all workflows triggered → SDK/Demo/Server/TEE passed → auto-merged.
+**Verified end-to-end:** Auto-update detected new version → created PR #15 → all workflows triggered → SDK/App/Server/TEE passed → auto-merged.
 
 **12B — Multi-network support: ✅ Complete**
-- `AZTEC_NODE_URL` env var configurable across demo (Vite proxy target), e2e fixtures (health check), and CI
+- `AZTEC_NODE_URL` env var configurable across app (Vite proxy target), e2e fixtures (health check), and CI
 - `setup-aztec` action: `skip_cli` input skips Foundry + Aztec CLI install when targeting remote node
 - `start-services` action: `aztec_node_url` input — local Aztec startup conditional, health check uses configured URL
-- `_e2e-sdk.yml` / `_e2e-demo.yml`: accept and propagate `aztec_node_url` to setup-aztec, start-services, and test env
-- Demo frontend: no longer blocks on tee-rex server being down — defaults to local mode, wallet init proceeds with just the Aztec node
-- Demo services panel: `#aztec-url` display updates dynamically from `AZTEC_NODE_URL` env var
+- `_e2e-sdk.yml` / `_e2e-app.yml`: accept and propagate `aztec_node_url` to setup-aztec, start-services, and test env
+- App frontend: no longer blocks on tee-rex server being down — defaults to local mode, wallet init proceeds with just the Aztec node
+- App services panel: `#aztec-url` display updates dynamically from `AZTEC_NODE_URL` env var
 
 **12B' — Nightly → Spartan migration: ✅ Complete**
 - Renamed `scripts/check-aztec-nightly.ts` → `scripts/check-aztec-spartan.ts` (checks `spartan` dist-tag)
@@ -334,8 +334,8 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 - Updated root `package.json` script, IAM README, test expectations
 - First run: trigger spartan workflow manually with `version: 4.0.0-spartan.20260210` to bootstrap from nightly to spartan
 
-**12C — Nextnet support in demo frontend: ✅ Complete (nextnet manual test pending)**
-- Demo auto-detects live network via `nodeInfo.l1ChainId !== 31337`
+**12C — Nextnet support in app frontend: ✅ Complete (nextnet manual test pending)**
+- App auto-detects live network via `nodeInfo.l1ChainId !== 31337`
 - Sponsored FPC (Fee Paying Contract) set up on all networks — derives canonical address from artifact + salt=0, registers in PXE
 - `deployTestAccount()`: uses `from: AztecAddress.ZERO` + sponsored fee on live networks (self-deploy path), sandbox uses pre-registered accounts
 - `runTokenFlow()`: all `.send()` calls include sponsored fee; deploys bob inline if only 1 account exists
@@ -374,7 +374,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
 ## Phase 14: SDK E2E Test Improvements — TEE + Mode Switching ✅ Complete
 
-**Goal**: Restructure SDK e2e tests to match the demo's elegant pattern — test TEE mode and mode switching, with TEE tests skipping gracefully when `TEE_URL` isn't set.
+**Goal**: Restructure SDK e2e tests to match the app's elegant pattern — test TEE mode and mode switching, with TEE tests skipping gracefully when `TEE_URL` isn't set.
 
 **Completed:**
 - Consolidated `remote-proving.test.ts`, `local-proving.test.ts`, `tee-proving.test.ts` into a single `proving.test.ts` with nested describes: `TeeRexProver` > `Remote` / `Local` / `TEE`

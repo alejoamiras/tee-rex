@@ -102,7 +102,7 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   state.wallet = await TestWallet.create(
     state.node,
     {
-      dataDirectory: `tee-rex-demo-${l1Contracts.rollupAddress}`,
+      dataDirectory: `tee-rex-app-${l1Contracts.rollupAddress}`,
       l1Contracts,
       ...(state.isLiveNetwork && { proverEnabled: true }),
     },

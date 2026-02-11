@@ -11,7 +11,7 @@ const AZTEC_VERSION_PATTERN = /^\d+\.\d+\.\d+-(nightly|spartan)\.\d{8}$/;
 const PACKAGE_JSON_FILES = [
   "packages/sdk/package.json",
   "packages/server/package.json",
-  "packages/demo/package.json",
+  "packages/app/package.json",
 ];
 
 export function validateVersion(version: string): boolean {

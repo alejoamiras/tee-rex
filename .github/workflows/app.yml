@@ -1,18 +1,18 @@
-name: Demo
+name: App
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "packages/demo/**"
+      - "packages/app/**"
       - "packages/sdk/**"
       - "tsconfig.json"
       - "biome.json"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/demo.yml"
-      - ".github/workflows/_e2e-demo.yml"
+      - ".github/workflows/app.yml"
+      - ".github/workflows/_e2e-app.yml"
       - ".github/actions/setup-aztec/**"
       - ".github/actions/start-services/**"
   pull_request:
@@ -37,7 +37,7 @@ jobs:
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          PATHS="packages/demo/ packages/sdk/ tsconfig.json biome.json package.json bun.lock .github/workflows/demo.yml .github/workflows/_e2e-demo.yml .github/actions/setup-aztec/ .github/actions/start-services/"
+          PATHS="packages/app/ packages/sdk/ tsconfig.json biome.json package.json bun.lock .github/workflows/app.yml .github/workflows/_e2e-app.yml .github/actions/setup-aztec/ .github/actions/start-services/"
           CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
           for path in $PATHS; do
             if echo "$CHANGED" | grep -q "^${path}"; then
@@ -83,7 +83,7 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - run: bun run --cwd packages/demo test:unit
+      - run: bun run --cwd packages/app test:unit
 
   mocked-e2e:
     name: Mocked E2E
@@ -104,17 +104,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
-      - run: bun run --cwd packages/demo test:e2e
+      - run: bun run --cwd packages/app test:e2e
 
   fullstack-e2e:
     name: Fullstack E2E
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
-    uses: ./.github/workflows/_e2e-demo.yml
+    uses: ./.github/workflows/_e2e-app.yml
     secrets: inherit
 
-  demo-status:
-    name: Demo Status
+  app-status:
+    name: App Status
     if: always()
     needs: [changes, lint, unit-tests, mocked-e2e, fullstack-e2e]
     runs-on: ubuntu-latest
