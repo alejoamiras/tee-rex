@@ -141,7 +141,7 @@ describe("setUiMode", () => {
     expect(state.uiMode).toBe("local");
     expect(state.provingMode).toBe("local");
     expect(mockSetProvingMode).toHaveBeenCalledWith("local");
-    expect(mockSetApiUrl).toHaveBeenCalledWith("http://localhost:4000");
+    expect(mockSetApiUrl).toHaveBeenCalledWith("/prover");
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
   });
 
@@ -150,7 +150,7 @@ describe("setUiMode", () => {
     expect(state.uiMode).toBe("remote");
     expect(state.provingMode).toBe("remote");
     expect(mockSetProvingMode).toHaveBeenCalledWith("remote");
-    expect(mockSetApiUrl).toHaveBeenCalledWith("http://localhost:4000");
+    expect(mockSetApiUrl).toHaveBeenCalledWith("/prover");
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
   });
 

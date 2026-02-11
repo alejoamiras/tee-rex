@@ -6,6 +6,7 @@ import {
   checkTeeRexServer,
   deployTestAccount,
   initializeWallet,
+  PROVER_DISPLAY_URL,
   runTokenFlow,
   setUiMode,
   state,
@@ -214,6 +215,7 @@ $("token-flow-btn").addEventListener("click", async () => {
 // ── Init ──
 async function init(): Promise<void> {
   $("aztec-url").textContent = AZTEC_DISPLAY_URL;
+  $("teerex-url").textContent = PROVER_DISPLAY_URL;
 
   appendLog("Checking services...");
   const { aztec, teerex } = await checkServices();

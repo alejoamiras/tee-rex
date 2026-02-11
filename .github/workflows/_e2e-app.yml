@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: "http://localhost:8080"
+      prover_url:
+        description: Prover URL (skips local server start when not localhost)
+        required: false
+        type: string
+        default: "http://localhost:4000"
 
 jobs:
   e2e-app:
@@ -74,9 +79,11 @@ jobs:
       - uses: ./.github/actions/start-services
         with:
           aztec_node_url: ${{ inputs.aztec_node_url }}
+          prover_url: ${{ inputs.prover_url }}
 
       - name: Run fullstack E2E tests
         env:
           TEE_URL: ${{ inputs.tee_url }}
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
+          PROVER_URL: ${{ inputs.prover_url }}
         run: bun run --cwd packages/app test:e2e:fullstack

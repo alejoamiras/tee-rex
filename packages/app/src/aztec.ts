@@ -15,10 +15,13 @@ export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success")
 export type UiMode = "local" | "remote" | "tee";
 
 const AZTEC_NODE_URL = "/aztec"; // Proxied via Vite dev server
-const LOCAL_TEEREX_URL = "http://localhost:4000";
+const PROVER_URL = "/prover"; // Proxied via Vite dev server
 
 /** Display-friendly Aztec node URL for the services panel (reads env set by Vite define). */
 export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
+
+/** Display-friendly prover URL for the services panel (reads env set by Vite define). */
+export const PROVER_DISPLAY_URL = process.env.PROVER_URL || "localhost:4000";
 
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
@@ -57,7 +60,7 @@ export async function checkAztecNode(): Promise<boolean> {
 
 export async function checkTeeRexServer(): Promise<boolean> {
   try {
-    const res = await fetch(`${LOCAL_TEEREX_URL}/encryption-public-key`, {
+    const res = await fetch(`${PROVER_URL}/encryption-public-key`, {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return false;
@@ -75,7 +78,7 @@ async function clearIndexedDB(): Promise<void> {
 
 async function doInitializeWallet(log: LogFn): Promise<boolean> {
   log("Creating TeeRexProver...");
-  state.prover = new TeeRexProver(LOCAL_TEEREX_URL, new WASMSimulator());
+  state.prover = new TeeRexProver(PROVER_URL, new WASMSimulator());
   state.prover.setProvingMode(state.provingMode);
 
   log("Connecting to Aztec node...");
@@ -175,13 +178,13 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
     case "local":
       state.provingMode = "local";
       state.prover.setProvingMode("local");
-      state.prover.setApiUrl(LOCAL_TEEREX_URL);
+      state.prover.setApiUrl(PROVER_URL);
       state.prover.setAttestationConfig({});
       break;
     case "remote":
       state.provingMode = "remote";
       state.prover.setProvingMode("remote");
-      state.prover.setApiUrl(LOCAL_TEEREX_URL);
+      state.prover.setApiUrl(PROVER_URL);
       state.prover.setAttestationConfig({});
       break;
     case "tee":
