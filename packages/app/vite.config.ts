@@ -4,7 +4,7 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 const require = createRequire(import.meta.url);
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     plugins: [
@@ -54,9 +54,12 @@ export default defineConfig(({ mode }) => {
       alias: {
         // Bun hoists vite-plugin-node-polyfills under .bun/ which Rollup can't
         // resolve when the plugin injects its buffer shim into SDK source files.
-        "vite-plugin-node-polyfills/shims/buffer": require.resolve(
-          "vite-plugin-node-polyfills/shims/buffer",
-        ),
+        // Only needed for production builds — dev mode resolves it via the plugin.
+        ...(command === "build" && {
+          "vite-plugin-node-polyfills/shims/buffer": require.resolve(
+            "vite-plugin-node-polyfills/shims/buffer",
+          ),
+        }),
       },
       // Ensure single class instances for instanceof checks across packages
       dedupe: ["@aztec/bb-prover"],
