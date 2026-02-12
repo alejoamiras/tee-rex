@@ -18,7 +18,7 @@ export function validateVersion(version: string): boolean {
   return VERSION_PATTERN.test(version);
 }
 
-export function updatePackageJson(content: string, newVersion: string): string {
+export function updatePackageJson(content: string, newVersion: string, skipPackages?: Set<string>): string {
   const pkg = JSON.parse(content);
 
   for (const section of ["dependencies", "devDependencies"] as const) {
@@ -26,12 +26,44 @@ export function updatePackageJson(content: string, newVersion: string): string {
     if (!deps) continue;
     for (const [key, value] of Object.entries(deps)) {
       if (key.startsWith("@aztec/") && typeof value === "string" && AZTEC_VERSION_PATTERN.test(value)) {
+        if (skipPackages?.has(key)) continue;
         deps[key] = newVersion;
       }
     }
   }
 
   return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
+async function findMissingPackages(version: string, packageFiles: string[]): Promise<Set<string>> {
+  // Collect all @aztec/* packages referenced across all package.json files
+  const allAztecPackages = new Set<string>();
+  for (const filePath of packageFiles) {
+    const pkg = await Bun.file(filePath).json();
+    for (const section of ["dependencies", "devDependencies"] as const) {
+      const deps = pkg[section];
+      if (!deps) continue;
+      for (const [key, value] of Object.entries(deps)) {
+        if (key.startsWith("@aztec/") && typeof value === "string" && AZTEC_VERSION_PATTERN.test(value)) {
+          allAztecPackages.add(key);
+        }
+      }
+    }
+  }
+
+  const missing = new Set<string>();
+  await Promise.all(
+    [...allAztecPackages].map(async (pkg) => {
+      const proc = Bun.spawn(["npm", "view", `${pkg}@${version}`, "version", "--json"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) missing.add(pkg);
+    }),
+  );
+
+  return missing;
 }
 
 async function main() {
@@ -48,13 +80,19 @@ async function main() {
     process.exit(1);
   }
 
+  // Check which packages are not yet published at the target version
+  const skipPackages = await findMissingPackages(newVersion, PACKAGE_JSON_FILES);
+  if (skipPackages.size > 0) {
+    console.log(`Skipping unpublished packages: ${[...skipPackages].join(", ")}`);
+  }
+
   let updatedFiles = 0;
 
   // Update package.json files
   for (const filePath of PACKAGE_JSON_FILES) {
     const file = Bun.file(filePath);
     const original = await file.text();
-    const updated = updatePackageJson(original, newVersion);
+    const updated = updatePackageJson(original, newVersion, skipPackages);
     if (updated !== original) {
       await Bun.write(filePath, updated);
       console.log(`Updated ${filePath}`);

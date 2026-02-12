@@ -71,15 +71,13 @@ async function main() {
     return;
   }
 
-  const { allExist, missing } = await verifyAllPackagesExist(latest);
+  const { missing } = await verifyAllPackagesExist(latest);
 
-  if (!allExist) {
+  if (missing.length > 0) {
     console.error(`Warning: Not all packages available at ${latest}. Missing: ${missing.join(", ")}`);
-    console.log(JSON.stringify({ current, latest, needsUpdate: false, missing }));
-    return;
   }
 
-  console.log(JSON.stringify({ current, latest, needsUpdate: true }));
+  console.log(JSON.stringify({ current, latest, needsUpdate: true, ...(missing.length > 0 && { missing }) }));
 }
 
 main().catch((err) => {
