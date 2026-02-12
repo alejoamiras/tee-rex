@@ -48,7 +48,8 @@ jobs:
       - name: Build app
         run: bun run --cwd packages/app build
         env:
-          AZTEC_NODE_URL: http://localhost:8080
+          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          PROVER_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/prover
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
