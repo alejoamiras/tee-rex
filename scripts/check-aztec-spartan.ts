@@ -16,7 +16,7 @@ const AZTEC_PACKAGES = [
   "@aztec/pxe",
   "@aztec/simulator",
   "@aztec/stdlib",
-  "@aztec/test-wallet",
+  "@aztec/wallets",
 ];
 
 async function getCurrentVersion(): Promise<string> {

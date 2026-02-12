@@ -4,6 +4,7 @@ import { assertServicesAvailable } from "./fullstack.fixture";
 const TEE_URL = process.env.TEE_URL || "";
 
 let sharedPage: Page;
+const deployCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 
 test.describe.configure({ mode: "serial" });
 
@@ -59,11 +60,10 @@ test.afterAll(async () => {
 
 // ── Helpers ──
 
-async function deployAndAssert(
-  page: Page,
-  mode: "local" | "remote" | "tee",
-  expectedTag: string,
-): Promise<void> {
+async function deployAndAssert(page: Page, mode: "local" | "remote" | "tee"): Promise<void> {
+  const expectedTag = deployCount[mode] === 0 ? "cold" : "warm";
+  deployCount[mode]++;
+
   await page.click("#deploy-btn");
 
   await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
@@ -132,7 +132,7 @@ test.describe("remote", () => {
   test("deploys account", async () => {
     const page = sharedPage;
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote", "cold");
+    await deployAndAssert(page, "remote");
   });
 
   test("runs full token flow", async () => {
@@ -147,7 +147,7 @@ test.describe("remote", () => {
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
-    await deployAndAssert(page, "local", "cold");
+    await deployAndAssert(page, "local");
   });
 
   test("remote → TEE deploys successfully", async () => {
@@ -162,7 +162,7 @@ test.describe("remote", () => {
     await configureTee(page);
     await expect(page.locator("#tee-attestation-label")).toContainText("nitro");
     await expect(page.locator("#log")).toContainText("TEE server reachable");
-    await deployAndAssert(page, "tee", "cold");
+    await deployAndAssert(page, "tee");
   });
 });
 
@@ -173,7 +173,7 @@ test.describe("local", () => {
     const page = sharedPage;
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "local", "warm");
+    await deployAndAssert(page, "local");
   });
 
   test("runs full token flow", async () => {
@@ -188,7 +188,7 @@ test.describe("local", () => {
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote", "warm");
+    await deployAndAssert(page, "remote");
   });
 
   test("local → TEE deploys successfully", async () => {
@@ -201,7 +201,7 @@ test.describe("local", () => {
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
     await configureTee(page);
-    await deployAndAssert(page, "tee", "warm");
+    await deployAndAssert(page, "tee");
   });
 });
 
@@ -217,7 +217,7 @@ test.describe("TEE", () => {
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
     await configureTee(page);
-    await deployAndAssert(page, "tee", "warm");
+    await deployAndAssert(page, "tee");
   });
 
   test("runs full token flow", async () => {
@@ -232,7 +232,7 @@ test.describe("TEE", () => {
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
-    await deployAndAssert(page, "local", "warm");
+    await deployAndAssert(page, "local");
   });
 
   test("TEE → remote deploys successfully", async () => {
@@ -244,6 +244,6 @@ test.describe("TEE", () => {
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote", "warm");
+    await deployAndAssert(page, "remote");
   });
 });

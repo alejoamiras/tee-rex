@@ -4,11 +4,13 @@ import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { createStore } from "@aztec/kv-store/indexeddb";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
+import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
-import { TestWallet } from "@aztec/test-wallet/client/lazy";
+import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
@@ -26,7 +28,7 @@ export const PROVER_DISPLAY_URL = process.env.PROVER_URL || "localhost:4000";
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;
-  wallet: TestWallet | null;
+  wallet: EmbeddedWallet | null;
   registeredAddresses: AztecAddress[];
   provingMode: ProvingMode;
   uiMode: UiMode;
@@ -76,6 +78,33 @@ async function clearIndexedDB(): Promise<void> {
   await Promise.all(dbs.filter((db) => db.name).map((db) => indexedDB.deleteDatabase(db.name!)));
 }
 
+/**
+ * Lazy account contracts provider — mirrors @aztec/wallets internal implementation.
+ * Uses dynamic imports so Vite can code-split the account contract artifacts.
+ */
+const lazyAccountContracts = {
+  async getSchnorrAccountContract(signingKey: import("@aztec/foundation/curves/bn254").Fq) {
+    const { SchnorrAccountContract } = await import("@aztec/accounts/schnorr/lazy");
+    return new SchnorrAccountContract(signingKey);
+  },
+  async getEcdsaRAccountContract(signingKey: Buffer) {
+    const { EcdsaRAccountContract } = await import("@aztec/accounts/ecdsa/lazy");
+    return new EcdsaRAccountContract(signingKey);
+  },
+  async getEcdsaKAccountContract(signingKey: Buffer) {
+    const { EcdsaKAccountContract } = await import("@aztec/accounts/ecdsa/lazy");
+    return new EcdsaKAccountContract(signingKey);
+  },
+  async getStubAccountContractArtifact() {
+    const { getStubAccountContractArtifact } = await import("@aztec/accounts/stub/lazy");
+    return getStubAccountContractArtifact();
+  },
+  async createStubAccount(address: import("@aztec/stdlib/contract").CompleteAddress) {
+    const { createStubAccount } = await import("@aztec/accounts/stub/lazy");
+    return createStubAccount(address);
+  },
+};
+
 async function doInitializeWallet(log: LogFn): Promise<boolean> {
   log("Creating TeeRexProver...");
   state.prover = new TeeRexProver(PROVER_URL, new WASMSimulator());
@@ -88,36 +117,33 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
     state.node.getL1ContractAddresses(),
   ]);
 
+  const rollupAddress = l1Contracts.rollupAddress;
   state.isLiveNetwork = nodeInfo.l1ChainId !== 31337;
   log(
     `Connected — chain ${nodeInfo.l1ChainId} (${state.isLiveNetwork ? "live network" : "sandbox"})`,
     "success",
   );
 
-  if (state.isLiveNetwork) {
-    log("Live network detected — enabling proofs + sponsored fees");
-  }
-
   log("Creating wallet (may take a moment)...");
-  // Pre-fetch l1Contracts and pass them in config to avoid extra async
-  // operations during PXE init (prevents IndexedDB transaction timeouts).
-  // Pattern from gregoswap's EmbeddedWallet.
-  state.wallet = await TestWallet.create(
-    state.node,
-    {
-      dataDirectory: `tee-rex-app-${l1Contracts.rollupAddress}`,
-      l1Contracts,
-      ...(state.isLiveNetwork && { proverEnabled: true }),
-    },
-    {
-      proverOrOptions: state.prover,
-      loggers: {},
-    },
-  );
+  // Mirrors BrowserEmbeddedWallet.create() but injects our TeeRexProver.
+  // proverEnabled defaults to true in getPXEConfig() so proving is always on.
+  const pxeConfig = getPXEConfig();
+  pxeConfig.dataDirectory = `pxe-${rollupAddress}`;
+
+  const pxe = await createPXE(state.node, pxeConfig, {
+    proverOrOptions: state.prover,
+  });
+
+  const walletDBStore = await createStore(`wallet-${rollupAddress}`, {
+    dataDirectory: "wallet",
+    dataStoreMapSizeKb: 2e10,
+  });
+  const walletDB = WalletDB.init(walletDBStore);
+
+  state.wallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
   log("Wallet created", "success");
 
   // Derive the canonical Sponsored FPC address and register it in the PXE.
-  // Both sandbox and live networks have it deployed.
   log("Setting up Sponsored FPC...");
   const fpcInstance = await getContractInstanceFromInstantiationParams(
     SponsoredFPCContract.artifact,
@@ -130,8 +156,6 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   if (!state.isLiveNetwork) {
     log("Registering sandbox accounts...");
     // Register accounts serially to avoid IndexedDB TransactionInactiveError.
-    // The SDK's registerInitialLocalNetworkAccountsInWallet uses Promise.all
-    // which causes concurrent IDB writes that conflict in real browsers.
     const testAccounts = await getInitialTestAccountsData();
     state.registeredAddresses = [];
     for (const account of testAccounts) {

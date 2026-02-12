@@ -36,11 +36,13 @@ export default defineConfig(({ mode, command }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/prover/, ""),
         },
-        "/tee": {
-          target: env.TEE_URL || "http://localhost:4001",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/tee/, ""),
-        },
+        ...(env.TEE_URL && {
+          "/tee": {
+            target: env.TEE_URL,
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/tee/, ""),
+          },
+        }),
       },
       fs: {
         // Allow serving files from the monorepo root (WASM files in node_modules)
