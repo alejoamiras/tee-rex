@@ -102,9 +102,27 @@ Add these in Settings > Secrets and variables > Actions > Secrets:
 | `PROD_PROVER_INSTANCE_ID` | Production prover instance ID (step 5) |
 | `AWS_REGION` | `eu-west-2` |
 | `ECR_REGISTRY` | `<ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com` |
+| `PROD_S3_BUCKET` | `tee-rex-app-prod` |
+| `PROD_CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID (see `infra/cloudfront/README.md`) |
+| `PROD_CLOUDFRONT_URL` | `https://d_____.cloudfront.net` |
 
 No long-lived AWS keys needed — OIDC provides credentials dynamically.
 These values are stored as secrets to avoid exposing infrastructure details in logs.
+
+## Updating the CI Policy
+
+> **Note**: The template file uses `<ACCOUNT_ID>` and `<DISTRIBUTION_ID>` as placeholders. Substitute real values before applying.
+
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+DISTRIBUTION_ID="..."  # from GitHub secrets or: aws cloudfront list-distributions --query '...'
+sed -e "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" -e "s/<DISTRIBUTION_ID>/$DISTRIBUTION_ID/g" \
+  infra/iam/tee-rex-ci-policy.json > /tmp/ci-policy.json
+aws iam put-role-policy \
+  --role-name tee-rex-ci-github \
+  --policy-name tee-rex-ci-policy \
+  --policy-document file:///tmp/ci-policy.json
+```
 
 ## Updating the Trust Policy
 

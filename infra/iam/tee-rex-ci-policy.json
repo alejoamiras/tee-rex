@@ -87,6 +87,26 @@
         "ssm:DescribeInstanceInformation"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "S3AppDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::tee-rex-app-prod",
+        "arn:aws:s3:::tee-rex-app-prod/*"
+      ]
+    },
+    {
+      "Sid": "CloudFrontInvalidation",
+      "Effect": "Allow",
+      "Action": "cloudfront:CreateInvalidation",
+      "Resource": "arn:aws:cloudfront::<ACCOUNT_ID>:distribution/<DISTRIBUTION_ID>"
     }
   ]
 }

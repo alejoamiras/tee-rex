@@ -1,0 +1,111 @@
+{
+  "CallerReference": "tee-rex-prod-2026-02-11",
+  "Comment": "tee-rex production — app (S3) + prover/TEE (EC2)",
+  "DefaultRootObject": "index.html",
+  "HttpVersion": "http2",
+  "PriceClass": "PriceClass_100",
+  "Enabled": true,
+  "Origins": {
+    "Quantity": 3,
+    "Items": [
+      {
+        "Id": "s3-app",
+        "DomainName": "tee-rex-app-prod.s3.eu-west-2.amazonaws.com",
+        "OriginAccessControlId": "<OAC_ID>",
+        "S3OriginConfig": { "OriginAccessIdentity": "" }
+      },
+      {
+        "Id": "prover-ec2",
+        "DomainName": "<PROVER_EC2_DNS>",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginReadTimeout": 60,
+          "OriginKeepaliveTimeout": 5
+        }
+      },
+      {
+        "Id": "tee-ec2",
+        "DomainName": "<TEE_EC2_DNS>",
+        "CustomOriginConfig": {
+          "HTTPPort": 4000,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginReadTimeout": 60,
+          "OriginKeepaliveTimeout": 5
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "s3-app",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "ResponseHeadersPolicyId": "<RESPONSE_HEADERS_POLICY_ID>",
+    "Compress": true,
+    "AllowedMethods": {
+      "Quantity": 2,
+      "Items": ["GET", "HEAD"],
+      "CachedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"] }
+    }
+  },
+  "CacheBehaviors": {
+    "Quantity": 2,
+    "Items": [
+      {
+        "PathPattern": "/prover/*",
+        "TargetOriginId": "prover-ec2",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "ResponseHeadersPolicyId": "<RESPONSE_HEADERS_POLICY_ID>",
+        "Compress": true,
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"],
+          "CachedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"] }
+        },
+        "FunctionAssociations": {
+          "Quantity": 1,
+          "Items": [
+            {
+              "FunctionARN": "arn:aws:cloudfront::<ACCOUNT_ID>:function/tee-rex-strip-prefix",
+              "EventType": "viewer-request"
+            }
+          ]
+        }
+      },
+      {
+        "PathPattern": "/tee/*",
+        "TargetOriginId": "tee-ec2",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+        "ResponseHeadersPolicyId": "<RESPONSE_HEADERS_POLICY_ID>",
+        "Compress": true,
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"],
+          "CachedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"] }
+        },
+        "FunctionAssociations": {
+          "Quantity": 1,
+          "Items": [
+            {
+              "FunctionARN": "arn:aws:cloudfront::<ACCOUNT_ID>:function/tee-rex-strip-prefix",
+              "EventType": "viewer-request"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "CustomErrorResponses": {
+    "Quantity": 2,
+    "Items": [
+      { "ErrorCode": 403, "ResponsePagePath": "/index.html", "ResponseCode": "200", "ErrorCachingMinTTL": 10 },
+      { "ErrorCode": 404, "ResponsePagePath": "/index.html", "ResponseCode": "200", "ErrorCachingMinTTL": 10 }
+    ]
+  }
+}

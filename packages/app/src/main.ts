@@ -65,14 +65,10 @@ $("mode-remote").addEventListener("click", () => {
 $("mode-tee").addEventListener("click", () => {
   if (deploying) return;
   updateModeUI("tee");
-  const url = ($("tee-url") as HTMLInputElement).value.trim();
-  if (url) {
-    setUiMode("tee", url);
-    appendLog(`Switched to TEE proving mode → ${url}`);
-    runTeeCheck(url);
-  } else {
-    appendLog("Enter TEE server URL, then click Check", "warn");
-  }
+  const url = ($("tee-url") as HTMLInputElement).value.trim() || "/tee";
+  setUiMode("tee", url);
+  appendLog(`Switched to TEE proving mode → ${url}`);
+  runTeeCheck(url);
 });
 
 async function runTeeCheck(url: string): Promise<void> {
