@@ -17,6 +17,8 @@ runs:
     - name: Start Aztec local network
       if: inputs.aztec_node_url == 'http://localhost:8080'
       shell: bash
+      env:
+        FORGE_BROADCAST_TIMEOUT: "300"
       run: aztec start --local-network &
 
     - name: Start tee-rex server
@@ -34,9 +36,9 @@ runs:
             echo "Aztec node ready (attempt $i)"
             exit 0
           fi
-          sleep 5
+          sleep 10
         done
-        echo "Aztec node failed to respond at ${AZTEC_NODE_URL} within 5 minutes"
+        echo "Aztec node failed to respond at ${AZTEC_NODE_URL} within 10 minutes"
         exit 1
 
     - name: Wait for tee-rex server
