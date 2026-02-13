@@ -226,8 +226,6 @@ async function init(): Promise<void> {
 
   if (!teerex) {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
-    setUiMode("local");
-    updateModeUI("local");
   }
 
   appendLog("Initializing wallet...");
@@ -242,12 +240,12 @@ async function init(): Promise<void> {
     setActionButtonsDisabled(false);
 
     const networkLabel = $("network-label");
-    if (state.isLiveNetwork) {
-      networkLabel.textContent = "live";
+    if (state.proofsRequired) {
+      networkLabel.textContent = "proofs enabled";
       networkLabel.className = "text-amber-500/80 text-[10px] uppercase tracking-wider ml-2";
-      appendLog("Ready — deploy a test account to get started (live network)", "success");
+      appendLog("Ready — deploy a test account to get started (proofs enabled)", "success");
     } else {
-      networkLabel.textContent = "local network";
+      networkLabel.textContent = "proofs simulated";
       networkLabel.className = "text-gray-600 text-[10px] uppercase tracking-wider ml-2";
       appendLog("Ready — deploy a test account or run the token flow", "success");
     }

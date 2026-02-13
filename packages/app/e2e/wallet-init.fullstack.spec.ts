@@ -52,5 +52,17 @@ test("wallet initialization completes", async ({ browser }) => {
   }
 
   expect(finalState).toBe("ready");
+
+  // Check browser capabilities for proving
+  const capabilities = await page.evaluate(() => ({
+    sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    crossOriginIsolated: self.crossOriginIsolated,
+  }));
+  console.log(`--- Browser capabilities ---`);
+  console.log(`  SharedArrayBuffer: ${capabilities.sharedArrayBuffer}`);
+  console.log(`  crossOriginIsolated: ${capabilities.crossOriginIsolated}`);
+  console.log(`  hardwareConcurrency: ${capabilities.hardwareConcurrency}`);
+
   await page.close();
 });

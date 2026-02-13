@@ -33,7 +33,8 @@ export interface AztecState {
   provingMode: ProvingMode;
   uiMode: UiMode;
   teeServerUrl: string;
-  isLiveNetwork: boolean;
+  /** True when the network requires real proofs (not simulated). */
+  proofsRequired: boolean;
   feePaymentMethod: SponsoredFeePaymentMethod | undefined;
 }
 
@@ -42,10 +43,10 @@ export const state: AztecState = {
   prover: null,
   wallet: null,
   registeredAddresses: [],
-  provingMode: "remote",
-  uiMode: "remote",
+  provingMode: "local",
+  uiMode: "local",
   teeServerUrl: "/tee",
-  isLiveNetwork: false,
+  proofsRequired: false,
   feePaymentMethod: undefined,
 };
 
@@ -118,9 +119,9 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   ]);
 
   const rollupAddress = l1Contracts.rollupAddress;
-  state.isLiveNetwork = nodeInfo.l1ChainId !== 31337;
+  state.proofsRequired = nodeInfo.l1ChainId !== 31337;
   log(
-    `Connected — chain ${nodeInfo.l1ChainId} (${state.isLiveNetwork ? "live network" : "sandbox"})`,
+    `Connected — chain ${nodeInfo.l1ChainId} (proofs ${state.proofsRequired ? "required" : "simulated"})`,
     "success",
   );
 
@@ -130,7 +131,7 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   // Only enable proving on live networks (sandbox uses simulated proofs).
   const pxeConfig = getPXEConfig();
   pxeConfig.dataDirectory = `pxe-${rollupAddress}`;
-  pxeConfig.proverEnabled = state.isLiveNetwork;
+  pxeConfig.proverEnabled = state.proofsRequired;
   pxeConfig.l1Contracts = l1Contracts;
 
   log("Initializing PXE...");
@@ -160,7 +161,7 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
   log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
 
-  if (!state.isLiveNetwork) {
+  if (!state.proofsRequired) {
     log("Registering sandbox accounts...");
     // Register accounts serially to avoid IndexedDB TransactionInactiveError.
     const testAccounts = await getInitialTestAccountsData();
@@ -270,7 +271,7 @@ export async function deployTestAccount(
   if (!state.wallet) {
     throw new Error("Wallet not initialized");
   }
-  if (!state.isLiveNetwork && !state.registeredAddresses.length) {
+  if (!state.proofsRequired && !state.registeredAddresses.length) {
     throw new Error("Wallet not initialized — no registered addresses");
   }
 
@@ -292,7 +293,7 @@ export async function deployTestAccount(
   try {
     const deployMethod = await accountManager.getDeployMethod();
     const deployed = await deployMethod.send({
-      from: state.isLiveNetwork ? AztecAddress.ZERO : state.registeredAddresses[0],
+      from: state.proofsRequired ? AztecAddress.ZERO : state.registeredAddresses[0],
       skipClassPublication: true,
       fee: { paymentMethod: state.feePaymentMethod! },
     });
@@ -302,7 +303,7 @@ export async function deployTestAccount(
     log(`Deployed in ${(durationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`, "success");
 
     // On live networks, store the deployed address for use in subsequent operations
-    if (state.isLiveNetwork) {
+    if (state.proofsRequired) {
       state.registeredAddresses.push(accountManager.address);
     }
 
