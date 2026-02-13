@@ -120,6 +120,14 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
 
   const rollupAddress = l1Contracts.rollupAddress;
   state.proofsRequired = nodeInfo.l1ChainId !== 31337;
+
+  // Allow forcing proofs via ?forceProofs=true for testing IVC locally
+  const forceProofs = new URLSearchParams(window.location.search).get("forceProofs") === "true";
+  if (forceProofs && !state.proofsRequired) {
+    state.proofsRequired = true;
+    log("Forced proverEnabled=true via ?forceProofs query param", "warn");
+  }
+
   log(
     `Connected — chain ${nodeInfo.l1ChainId} (proofs ${state.proofsRequired ? "required" : "simulated"})`,
     "success",

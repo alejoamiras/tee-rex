@@ -30,13 +30,13 @@ test("page loads with correct initial state", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
 
-  // Remote mode button is active by default
-  const remoteBtn = page.locator("#mode-remote");
-  await expect(remoteBtn).toHaveClass(/mode-active/);
-
-  // Local and TEE buttons are not active
+  // Local mode button is active by default
   const localBtn = page.locator("#mode-local");
-  await expect(localBtn).not.toHaveClass(/mode-active/);
+  await expect(localBtn).toHaveClass(/mode-active/);
+
+  // Remote and TEE buttons are not active
+  const remoteBtn = page.locator("#mode-remote");
+  await expect(remoteBtn).not.toHaveClass(/mode-active/);
   const teeBtn = page.locator("#mode-tee");
   await expect(teeBtn).not.toHaveClass(/mode-active/);
 
