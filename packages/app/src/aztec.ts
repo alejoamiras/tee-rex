@@ -126,19 +126,26 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
 
   log("Creating wallet (may take a moment)...");
   // Mirrors BrowserEmbeddedWallet.create() but injects our TeeRexProver.
-  // proverEnabled defaults to true in getPXEConfig() so proving is always on.
+  // Pass l1Contracts in the config to avoid extra fetches during PXE init.
+  // Only enable proving on live networks (sandbox uses simulated proofs).
   const pxeConfig = getPXEConfig();
   pxeConfig.dataDirectory = `pxe-${rollupAddress}`;
+  pxeConfig.proverEnabled = state.isLiveNetwork;
+  pxeConfig.l1Contracts = l1Contracts;
 
+  log("Initializing PXE...");
   const pxe = await createPXE(state.node, pxeConfig, {
     proverOrOptions: state.prover,
   });
+  log("PXE initialized", "success");
 
+  log("Creating wallet DB...");
   const walletDBStore = await createStore(`wallet-${rollupAddress}`, {
     dataDirectory: "wallet",
     dataStoreMapSizeKb: 2e10,
   });
-  const walletDB = WalletDB.init(walletDBStore);
+  const walletDB = WalletDB.init(walletDBStore, (msg) => log(msg));
+  log("Wallet DB created", "success");
 
   state.wallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
   log("Wallet created", "success");
