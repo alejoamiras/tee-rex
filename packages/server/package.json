@@ -10,9 +10,9 @@
     "test:unit": "bun test"
   },
   "dependencies": {
-    "@aztec/bb-prover": "4.0.0-spartan.20260211",
-    "@aztec/simulator": "4.0.0-spartan.20260211",
-    "@aztec/stdlib": "4.0.0-spartan.20260211",
+    "@aztec/bb-prover": "4.0.0-spartan.20260213",
+    "@aztec/simulator": "4.0.0-spartan.20260213",
+    "@aztec/stdlib": "4.0.0-spartan.20260213",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "ms": "^2.1.3",
