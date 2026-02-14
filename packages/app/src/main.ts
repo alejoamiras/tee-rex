@@ -30,12 +30,10 @@ async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
 
   let teerex = false;
   if (PROVER_CONFIGURED) {
+    ($("mode-remote") as HTMLButtonElement).disabled = false;
     teerex = await checkTeeRexServer();
     setStatus("teerex-status", teerex);
     $("teerex-label").textContent = teerex ? "available" : "unavailable";
-    if (teerex) {
-      ($("mode-remote") as HTMLButtonElement).disabled = false;
-    }
   }
 
   return { aztec, teerex };
