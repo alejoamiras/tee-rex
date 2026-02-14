@@ -49,7 +49,8 @@ test("local proving deploy completes with real IVC", async ({ browser }) => {
   console.log(`[${elapsed()}] --- Network: "${networkLabel}" ---`);
   expect(networkLabel).toBe("proofs enabled");
 
-  // Verify we're in local mode (default now)
+  // Switch to local mode (app auto-selects remote when teerex is available)
+  await page.click("#mode-local");
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
   console.log(`[${elapsed()}] --- Local mode active, starting deploy ---`);
 

@@ -411,7 +411,7 @@ export async function runTokenFlow(
 
     const [aliceBalance, bobBalance] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
-      token.methods.balance_of_private(bob).simulate({ from: alice }),
+      token.methods.balance_of_private(bob).simulate({ from: bob }),
     ]);
 
     stepDuration = Date.now() - stepStart;
