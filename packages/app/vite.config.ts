@@ -102,11 +102,13 @@ export default defineConfig(({ mode, command }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/aztec/, ""),
         },
-        "/prover": {
-          target: env.PROVER_URL || "http://localhost:4000",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/prover/, ""),
-        },
+        ...(env.PROVER_URL && {
+          "/prover": {
+            target: env.PROVER_URL,
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/prover/, ""),
+          },
+        }),
         ...(env.TEE_URL && {
           "/tee": {
             target: env.TEE_URL,
@@ -141,6 +143,7 @@ export default defineConfig(({ mode, command }) => {
       "process.env": JSON.stringify({
         AZTEC_NODE_URL: env.AZTEC_NODE_URL,
         PROVER_URL: env.PROVER_URL,
+        TEE_URL: env.TEE_URL,
       }),
     },
   };

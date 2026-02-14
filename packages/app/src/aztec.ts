@@ -25,6 +25,15 @@ export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
 /** Display-friendly prover URL for the services panel (reads env set by Vite define). */
 export const PROVER_DISPLAY_URL = process.env.PROVER_URL || "localhost:4000";
 
+/** True when PROVER_URL was set at build time — enables remote proving. */
+export const PROVER_CONFIGURED = !!process.env.PROVER_URL;
+
+/** True when TEE_URL was set at build time — enables auto-configuration. */
+export const TEE_CONFIGURED = !!process.env.TEE_URL;
+
+/** Display-friendly TEE URL for the services panel. */
+export const TEE_DISPLAY_URL = process.env.TEE_URL || "";
+
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;

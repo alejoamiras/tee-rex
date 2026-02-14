@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { assertServicesAvailable } from "./fullstack.fixture";
 
+const PROVER_URL = process.env.PROVER_URL || "";
 const TEE_URL = process.env.TEE_URL || "";
 
 let sharedPage: Page;
@@ -116,21 +117,23 @@ async function runTokenFlowAndAssert(page: Page, mode: "local" | "remote" | "tee
   await expect(page.locator("#token-flow-btn")).toBeEnabled();
 }
 
-/** Fill TEE URL and verify attestation. Idempotent — safe to call multiple times. */
-async function configureTee(page: Page): Promise<void> {
-  await expect(page.locator("#tee-config")).not.toHaveClass(/hidden/);
-  await page.fill("#tee-url", TEE_URL);
-  await page.click("#tee-check-btn");
-  await expect(page.locator("#tee-attestation-dot")).toHaveClass(/status-online/, {
-    timeout: 30_000,
-  });
+/** Verify TEE attestation passed (auto-checked on init when TEE_URL is set). */
+async function assertTeeAttested(page: Page): Promise<void> {
+  await expect(page.locator("#tee-status")).toHaveClass(/status-online/, { timeout: 30_000 });
+  await expect(page.locator("#tee-attestation-label")).toHaveText("attested");
 }
 
 // ── Remote proving ──
 
 test.describe("remote", () => {
+  test.beforeEach(() => {
+    test.skip(!PROVER_URL, "PROVER_URL env var not set");
+  });
+
   test("deploys account", async () => {
     const page = sharedPage;
+    await expect(page.locator("#mode-remote")).toBeEnabled();
+    await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await deployAndAssert(page, "remote");
   });
@@ -159,9 +162,7 @@ test.describe("remote", () => {
     // Switch to TEE
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await configureTee(page);
-    await expect(page.locator("#tee-attestation-label")).toContainText("nitro");
-    await expect(page.locator("#log")).toContainText("TEE server reachable");
+    await assertTeeAttested(page);
     await deployAndAssert(page, "tee");
   });
 });
@@ -200,7 +201,7 @@ test.describe("local", () => {
     // Switch to TEE
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await configureTee(page);
+    await assertTeeAttested(page);
     await deployAndAssert(page, "tee");
   });
 });
@@ -216,7 +217,7 @@ test.describe("TEE", () => {
     const page = sharedPage;
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await configureTee(page);
+    await assertTeeAttested(page);
     await deployAndAssert(page, "tee");
   });
 

@@ -52,7 +52,14 @@
           <div class="flex items-center gap-3 text-xs">
             <span id="teerex-status" class="status-dot status-unknown"></span>
             <span class="text-gray-400 w-28">TEE-Rex Server</span>
-            <span id="teerex-url" class="text-gray-600 ml-auto font-light">localhost:4000</span>
+            <span id="teerex-label" class="text-[10px] text-gray-600">not configured</span>
+            <span id="teerex-url" class="text-gray-600 ml-auto font-light"></span>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span id="tee-status" class="status-dot status-unknown"></span>
+            <span class="text-gray-400 w-28">TEE Enclave</span>
+            <span id="tee-attestation-label" class="text-[10px] text-gray-600">not configured</span>
+            <span id="tee-url" class="text-gray-600 ml-auto font-light"></span>
           </div>
           <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
             <span id="wallet-dot" class="status-dot status-unknown"></span>
@@ -76,36 +83,18 @@
           </button>
           <button
             id="mode-remote"
+            disabled
             class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
           >
             ▸ Remote <span class="text-gray-600 normal-case tracking-normal">(server)</span>
           </button>
           <button
             id="mode-tee"
+            disabled
             class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
           >
             ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
           </button>
-        </div>
-        <div id="tee-config" class="hidden px-3 pb-3 space-y-2">
-          <div class="flex items-center gap-2">
-            <input
-              id="tee-url"
-              type="text"
-              placeholder="http://localhost:4001"
-              class="flex-1 bg-black/40 border border-gray-800 px-3 py-1.5 text-xs font-mono text-gray-400 placeholder-gray-700 focus:border-emerald-700/50 focus:outline-none transition-colors"
-            />
-            <button
-              id="tee-check-btn"
-              class="px-3 py-1.5 text-[10px] uppercase tracking-wider border border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400 transition-colors"
-            >
-              Check
-            </button>
-          </div>
-          <div class="flex items-center gap-2 px-1">
-            <span id="tee-attestation-dot" class="status-dot status-unknown"></span>
-            <span id="tee-attestation-label" class="text-[10px] text-gray-600">attestation: not checked</span>
-          </div>
         </div>
       </section>
 

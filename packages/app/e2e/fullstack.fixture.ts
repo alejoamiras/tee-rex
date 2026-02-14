@@ -1,6 +1,5 @@
 const AZTEC_STATUS_URL = `${process.env.AZTEC_NODE_URL || "http://localhost:8080"}/status`;
-const PROVER_URL = process.env.PROVER_URL || "http://localhost:4000";
-const TEEREX_KEY_URL = `${PROVER_URL}/encryption-public-key`;
+const PROVER_URL = process.env.PROVER_URL;
 
 async function isServiceHealthy(url: string): Promise<boolean> {
   try {
@@ -12,16 +11,21 @@ async function isServiceHealthy(url: string): Promise<boolean> {
 }
 
 export async function assertServicesAvailable(): Promise<void> {
-  const [aztec, teerex] = await Promise.all([
-    isServiceHealthy(AZTEC_STATUS_URL),
-    isServiceHealthy(TEEREX_KEY_URL),
-  ]);
-  if (!aztec || !teerex) {
+  const aztec = await isServiceHealthy(AZTEC_STATUS_URL);
+  if (!aztec) {
     throw new Error(
-      `Required services not available (aztec: ${aztec}, tee-rex: ${teerex}). ` +
-        "Start Aztec local network and tee-rex server before running fullstack e2e tests.\n" +
-        "  aztec start --local-network\n" +
-        "  bun run start",
+      "Aztec node not available. Start Aztec local network before running fullstack e2e tests.\n" +
+        "  aztec start --local-network",
     );
+  }
+
+  if (PROVER_URL) {
+    const teerex = await isServiceHealthy(`${PROVER_URL}/encryption-public-key`);
+    if (!teerex) {
+      throw new Error(
+        `TEE-Rex server not available at ${PROVER_URL}. Start tee-rex server before running fullstack e2e tests.\n` +
+          "  bun run start",
+      );
+    }
   }
 }
