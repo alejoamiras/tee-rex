@@ -44,8 +44,8 @@ test("page loads with correct initial state", async ({ page }) => {
   await expect(page.locator("#deploy-btn")).toBeDisabled();
   await expect(page.locator("#token-flow-btn")).toBeDisabled();
 
-  // TEE config panel is hidden
-  await expect(page.locator("#tee-config")).toHaveClass(/hidden/);
+  // TEE service row shows "not configured" by default
+  await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
 });
 
 test("mode buttons toggle active class", async ({ page }) => {
@@ -72,70 +72,51 @@ test("mode buttons toggle active class", async ({ page }) => {
   await expect(page.locator("#mode-remote")).not.toHaveClass(/mode-active/);
 });
 
-test("TEE mode shows tee-config panel, other modes hide it", async ({ page }) => {
+test("TEE mode toggles correctly between all modes", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // Click TEE — config panel appears
+  // Click TEE
   await page.click("#mode-tee");
-  await expect(page.locator("#tee-config")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
+  await expect(page.locator("#mode-local")).not.toHaveClass(/mode-active/);
 
-  // Click Remote — config panel hides
+  // Click Remote
   await page.click("#mode-remote");
-  await expect(page.locator("#tee-config")).toHaveClass(/hidden/);
+  await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
+  await expect(page.locator("#mode-tee")).not.toHaveClass(/mode-active/);
 
-  // Click TEE again — config panel appears
+  // Click TEE again
   await page.click("#mode-tee");
-  await expect(page.locator("#tee-config")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
 
-  // Click Local — config panel hides
+  // Click Local
   await page.click("#mode-local");
-  await expect(page.locator("#tee-config")).toHaveClass(/hidden/);
+  await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
+  await expect(page.locator("#mode-tee")).not.toHaveClass(/mode-active/);
 });
 
-test("TEE Check with mocked nitro response shows green dot", async ({ page }) => {
+test("TEE service row elements are present in the UI", async ({ page }) => {
   await mockServicesOffline(page);
-
-  // Mock the TEE attestation endpoint
-  await page.route("http://tee-server.test:4000/attestation", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ mode: "nitro" }),
-    }),
-  );
-
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // Switch to TEE mode and enter URL
-  await page.click("#mode-tee");
-  await page.fill("#tee-url", "http://tee-server.test:4000");
-  await page.click("#tee-check-btn");
-
-  // Wait for attestation check to complete
-  await expect(page.locator("#tee-attestation-dot")).toHaveClass(/status-online/);
-  await expect(page.locator("#tee-attestation-label")).toContainText("nitro");
+  // TEE service row exists with status dot and attestation label
+  await expect(page.locator("#tee-status")).toBeVisible();
+  await expect(page.locator("#tee-attestation-label")).toBeVisible();
+  // URL span is empty (hidden) when TEE_URL is not set — just check it exists
+  await expect(page.locator("#tee-url")).toHaveCount(1);
 });
 
-test("TEE Check with unreachable server shows red dot", async ({ page }) => {
+test("TEE service row shows not configured when TEE_URL is not set", async ({ page }) => {
   await mockServicesOffline(page);
-
-  // Mock the attestation endpoint as unreachable
-  await page.route("http://tee-server.test:4000/attestation", (route) =>
-    route.fulfill({ status: 503, body: "unavailable" }),
-  );
-
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  await page.click("#mode-tee");
-  await page.fill("#tee-url", "http://tee-server.test:4000");
-  await page.click("#tee-check-btn");
-
-  await expect(page.locator("#tee-attestation-dot")).toHaveClass(/status-offline/);
-  await expect(page.locator("#tee-attestation-label")).toContainText("unreachable");
+  // Without TEE_URL, the service row shows "not configured"
+  await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
+  await expect(page.locator("#tee-url")).toHaveText("");
 });
 
 test("service dots show online when both services respond OK", async ({ page }) => {

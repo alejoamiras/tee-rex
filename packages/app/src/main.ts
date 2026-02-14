@@ -10,6 +10,8 @@ import {
   runTokenFlow,
   setUiMode,
   state,
+  TEE_CONFIGURED,
+  TEE_DISPLAY_URL,
   type UiMode,
 } from "./aztec";
 import { $, appendLog, formatDuration, setStatus, startClock } from "./ui";
@@ -44,8 +46,6 @@ function updateModeUI(mode: UiMode): void {
   for (const [key, btn] of Object.entries(buttons)) {
     btn.className = key === mode ? ACTIVE_BTN : INACTIVE_BTN;
   }
-
-  $("tee-config").classList.toggle("hidden", mode !== "tee");
 }
 
 $("mode-local").addEventListener("click", () => {
@@ -64,50 +64,9 @@ $("mode-remote").addEventListener("click", () => {
 
 $("mode-tee").addEventListener("click", () => {
   if (deploying) return;
+  setUiMode("tee");
   updateModeUI("tee");
-  const url = ($("tee-url") as HTMLInputElement).value.trim() || "/tee";
-  setUiMode("tee", url);
-  appendLog(`Switched to TEE proving mode → ${url}`);
-  runTeeCheck(url);
-});
-
-async function runTeeCheck(url: string): Promise<void> {
-  const dot = $("tee-attestation-dot");
-  const label = $("tee-attestation-label");
-  dot.className = "status-dot status-unknown";
-  label.textContent = "attestation: checking...";
-  appendLog(`Checking TEE attestation at ${url}...`);
-
-  const result = await checkTeeAttestation(url);
-  if (result.reachable) {
-    dot.className = `status-dot ${result.mode === "nitro" ? "status-online" : "status-offline"}`;
-    label.textContent = `attestation: ${result.mode ?? "unknown"}`;
-    setUiMode("tee", url);
-    appendLog(
-      `TEE server reachable — mode: ${result.mode}`,
-      result.mode === "nitro" ? "success" : "warn",
-    );
-  } else {
-    dot.className = "status-dot status-offline";
-    label.textContent = "attestation: unreachable";
-    appendLog(`TEE server unreachable at ${url}`, "error");
-  }
-}
-
-$("tee-check-btn").addEventListener("click", () => {
-  const url = ($("tee-url") as HTMLInputElement).value.trim();
-  if (!url) {
-    appendLog("Enter a TEE server URL first", "warn");
-    return;
-  }
-  runTeeCheck(url);
-});
-
-$("tee-url").addEventListener("keydown", (e) => {
-  if ((e as KeyboardEvent).key === "Enter") {
-    const url = ($("tee-url") as HTMLInputElement).value.trim();
-    if (url) runTeeCheck(url);
-  }
+  appendLog("Switched to TEE proving mode");
 });
 
 // ── Shared helpers ──
@@ -224,11 +183,29 @@ async function init(): Promise<void> {
     return;
   }
 
-  if (teerex) {
-    setUiMode("remote");
-    updateModeUI("remote");
-  } else {
+  // Always start in local mode — user switches manually
+  if (!teerex) {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
+  }
+
+  // Auto-configure TEE when env var is set (display URL + check attestation)
+  if (TEE_CONFIGURED) {
+    $("tee-url").textContent = TEE_DISPLAY_URL;
+    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
+    const attestation = await checkTeeAttestation("/tee");
+    if (attestation.reachable) {
+      setStatus("tee-status", attestation.mode === "nitro");
+      $("tee-attestation-label").textContent =
+        attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
+      appendLog(
+        `TEE attestation: ${attestation.mode ?? "unknown"}`,
+        attestation.mode === "nitro" ? "success" : "warn",
+      );
+    } else {
+      setStatus("tee-status", false);
+      $("tee-attestation-label").textContent = "unreachable";
+      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+    }
   }
 
   appendLog("Initializing wallet...");

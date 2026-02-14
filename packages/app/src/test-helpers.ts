@@ -12,11 +12,9 @@ export function setupDOM(): void {
     <button id="mode-local"></button>
     <button id="mode-remote"></button>
     <button id="mode-tee"></button>
-    <div id="tee-config" class="hidden"></div>
-    <input id="tee-url" type="text" />
-    <button id="tee-check-btn"></button>
-    <span id="tee-attestation-dot" class="status-dot status-unknown"></span>
+    <span id="tee-status" class="status-dot status-unknown"></span>
     <span id="tee-attestation-label"></span>
+    <span id="tee-url"></span>
     <button id="deploy-btn" disabled></button>
     <button id="token-flow-btn" disabled></button>
     <div id="progress" class="hidden"></div>

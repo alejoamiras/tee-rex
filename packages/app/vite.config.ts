@@ -141,6 +141,7 @@ export default defineConfig(({ mode, command }) => {
       "process.env": JSON.stringify({
         AZTEC_NODE_URL: env.AZTEC_NODE_URL,
         PROVER_URL: env.PROVER_URL,
+        TEE_URL: env.TEE_URL,
       }),
     },
   };
