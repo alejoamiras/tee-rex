@@ -15,7 +15,8 @@ import { ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { WASMSimulator } from "@aztec/simulator/client";
-import { registerInitialLocalNetworkAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
+import { EmbeddedWallet } from "@aztec/wallets/embedded";
+import { registerInitialLocalNetworkAccountsInWallet } from "@aztec/wallets/testing";
 import { getLogger } from "@logtape/logtape";
 import { config } from "./e2e-setup";
 
@@ -24,7 +25,7 @@ const logger = getLogger(["tee-rex", "sdk", "e2e", "mode-switching"]);
 // Shared state across tests
 let node: ReturnType<typeof createAztecNodeClient>;
 let prover: TeeRexProver;
-let wallet: TestWallet;
+let wallet: EmbeddedWallet;
 let registeredAddresses: any[];
 
 describe("Mode Switching", () => {
@@ -45,18 +46,14 @@ describe("Mode Switching", () => {
       logger.info("Connected to Aztec node", { chainId: nodeInfo.l1ChainId });
     });
 
-    test("should create TestWallet and register accounts", async () => {
+    test("should create EmbeddedWallet and register accounts", async () => {
       expect(node).toBeDefined();
       expect(prover).toBeDefined();
 
-      wallet = await TestWallet.create(
-        node,
-        {},
-        {
-          proverOrOptions: prover,
-          loggers: {},
-        },
-      );
+      wallet = await EmbeddedWallet.create(node, {
+        ephemeral: true,
+        pxeOptions: { proverOrOptions: prover },
+      });
 
       registeredAddresses = await registerInitialLocalNetworkAccountsInWallet(wallet);
 

@@ -4,11 +4,13 @@ import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { createStore } from "@aztec/kv-store/indexeddb";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
+import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
-import { TestWallet } from "@aztec/test-wallet/client/lazy";
+import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
@@ -26,12 +28,13 @@ export const PROVER_DISPLAY_URL = process.env.PROVER_URL || "localhost:4000";
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;
-  wallet: TestWallet | null;
+  wallet: EmbeddedWallet | null;
   registeredAddresses: AztecAddress[];
   provingMode: ProvingMode;
   uiMode: UiMode;
   teeServerUrl: string;
-  isLiveNetwork: boolean;
+  /** True when the network requires real proofs (not simulated). */
+  proofsRequired: boolean;
   feePaymentMethod: SponsoredFeePaymentMethod | undefined;
 }
 
@@ -40,10 +43,10 @@ export const state: AztecState = {
   prover: null,
   wallet: null,
   registeredAddresses: [],
-  provingMode: "remote",
-  uiMode: "remote",
+  provingMode: "local",
+  uiMode: "local",
   teeServerUrl: "/tee",
-  isLiveNetwork: false,
+  proofsRequired: false,
   feePaymentMethod: undefined,
 };
 
@@ -76,6 +79,33 @@ async function clearIndexedDB(): Promise<void> {
   await Promise.all(dbs.filter((db) => db.name).map((db) => indexedDB.deleteDatabase(db.name!)));
 }
 
+/**
+ * Lazy account contracts provider — mirrors @aztec/wallets internal implementation.
+ * Uses dynamic imports so Vite can code-split the account contract artifacts.
+ */
+const lazyAccountContracts = {
+  async getSchnorrAccountContract(signingKey: import("@aztec/foundation/curves/bn254").Fq) {
+    const { SchnorrAccountContract } = await import("@aztec/accounts/schnorr/lazy");
+    return new SchnorrAccountContract(signingKey);
+  },
+  async getEcdsaRAccountContract(signingKey: Buffer) {
+    const { EcdsaRAccountContract } = await import("@aztec/accounts/ecdsa/lazy");
+    return new EcdsaRAccountContract(signingKey);
+  },
+  async getEcdsaKAccountContract(signingKey: Buffer) {
+    const { EcdsaKAccountContract } = await import("@aztec/accounts/ecdsa/lazy");
+    return new EcdsaKAccountContract(signingKey);
+  },
+  async getStubAccountContractArtifact() {
+    const { getStubAccountContractArtifact } = await import("@aztec/accounts/stub/lazy");
+    return getStubAccountContractArtifact();
+  },
+  async createStubAccount(address: import("@aztec/stdlib/contract").CompleteAddress) {
+    const { createStubAccount } = await import("@aztec/accounts/stub/lazy");
+    return createStubAccount(address);
+  },
+};
+
 async function doInitializeWallet(log: LogFn): Promise<boolean> {
   log("Creating TeeRexProver...");
   state.prover = new TeeRexProver(PROVER_URL, new WASMSimulator());
@@ -88,36 +118,48 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
     state.node.getL1ContractAddresses(),
   ]);
 
-  state.isLiveNetwork = nodeInfo.l1ChainId !== 31337;
+  const rollupAddress = l1Contracts.rollupAddress;
+  state.proofsRequired = nodeInfo.l1ChainId !== 31337;
+
+  // Allow forcing proofs via ?forceProofs=true for testing IVC locally
+  const forceProofs = new URLSearchParams(window.location.search).get("forceProofs") === "true";
+  if (forceProofs && !state.proofsRequired) {
+    state.proofsRequired = true;
+    log("Forced proverEnabled=true via ?forceProofs query param", "warn");
+  }
+
   log(
-    `Connected — chain ${nodeInfo.l1ChainId} (${state.isLiveNetwork ? "live network" : "sandbox"})`,
+    `Connected — chain ${nodeInfo.l1ChainId} (proofs ${state.proofsRequired ? "required" : "simulated"})`,
     "success",
   );
 
-  if (state.isLiveNetwork) {
-    log("Live network detected — enabling proofs + sponsored fees");
-  }
-
   log("Creating wallet (may take a moment)...");
-  // Pre-fetch l1Contracts and pass them in config to avoid extra async
-  // operations during PXE init (prevents IndexedDB transaction timeouts).
-  // Pattern from gregoswap's EmbeddedWallet.
-  state.wallet = await TestWallet.create(
-    state.node,
-    {
-      dataDirectory: `tee-rex-app-${l1Contracts.rollupAddress}`,
-      l1Contracts,
-      ...(state.isLiveNetwork && { proverEnabled: true }),
-    },
-    {
-      proverOrOptions: state.prover,
-      loggers: {},
-    },
-  );
+  // Mirrors BrowserEmbeddedWallet.create() but injects our TeeRexProver.
+  // Pass l1Contracts in the config to avoid extra fetches during PXE init.
+  // Only enable proving on live networks (sandbox uses simulated proofs).
+  const pxeConfig = getPXEConfig();
+  pxeConfig.dataDirectory = `pxe-${rollupAddress}`;
+  pxeConfig.proverEnabled = state.proofsRequired;
+  pxeConfig.l1Contracts = l1Contracts;
+
+  log("Initializing PXE...");
+  const pxe = await createPXE(state.node, pxeConfig, {
+    proverOrOptions: state.prover,
+  });
+  log("PXE initialized", "success");
+
+  log("Creating wallet DB...");
+  const walletDBStore = await createStore(`wallet-${rollupAddress}`, {
+    dataDirectory: "wallet",
+    dataStoreMapSizeKb: 2e10,
+  });
+  const walletDB = WalletDB.init(walletDBStore, (msg) => log(msg));
+  log("Wallet DB created", "success");
+
+  state.wallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
   log("Wallet created", "success");
 
   // Derive the canonical Sponsored FPC address and register it in the PXE.
-  // Both sandbox and live networks have it deployed.
   log("Setting up Sponsored FPC...");
   const fpcInstance = await getContractInstanceFromInstantiationParams(
     SponsoredFPCContract.artifact,
@@ -127,11 +169,9 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
   log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
 
-  if (!state.isLiveNetwork) {
+  if (!state.proofsRequired) {
     log("Registering sandbox accounts...");
     // Register accounts serially to avoid IndexedDB TransactionInactiveError.
-    // The SDK's registerInitialLocalNetworkAccountsInWallet uses Promise.all
-    // which causes concurrent IDB writes that conflict in real browsers.
     const testAccounts = await getInitialTestAccountsData();
     state.registeredAddresses = [];
     for (const account of testAccounts) {
@@ -239,7 +279,7 @@ export async function deployTestAccount(
   if (!state.wallet) {
     throw new Error("Wallet not initialized");
   }
-  if (!state.isLiveNetwork && !state.registeredAddresses.length) {
+  if (!state.proofsRequired && !state.registeredAddresses.length) {
     throw new Error("Wallet not initialized — no registered addresses");
   }
 
@@ -261,7 +301,7 @@ export async function deployTestAccount(
   try {
     const deployMethod = await accountManager.getDeployMethod();
     const deployed = await deployMethod.send({
-      from: state.isLiveNetwork ? AztecAddress.ZERO : state.registeredAddresses[0],
+      from: state.proofsRequired ? AztecAddress.ZERO : state.registeredAddresses[0],
       skipClassPublication: true,
       fee: { paymentMethod: state.feePaymentMethod! },
     });
@@ -271,7 +311,7 @@ export async function deployTestAccount(
     log(`Deployed in ${(durationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`, "success");
 
     // On live networks, store the deployed address for use in subsequent operations
-    if (state.isLiveNetwork) {
+    if (state.proofsRequired) {
       state.registeredAddresses.push(accountManager.address);
     }
 
@@ -371,7 +411,7 @@ export async function runTokenFlow(
 
     const [aliceBalance, bobBalance] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
-      token.methods.balance_of_private(bob).simulate({ from: alice }),
+      token.methods.balance_of_private(bob).simulate({ from: bob }),
     ]);
 
     stepDuration = Date.now() - stepStart;

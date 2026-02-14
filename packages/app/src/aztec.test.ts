@@ -8,10 +8,10 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   // Reset state
   state.prover = null;
-  state.provingMode = "remote";
-  state.uiMode = "remote";
+  state.provingMode = "local";
+  state.uiMode = "local";
   state.teeServerUrl = "/tee";
-  state.isLiveNetwork = false;
+  state.proofsRequired = false;
   state.feePaymentMethod = undefined;
 });
 

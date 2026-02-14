@@ -56,8 +56,16 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   ): Promise<ChonkProofWithPublicInputs> {
     switch (this.#provingMode) {
       case "local": {
-        logger.info("Using local prover");
-        return super.createChonkProof(executionSteps);
+        logger.info("Using local prover", {
+          steps: executionSteps.length,
+          functions: executionSteps.map((s) => s.functionName),
+        });
+        const start = performance.now();
+        const result = await super.createChonkProof(executionSteps);
+        logger.info("Local proof completed", {
+          durationMs: Math.round(performance.now() - start),
+        });
+        return result;
       }
       case "remote": {
         logger.info("Using remote prover");
