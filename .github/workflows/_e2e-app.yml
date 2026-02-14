@@ -111,3 +111,11 @@ jobs:
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
           PROVER_URL: ${{ inputs.prover_url }}
         run: bun run --cwd packages/app test:e2e:fullstack
+
+      - name: Upload Aztec logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aztec-node-logs-app
+          path: /tmp/aztec-node.log
+          if-no-files-found: ignore

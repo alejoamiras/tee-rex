@@ -32,6 +32,12 @@ runs:
         echo "Aztec version: $VERSION"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+    - name: Install Node.js 24
+      if: inputs.skip_cli != 'true'
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24
+
     - name: Install Foundry
       if: inputs.skip_cli != 'true'
       uses: foundry-rs/foundry-toolchain@v1

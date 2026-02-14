@@ -19,7 +19,7 @@ runs:
       shell: bash
       env:
         FORGE_BROADCAST_TIMEOUT: "300"
-      run: aztec start --local-network &
+      run: aztec start --local-network > /tmp/aztec-node.log 2>&1 &
 
     - name: Start tee-rex server
       if: inputs.prover_url == 'http://localhost:4000'
@@ -40,6 +40,13 @@ runs:
         done
         echo "Aztec node failed to respond at ${AZTEC_NODE_URL} within 10 minutes"
         exit 1
+
+    - name: Dump Aztec node logs on failure
+      if: failure()
+      shell: bash
+      run: |
+        echo "=== Last 100 lines of Aztec node log ==="
+        tail -100 /tmp/aztec-node.log 2>/dev/null || echo "No log file found"
 
     - name: Wait for tee-rex server
       shell: bash

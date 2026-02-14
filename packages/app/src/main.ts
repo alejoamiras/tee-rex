@@ -224,7 +224,10 @@ async function init(): Promise<void> {
     return;
   }
 
-  if (!teerex) {
+  if (teerex) {
+    setUiMode("remote");
+    updateModeUI("remote");
+  } else {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
   }
 
