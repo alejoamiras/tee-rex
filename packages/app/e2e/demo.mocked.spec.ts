@@ -79,13 +79,9 @@ test("TEE button is disabled when TEE_URL is not configured", async ({ page }) =
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // TEE button stays disabled
+  // TEE button stays disabled (force-click guards tested in mocked-unconfigured)
   await expect(page.locator("#mode-tee")).toBeDisabled();
-
-  // Clicking it should not change the active mode
-  await page.click("#mode-tee", { force: true });
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-  await expect(page.locator("#mode-tee")).not.toHaveClass(/mode-active/);
 });
 
 test("TEE service row elements are present in the UI", async ({ page }) => {
