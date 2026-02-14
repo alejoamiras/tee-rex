@@ -7,11 +7,12 @@ export function setupDOM(): void {
     <span id="clock"></span>
     <span id="aztec-status" class="status-dot status-unknown"></span>
     <span id="teerex-status" class="status-dot status-unknown"></span>
+    <span id="teerex-label"></span>
     <span id="wallet-dot" class="status-dot status-unknown"></span>
     <span id="wallet-state"></span>
     <button id="mode-local"></button>
-    <button id="mode-remote"></button>
-    <button id="mode-tee"></button>
+    <button id="mode-remote" disabled></button>
+    <button id="mode-tee" disabled></button>
     <span id="tee-status" class="status-dot status-unknown"></span>
     <span id="tee-attestation-label"></span>
     <span id="tee-url"></span>

@@ -6,6 +6,7 @@ import {
   checkTeeRexServer,
   deployTestAccount,
   initializeWallet,
+  PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
   runTokenFlow,
   setUiMode,
@@ -24,9 +25,19 @@ startClock();
 
 // ── Service checks ──
 async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
-  const [aztec, teerex] = await Promise.all([checkAztecNode(), checkTeeRexServer()]);
+  const aztec = await checkAztecNode();
   setStatus("aztec-status", aztec);
-  setStatus("teerex-status", teerex);
+
+  let teerex = false;
+  if (PROVER_CONFIGURED) {
+    teerex = await checkTeeRexServer();
+    setStatus("teerex-status", teerex);
+    $("teerex-label").textContent = teerex ? "available" : "unavailable";
+    if (teerex) {
+      ($("mode-remote") as HTMLButtonElement).disabled = false;
+    }
+  }
+
   return { aztec, teerex };
 }
 
@@ -56,14 +67,14 @@ $("mode-local").addEventListener("click", () => {
 });
 
 $("mode-remote").addEventListener("click", () => {
-  if (deploying) return;
+  if (deploying || ($("mode-remote") as HTMLButtonElement).disabled) return;
   setUiMode("remote");
   updateModeUI("remote");
   appendLog("Switched to remote proving mode");
 });
 
 $("mode-tee").addEventListener("click", () => {
-  if (deploying) return;
+  if (deploying || ($("mode-tee") as HTMLButtonElement).disabled) return;
   setUiMode("tee");
   updateModeUI("tee");
   appendLog("Switched to TEE proving mode");
@@ -170,7 +181,9 @@ $("token-flow-btn").addEventListener("click", async () => {
 // ── Init ──
 async function init(): Promise<void> {
   $("aztec-url").textContent = AZTEC_DISPLAY_URL;
-  $("teerex-url").textContent = PROVER_DISPLAY_URL;
+  if (PROVER_CONFIGURED) {
+    $("teerex-url").textContent = PROVER_DISPLAY_URL;
+  }
 
   appendLog("Checking services...");
   const { aztec, teerex } = await checkServices();
@@ -183,8 +196,7 @@ async function init(): Promise<void> {
     return;
   }
 
-  // Always start in local mode — user switches manually
-  if (!teerex) {
+  if (PROVER_CONFIGURED && !teerex) {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
   }
 
@@ -197,6 +209,9 @@ async function init(): Promise<void> {
       setStatus("tee-status", attestation.mode === "nitro");
       $("tee-attestation-label").textContent =
         attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
+      if (attestation.mode === "nitro") {
+        ($("mode-tee") as HTMLButtonElement).disabled = false;
+      }
       appendLog(
         `TEE attestation: ${attestation.mode ?? "unknown"}`,
         attestation.mode === "nitro" ? "success" : "warn",

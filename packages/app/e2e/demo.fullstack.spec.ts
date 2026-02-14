@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { assertServicesAvailable } from "./fullstack.fixture";
 
+const PROVER_URL = process.env.PROVER_URL || "";
 const TEE_URL = process.env.TEE_URL || "";
 
 let sharedPage: Page;
@@ -125,8 +126,13 @@ async function assertTeeAttested(page: Page): Promise<void> {
 // ── Remote proving ──
 
 test.describe("remote", () => {
+  test.beforeEach(() => {
+    test.skip(!PROVER_URL, "PROVER_URL env var not set");
+  });
+
   test("deploys account", async () => {
     const page = sharedPage;
+    await expect(page.locator("#mode-remote")).toBeEnabled();
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await deployAndAssert(page, "remote");

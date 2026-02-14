@@ -34,11 +34,14 @@ test("page loads with correct initial state", async ({ page }) => {
   const localBtn = page.locator("#mode-local");
   await expect(localBtn).toHaveClass(/mode-active/);
 
-  // Remote and TEE buttons are not active
+  // Remote button is enabled (PROVER_URL set via playwright.config) but not active
   const remoteBtn = page.locator("#mode-remote");
   await expect(remoteBtn).not.toHaveClass(/mode-active/);
+
+  // TEE button is disabled (TEE_URL not set)
   const teeBtn = page.locator("#mode-tee");
   await expect(teeBtn).not.toHaveClass(/mode-active/);
+  await expect(teeBtn).toBeDisabled();
 
   // Action buttons are disabled
   await expect(page.locator("#deploy-btn")).toBeDisabled();
@@ -48,51 +51,39 @@ test("page loads with correct initial state", async ({ page }) => {
   await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
 });
 
-test("mode buttons toggle active class", async ({ page }) => {
+test("mode buttons toggle active class (local and remote)", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
 
-  // Wait for init to settle
+  // Wait for init to settle (remote button gets enabled by checkServices)
   await expect(page.locator("#log")).toContainText("services");
 
   // Click Local
   await page.click("#mode-local");
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
   await expect(page.locator("#mode-remote")).not.toHaveClass(/mode-active/);
-  await expect(page.locator("#mode-tee")).not.toHaveClass(/mode-active/);
 
-  // Click Remote
+  // Click Remote (enabled because PROVER_URL is set, even if service is offline)
   await page.click("#mode-remote");
   await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
   await expect(page.locator("#mode-local")).not.toHaveClass(/mode-active/);
 
-  // Click TEE
-  await page.click("#mode-tee");
-  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
+  // Click Local again
+  await page.click("#mode-local");
+  await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
   await expect(page.locator("#mode-remote")).not.toHaveClass(/mode-active/);
 });
 
-test("TEE mode toggles correctly between all modes", async ({ page }) => {
+test("TEE button is disabled when TEE_URL is not configured", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // Click TEE
-  await page.click("#mode-tee");
-  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-  await expect(page.locator("#mode-local")).not.toHaveClass(/mode-active/);
+  // TEE button stays disabled
+  await expect(page.locator("#mode-tee")).toBeDisabled();
 
-  // Click Remote
-  await page.click("#mode-remote");
-  await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-  await expect(page.locator("#mode-tee")).not.toHaveClass(/mode-active/);
-
-  // Click TEE again
-  await page.click("#mode-tee");
-  await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-
-  // Click Local
-  await page.click("#mode-local");
+  // Clicking it should not change the active mode
+  await page.click("#mode-tee", { force: true });
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
   await expect(page.locator("#mode-tee")).not.toHaveClass(/mode-active/);
 });
@@ -119,7 +110,9 @@ test("TEE service row shows not configured when TEE_URL is not set", async ({ pa
   await expect(page.locator("#tee-url")).toHaveText("");
 });
 
-test("service dots show online when both services respond OK", async ({ page }) => {
+test("service dots show online and teerex label shows available when services respond OK", async ({
+  page,
+}) => {
   await mockServicesOnline(page);
 
   // Block all further RPC calls so wallet init fails gracefully
@@ -136,15 +129,23 @@ test("service dots show online when both services respond OK", async ({ page }) 
   // Both service dots should turn green
   await expect(page.locator("#aztec-status")).toHaveClass(/status-online/);
   await expect(page.locator("#teerex-status")).toHaveClass(/status-online/);
+
+  // TEE-Rex label shows "available" and remote button is enabled
+  await expect(page.locator("#teerex-label")).toHaveText("available");
+  await expect(page.locator("#mode-remote")).toBeEnabled();
 });
 
-test("service dots show offline when services fail", async ({ page }) => {
+test("service dots show offline and teerex label shows unavailable when services fail", async ({
+  page,
+}) => {
   await mockServicesOffline(page);
   await page.goto("/");
 
-  // Both service dots should be red
+  // Aztec dot should be red
   await expect(page.locator("#aztec-status")).toHaveClass(/status-offline/);
+  // TEE-Rex dot should be red, label "unavailable" (PROVER_URL is set but service is down)
   await expect(page.locator("#teerex-status")).toHaveClass(/status-offline/);
+  await expect(page.locator("#teerex-label")).toHaveText("unavailable");
 });
 
 test("log panel shows checking services message on load", async ({ page }) => {
