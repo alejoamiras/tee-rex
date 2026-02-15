@@ -84,6 +84,12 @@ async function deployAndAssert(page: Page, mode: "local" | "remote" | "tee"): Pr
   await expect(page.locator(`#tag-${mode}`)).toHaveText(expectedTag);
   await expect(page.locator(`#result-${mode}`)).toHaveClass(/result-filled/);
   await expect(page.locator("#log")).toContainText("Deployed in");
+  await expect(page.locator("#log")).toContainText("step breakdown");
+
+  const steps = page.locator(`#steps-${mode}`);
+  await expect(steps).not.toHaveClass(/hidden/);
+  await expect(steps.locator("details")).toHaveCount(1);
+  await expect(steps.locator("details summary")).toContainText("steps");
 
   await expect(page.locator("#deploy-btn")).toBeEnabled();
   await expect(page.locator("#token-flow-btn")).toBeEnabled();
@@ -112,6 +118,11 @@ async function runTokenFlowAndAssert(page: Page, mode: "local" | "remote" | "tee
   await expect(page.locator("#log")).toContainText("Token flow complete");
   await expect(page.locator("#log")).toContainText("Alice: 500");
   await expect(page.locator("#log")).toContainText("Bob: 500");
+
+  const steps = page.locator(`#steps-${mode}`);
+  await expect(steps).not.toHaveClass(/hidden/);
+  await expect(steps.locator("details")).toHaveCount(1);
+  await expect(steps.locator("details summary")).toContainText("steps");
 
   await expect(page.locator("#deploy-btn")).toBeEnabled();
   await expect(page.locator("#token-flow-btn")).toBeEnabled();

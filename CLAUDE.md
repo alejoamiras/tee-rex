@@ -118,7 +118,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 18A)
+## Completed Phases (1–14, 16, 18A–B)
 
 | Phase | Summary |
 |---|---|
@@ -219,11 +219,13 @@ aztec-spartan.yml detects new version
 - `deploy-prod.yml` passes `TEE_URL` to app build
 - Fullstack e2e skip guards: remote tests skip when `PROVER_URL` not set
 
-**18B — Granular benchmark UI:**
-- Add sub-step timing to deploy and token flow operations (witness generation, proving, tx send/confirm)
-- Display in a collapsible section under each result card to avoid UI clutter
-- Track: witness gen time, IVC proof time, tx submission time, tx confirmation time
-- Requires instrumenting `aztec.ts` deploy/token flow functions with finer-grained timing
+**18B — Granular benchmark UI:** DONE (PR #37)
+- Break `.send()` into two timed phases using `NO_WAIT` + `waitForTx()` polling: prove+send and confirm
+- Added `proveSendMs` / `confirmMs` optional fields to `StepTiming` interface
+- `waitForTx()` helper polls `getTxReceipt()` every 1s, throws on dropped txs
+- All send operations in `deployTestAccount()` and `runTokenFlow()` refactored to capture sub-timings
+- For token deploy, uses `TokenContract.at()` after confirm (address deterministic from simulate)
+- UI renders "prove + send" and "confirm" sub-rows alongside existing simulation details in step breakdown
 
 **18C — Attribution update:**
 - Change footer from `tee-rex · nemi.fi` to `tee-rex · inspired by nemi.fi`

@@ -25,12 +25,15 @@ export function setupDOM(): void {
     <div id="result-local"></div>
     <div id="time-local"></div>
     <div id="tag-local"></div>
+    <div id="steps-local" class="hidden"></div>
     <div id="result-remote"></div>
     <div id="time-remote"></div>
     <div id="tag-remote"></div>
+    <div id="steps-remote" class="hidden"></div>
     <div id="result-tee"></div>
     <div id="time-tee"></div>
     <div id="tag-tee"></div>
+    <div id="steps-tee" class="hidden"></div>
     <div id="log"></div>
     <span id="log-count"></span>
   `;

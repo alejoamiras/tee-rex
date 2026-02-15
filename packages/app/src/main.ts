@@ -9,6 +9,7 @@ import {
   PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
   runTokenFlow,
+  type StepTiming,
   setUiMode,
   state,
   TEE_CONFIGURED,
@@ -84,7 +85,107 @@ function setActionButtonsDisabled(disabled: boolean): void {
   ($("token-flow-btn") as HTMLButtonElement).disabled = disabled;
 }
 
-function showResult(mode: UiMode, durationMs: number, tag: string): void {
+function formatMs(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+}
+
+/** Shorten "ContractName:function_name" → "function_name" */
+function shortFnName(name: string): string {
+  const i = name.lastIndexOf(":");
+  return i >= 0 ? name.slice(i + 1) : name;
+}
+
+function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
+  container.innerHTML = "";
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `${steps.length} steps`;
+  details.appendChild(summary);
+
+  const list = document.createElement("div");
+  list.className = "mt-1.5 space-y-1.5";
+
+  for (const step of steps) {
+    const group = document.createElement("div");
+
+    // Step header row
+    const row = document.createElement("div");
+    row.className = "step-row";
+    row.innerHTML =
+      `<span class="text-gray-300">${step.step}</span>` +
+      `<span class="step-dots"></span>` +
+      `<span class="text-emerald-500/80 tabular-nums">${formatMs(step.durationMs)}</span>`;
+    group.appendChild(row);
+
+    // Sub-phase details (simulation + prove/send + confirm)
+    if (step.simulation || step.proveSendMs != null) {
+      const sub = document.createElement("div");
+      sub.className = "step-sim";
+
+      // Simulation sub-details
+      if (step.simulation) {
+        const sim = step.simulation;
+
+        const header = document.createElement("div");
+        header.className = "step-sim-row";
+        header.innerHTML =
+          `<span class="text-gray-600">sim</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(sim.totalMs)}</span>`;
+        sub.appendChild(header);
+
+        const syncRow = document.createElement("div");
+        syncRow.className = "step-sim-row";
+        syncRow.innerHTML =
+          `<span class="text-gray-600">sync</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(sim.syncMs)}</span>`;
+        sub.appendChild(syncRow);
+
+        for (const fn of sim.perFunction) {
+          const fnRow = document.createElement("div");
+          fnRow.className = "step-sim-row";
+          fnRow.innerHTML =
+            `<span class="text-gray-600">${shortFnName(fn.name)}</span>` +
+            `<span class="step-dots"></span>` +
+            `<span class="tabular-nums">${formatMs(fn.ms)}</span>`;
+          sub.appendChild(fnRow);
+        }
+      }
+
+      // Prove + send / confirm sub-rows
+      if (step.proveSendMs != null) {
+        const psRow = document.createElement("div");
+        psRow.className = "step-sim-row";
+        psRow.innerHTML =
+          `<span class="text-gray-600">prove + send</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(step.proveSendMs)}</span>`;
+        sub.appendChild(psRow);
+      }
+
+      if (step.confirmMs != null) {
+        const cRow = document.createElement("div");
+        cRow.className = "step-sim-row";
+        cRow.innerHTML =
+          `<span class="text-gray-600">confirm</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(step.confirmMs)}</span>`;
+        sub.appendChild(cRow);
+      }
+
+      group.appendChild(sub);
+    }
+
+    list.appendChild(group);
+  }
+
+  details.appendChild(list);
+  container.appendChild(details);
+  container.classList.remove("hidden");
+}
+
+function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepTiming[]): void {
   $("results").classList.remove("hidden");
   const suffix = mode;
 
@@ -103,6 +204,10 @@ function showResult(mode: UiMode, durationMs: number, tag: string): void {
   }`;
 
   $(`result-${suffix}`).classList.add("result-filled");
+
+  if (steps?.length) {
+    renderSteps($(`steps-${suffix}`), steps);
+  }
 }
 
 // ── Deploy ──
@@ -118,14 +223,25 @@ $("deploy-btn").addEventListener("click", async () => {
   $("elapsed-time").textContent = "0.0s";
 
   try {
-    const result = await deployTestAccount(appendLog, (elapsedMs) => {
-      $("elapsed-time").textContent = formatDuration(elapsedMs);
-      $("progress-text").textContent = `proving [${state.uiMode}]...`;
-    });
+    const result = await deployTestAccount(
+      appendLog,
+      (elapsedMs) => {
+        $("elapsed-time").textContent = formatDuration(elapsedMs);
+      },
+      (stepName) => {
+        $("progress-text").textContent = `${stepName}...`;
+      },
+    );
+
+    appendLog("--- step breakdown ---");
+    for (const step of result.steps) {
+      appendLog(`  ${step.step}: ${formatDuration(step.durationMs)}`);
+    }
+    appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
     runCount[result.mode]++;
     const isCold = runCount[result.mode] === 1;
-    showResult(result.mode, result.durationMs, isCold ? "cold" : "warm");
+    showResult(result.mode, result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
@@ -165,7 +281,7 @@ $("token-flow-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    showResult(result.mode, result.totalDurationMs, "token flow");
+    showResult(result.mode, result.totalDurationMs, "token flow", result.steps);
   } catch (err) {
     appendLog(`Token flow failed: ${err}`, "error");
   } finally {
