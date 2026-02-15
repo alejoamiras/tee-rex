@@ -52,7 +52,16 @@ When working on infrastructure, deployment, or debugging tasks:
 - **Format**: Use a table or numbered list with columns: Attempt | Approach | Result (worked/failed/partial + details).
 - **When stuck after 3+ failed attempts**: STOP. Write down all attempts so far, save them, and either research the problem more deeply or ask the user for guidance. Do NOT keep looping with slight variations of the same broken approach.
 
-### 4. Validation
+### 4. Test coverage
+
+For every roadmap task, before starting implementation:
+
+- **Read existing tests** for the packages you're modifying (`src/*.test.ts` for unit, `e2e/` for integration/Playwright)
+- **Evaluate whether your changes need new or updated tests** — ask: "does this change behavior that existing tests cover? Does it add new behavior that should be tested?"
+- **Skip adding tests only for truly miscellaneous changes** (docs-only, comments, config tweaks with no behavioral impact)
+- **Add tests incrementally** — write the test alongside or immediately after the code change, not as a batch at the end
+
+### 5. Validation
 
 Every step must include a validation strategy. Think about how to verify the step worked:
 
@@ -63,6 +72,16 @@ Every step must include a validation strategy. Think about how to verify the ste
 - **New features**: write a test or run a manual verification script
 
 If you're unsure how to validate a step, that's a sign the step might be too big — break it down further.
+
+### 6. Branch, commit & CI
+
+When the work is complete and validated locally:
+
+1. **Create a feature branch** from `main` using commitlint-friendly naming (e.g., `feat/feature-name`, `fix/bug-name`, `refactor/description`)
+2. **Commit** with a conventional commit message (`feat:`, `fix:`, `refactor:`, `ci:`, `docs:`, etc.)
+3. **Push** and create a PR via `gh pr create`
+4. **Watch the CI run** with `gh pr checks <PR_NUMBER> --watch` — do not walk away assuming it passes
+5. **If CI fails**: evaluate the failure, fix, push, and watch again — repeat until all checks pass
 
 ---
 
