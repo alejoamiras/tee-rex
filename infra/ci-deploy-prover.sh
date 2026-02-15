@@ -20,6 +20,7 @@ echo "=== Tearing down existing container ==="
 docker stop "${CONTAINER_NAME}" 2>/dev/null || true
 docker rm "${CONTAINER_NAME}" 2>/dev/null || true
 docker system prune -af --volumes 2>/dev/null || true
+echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
 # ── 2. Pull Docker image ─────────────────────────────────────────
 echo "=== Pulling image ==="
