@@ -2,15 +2,6 @@ name: Server
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "packages/server/**"
-      - "tsconfig.json"
-      - "biome.json"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/server.yml"
   pull_request:
     branches: [main]
 
@@ -28,7 +19,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Push/dispatch events already have paths filter — always relevant
+          # Dispatch events — always relevant
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0

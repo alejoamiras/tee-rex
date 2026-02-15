@@ -2,19 +2,6 @@ name: App
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "packages/app/**"
-      - "packages/sdk/**"
-      - "tsconfig.json"
-      - "biome.json"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/app.yml"
-      - ".github/workflows/_e2e-app.yml"
-      - ".github/actions/setup-aztec/**"
-      - ".github/actions/start-services/**"
   pull_request:
     branches: [main]
 
@@ -32,7 +19,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Push/dispatch events already have paths filter — always relevant
+          # Dispatch events — always relevant
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
