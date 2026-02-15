@@ -1,9 +1,11 @@
 import { type ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing/lazy";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { NO_WAIT } from "@aztec/aztec.js/contracts";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import type { TxHash } from "@aztec/aztec.js/tx";
 import { createStore } from "@aztec/kv-store/indexeddb";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
@@ -271,6 +273,8 @@ export interface StepTiming {
   step: string;
   durationMs: number;
   simulation?: SimStepDetail;
+  proveSendMs?: number;
+  confirmMs?: number;
 }
 
 export interface DeployResult {
@@ -297,6 +301,18 @@ function extractSimDetail(simResult: { stats: { timings: any } }): SimStepDetail
     totalMs: t.total,
     perFunction: (t.perFunction ?? []).map((f: any) => ({ name: f.functionName, ms: f.time })),
   };
+}
+
+/** Poll until a transaction is no longer pending. Throws on dropped txs. */
+async function waitForTx(txHash: TxHash): Promise<void> {
+  while (true) {
+    const receipt = await state.node!.getTxReceipt(txHash);
+    if (!receipt.isPending()) {
+      if (receipt.isDropped()) throw new Error("Transaction dropped");
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 export async function deployTestAccount(
@@ -359,17 +375,28 @@ export async function deployTestAccount(
       simulation: simDetail,
     });
 
-    // Step 3: Prove + send
+    // Step 3: Prove + send + confirm
     onStep(`proving + sending [${mode}]`);
     log(`Deploying [${mode} proving]...`);
     stepStart = Date.now();
 
-    const deployed = await deployMethod.send(sendOpts);
+    const txHash = await deployMethod.send({ ...sendOpts, wait: NO_WAIT });
+    const proveSendMs = Date.now() - stepStart;
 
-    steps.push({ step: "prove + send", durationMs: Date.now() - stepStart });
+    onStep(`confirming [${mode}]`);
+    const confirmStart = Date.now();
+    await waitForTx(txHash);
+    const confirmMs = Date.now() - confirmStart;
+
+    steps.push({
+      step: "prove + send",
+      durationMs: proveSendMs + confirmMs,
+      proveSendMs,
+      confirmMs,
+    });
 
     const totalDurationMs = Date.now() - totalStart;
-    const address = deployed.address?.toString() ?? "unknown";
+    const address = accountManager.address.toString();
     log(
       `Deployed in ${(totalDurationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`,
       "success",
@@ -419,17 +446,28 @@ export async function runTokenFlow(
       const bobDeploy = await bobManager.getDeployMethod();
       const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
       const bobSim = await bobDeploy.simulate({ ...bobSendOpts, includeMetadata: true });
-      await bobDeploy.send(bobSendOpts);
+
+      const bobSendStart = Date.now();
+      const bobTxHash = await bobDeploy.send({ ...bobSendOpts, wait: NO_WAIT });
+      const bobProveSendMs = Date.now() - bobSendStart;
+
+      onStep(`confirming bob [${mode}]`);
+      const bobConfirmStart = Date.now();
+      await waitForTx(bobTxHash);
+      const bobConfirmMs = Date.now() - bobConfirmStart;
+
       bob = bobManager.address;
       state.registeredAddresses.push(bob);
 
-      const stepDuration = Date.now() - stepStart;
+      const bobStepDuration = Date.now() - stepStart;
       steps.push({
         step: "deploy bob",
-        durationMs: stepDuration,
+        durationMs: bobStepDuration,
         simulation: extractSimDetail(bobSim),
+        proveSendMs: bobProveSendMs,
+        confirmMs: bobConfirmMs,
       });
-      log(`Bob deployed in ${(stepDuration / 1000).toFixed(1)}s`, "success");
+      log(`Bob deployed in ${(bobStepDuration / 1000).toFixed(1)}s`, "success");
     }
 
     // Step 1: Deploy TokenContract
@@ -439,13 +477,25 @@ export async function runTokenFlow(
 
     const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
     const tokenSim = await tokenDeploy.simulate({ from: alice, fee, includeMetadata: true });
-    const token = await tokenDeploy.send({ from: alice, fee });
+
+    const tokenSendStart = Date.now();
+    const tokenTxHash = await tokenDeploy.send({ from: alice, fee, wait: NO_WAIT });
+    const tokenProveSendMs = Date.now() - tokenSendStart;
+
+    onStep(`confirming token deploy [${mode}]`);
+    const tokenConfirmStart = Date.now();
+    await waitForTx(tokenTxHash);
+    const tokenConfirmMs = Date.now() - tokenConfirmStart;
+
+    const token = TokenContract.at(tokenDeploy.address!, state.wallet);
 
     let stepDuration = Date.now() - stepStart;
     steps.push({
       step: "deploy token",
       durationMs: stepDuration,
       simulation: extractSimDetail(tokenSim),
+      proveSendMs: tokenProveSendMs,
+      confirmMs: tokenConfirmMs,
     });
     log(
       `Token deployed in ${(stepDuration / 1000).toFixed(1)}s — ${token.address.toString().slice(0, 20)}...`,
@@ -459,13 +509,23 @@ export async function runTokenFlow(
 
     const mintCall = token.methods.mint_to_private(alice, 1000n);
     const mintSim = await mintCall.simulate({ from: alice, fee, includeMetadata: true });
-    await mintCall.send({ from: alice, fee });
+
+    const mintSendStart = Date.now();
+    const mintTxHash = await mintCall.send({ from: alice, fee, wait: NO_WAIT });
+    const mintProveSendMs = Date.now() - mintSendStart;
+
+    onStep(`confirming mint [${mode}]`);
+    const mintConfirmStart = Date.now();
+    await waitForTx(mintTxHash);
+    const mintConfirmMs = Date.now() - mintConfirmStart;
 
     stepDuration = Date.now() - stepStart;
     steps.push({
       step: "mint to private",
       durationMs: stepDuration,
       simulation: extractSimDetail(mintSim),
+      proveSendMs: mintProveSendMs,
+      confirmMs: mintConfirmMs,
     });
     log(`Minted in ${(stepDuration / 1000).toFixed(1)}s`, "success");
 
@@ -476,13 +536,23 @@ export async function runTokenFlow(
 
     const transferCall = token.methods.transfer(bob, 500n);
     const transferSim = await transferCall.simulate({ from: alice, fee, includeMetadata: true });
-    await transferCall.send({ from: alice, fee });
+
+    const transferSendStart = Date.now();
+    const transferTxHash = await transferCall.send({ from: alice, fee, wait: NO_WAIT });
+    const transferProveSendMs = Date.now() - transferSendStart;
+
+    onStep(`confirming transfer [${mode}]`);
+    const transferConfirmStart = Date.now();
+    await waitForTx(transferTxHash);
+    const transferConfirmMs = Date.now() - transferConfirmStart;
 
     stepDuration = Date.now() - stepStart;
     steps.push({
       step: "private transfer",
       durationMs: stepDuration,
       simulation: extractSimDetail(transferSim),
+      proveSendMs: transferProveSendMs,
+      confirmMs: transferConfirmMs,
     });
     log(`Transferred in ${(stepDuration / 1000).toFixed(1)}s`, "success");
 

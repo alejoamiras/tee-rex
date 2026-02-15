@@ -117,38 +117,61 @@ function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
       `<span class="text-emerald-500/80 tabular-nums">${formatMs(step.durationMs)}</span>`;
     group.appendChild(row);
 
-    // Simulation sub-details
-    if (step.simulation) {
-      const sim = step.simulation;
+    // Sub-phase details (simulation + prove/send + confirm)
+    if (step.simulation || step.proveSendMs != null) {
       const sub = document.createElement("div");
       sub.className = "step-sim";
 
-      // Sync + total sim row
-      const header = document.createElement("div");
-      header.className = "step-sim-row";
-      header.innerHTML =
-        `<span class="text-gray-600">sim</span>` +
-        `<span class="step-dots"></span>` +
-        `<span class="tabular-nums">${formatMs(sim.totalMs)}</span>`;
-      sub.appendChild(header);
+      // Simulation sub-details
+      if (step.simulation) {
+        const sim = step.simulation;
 
-      const syncRow = document.createElement("div");
-      syncRow.className = "step-sim-row";
-      syncRow.innerHTML =
-        `<span class="text-gray-600">sync</span>` +
-        `<span class="step-dots"></span>` +
-        `<span class="tabular-nums">${formatMs(sim.syncMs)}</span>`;
-      sub.appendChild(syncRow);
-
-      // Per-function rows
-      for (const fn of sim.perFunction) {
-        const fnRow = document.createElement("div");
-        fnRow.className = "step-sim-row";
-        fnRow.innerHTML =
-          `<span class="text-gray-600">${shortFnName(fn.name)}</span>` +
+        const header = document.createElement("div");
+        header.className = "step-sim-row";
+        header.innerHTML =
+          `<span class="text-gray-600">sim</span>` +
           `<span class="step-dots"></span>` +
-          `<span class="tabular-nums">${formatMs(fn.ms)}</span>`;
-        sub.appendChild(fnRow);
+          `<span class="tabular-nums">${formatMs(sim.totalMs)}</span>`;
+        sub.appendChild(header);
+
+        const syncRow = document.createElement("div");
+        syncRow.className = "step-sim-row";
+        syncRow.innerHTML =
+          `<span class="text-gray-600">sync</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(sim.syncMs)}</span>`;
+        sub.appendChild(syncRow);
+
+        for (const fn of sim.perFunction) {
+          const fnRow = document.createElement("div");
+          fnRow.className = "step-sim-row";
+          fnRow.innerHTML =
+            `<span class="text-gray-600">${shortFnName(fn.name)}</span>` +
+            `<span class="step-dots"></span>` +
+            `<span class="tabular-nums">${formatMs(fn.ms)}</span>`;
+          sub.appendChild(fnRow);
+        }
+      }
+
+      // Prove + send / confirm sub-rows
+      if (step.proveSendMs != null) {
+        const psRow = document.createElement("div");
+        psRow.className = "step-sim-row";
+        psRow.innerHTML =
+          `<span class="text-gray-600">prove + send</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(step.proveSendMs)}</span>`;
+        sub.appendChild(psRow);
+      }
+
+      if (step.confirmMs != null) {
+        const cRow = document.createElement("div");
+        cRow.className = "step-sim-row";
+        cRow.innerHTML =
+          `<span class="text-gray-600">confirm</span>` +
+          `<span class="step-dots"></span>` +
+          `<span class="tabular-nums">${formatMs(step.confirmMs)}</span>`;
+        sub.appendChild(cRow);
       }
 
       group.appendChild(sub);
