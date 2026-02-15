@@ -14,9 +14,48 @@ permissions:
   contents: read
 
 jobs:
+  # ── Detect whether the push contains deployable changes ────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      deploy: ${{ steps.check.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for deployable changes
+        id: check
+        run: |
+          # workflow_dispatch always deploys
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Get files changed in the push commit(s)
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # If ALL changed files are docs/tests/config-only, skip deploy
+          NON_DOCS=$(echo "$CHANGED" | grep -vE '(\.md$|\.test\.ts$|/e2e/|playwright\.config\.ts$|lessons/)' || true)
+          if [ -z "$NON_DOCS" ]; then
+            echo "Only docs/test changes — skipping deploy"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Deployable changes detected:"
+            echo "$NON_DOCS"
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # ── Deploy TEE enclave to production ─────────────────────────────
   deploy-tee:
     name: Deploy TEE (prod)
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
@@ -26,6 +65,8 @@ jobs:
   # ── Deploy prover container to production ────────────────────────
   deploy-prover:
     name: Deploy Prover (prod)
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
     with:
@@ -35,6 +76,8 @@ jobs:
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:
     name: Deploy App (prod)
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
