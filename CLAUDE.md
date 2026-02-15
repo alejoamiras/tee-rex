@@ -121,7 +121,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 21)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A, 21)
 
 | Phase | Summary |
 |---|---|
@@ -249,11 +249,11 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 
 **Current state**: Deploy scripts wipe `/var/lib/docker` entirely on every deploy because the EBS volumes are too small to keep cached layers. This forces a full image pull (~2GB) every time and makes deploys slow. EC2 startup now uses `instance-status-ok` (2/2 checks) + 10 min SSM timeout with diagnostics on failure.
 
-**20A — Increase TEE EC2 EBS volume:**
-- Current root EBS is too small (~8GB?) — only 614M free after OS + Docker runtime
-- Increase to 20GB so Docker can keep base layers cached between deploys
-- Once disk is large enough, revert the nuclear `/var/lib/docker` wipe back to `docker system prune -af`
-- This alone should cut TEE deploy time significantly (pull only changed layers instead of all ~2GB)
+**20A — Increase EBS volumes + replace nuclear Docker cleanup:** DONE (PR #45)
+- Resized all 4 EC2 EBS volumes from 8GB to 20GB (`aws ec2 modify-volume` + `growpart` / cloud-init auto-grow)
+- Replaced nuclear Docker cleanup (`systemctl stop docker && rm -rf /var/lib/docker/*`) with `docker system prune -af` in `infra/ci-deploy.sh` and `infra/ci-deploy-prover.sh`
+- Docker layer cache now persists between deploys — pulls only changed layers instead of full ~2GB
+- Validated via CI: Remote Prover deploy + e2e (green), TEE deploy + e2e (green)
 
 **20B — Split Docker image into base + app layers:**
 - Create a base image (`tee-rex-base:spartan-YYYYMMDD`) with OS + Bun + `@aztec/*` packages
