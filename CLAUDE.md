@@ -121,7 +121,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 21)
 
 | Phase | Summary |
 |---|---|
@@ -281,23 +281,27 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 
 ---
 
-## Phase 21: Multi-Region Strategy (Research)
+## Phase 21: Multi-Region Strategy (Research) — DONE
 
 **Goal**: Research deploying TEE, prover, and frontend across multiple AWS regions (closest to Argentina + London offices). **Research only — no implementation.**
 
-**Questions to answer:**
-1. Which AWS regions are closest to Buenos Aires and London? (sa-east-1 São Paulo, eu-west-2 London)
-2. Can we build Docker images once (in CI) and push to ECR in multiple regions? (ECR cross-region replication vs multi-push)
-3. How to route users to the nearest region? (CloudFront multi-origin, Route 53 latency-based routing, CloudFront Functions geo-routing)
-4. TEE (Nitro Enclaves) availability per region — are enclaves supported in sa-east-1?
-5. Would Terraform/OpenTofu make sense for managing multi-region infra? (vs. current shell scripts + GitHub Actions)
-6. Cost implications — running 2x EC2 instances, cross-region data transfer
-7. What's the simplest MVP? (e.g., just add sa-east-1 prover + CloudFront latency routing, keep single TEE)
+**Research doc**: `lessons/phase-21-multi-region-research.md`
 
-**Possible outcomes:**
-- A concrete plan with estimated effort and cost
-- Decision on IaC tool (Terraform vs current approach)
-- Phased rollout plan (which component to multi-region first)
+**Key findings:**
+- **Regions**: sa-east-1 (São Paulo, ~30-50ms from Buenos Aires) + eu-west-2 (London, current)
+- **Nitro Enclaves**: Supported in all AWS regions since Oct 2025 — no blockers for sa-east-1
+- **ECR strategy**: Cross-region replication (configure once, push once to eu-west-2, auto-replicates to sa-east-1)
+- **Geo-routing**: CloudFront Function rewrites paths based on `CloudFront-Viewer-Country` header. No custom domain needed. Add sa-east-1 origins as `/prover-sa/*` and `/tee-sa/*` cache behaviors.
+- **IaC**: Keep shell scripts for MVP (1 new region). Adopt **OpenTofu** at 3+ regions — open-source Terraform fork (MPL 2.0), same HCL syntax/providers, `for_each` on providers for clean multi-region configs. Example at `infra/opentofu-example/`.
+- **Cost**: +$160/month (prover-only MVP) to +$360/month (full dual-region). sa-east-1 has ~20-30% premium over eu-west-2.
+- **Simplest MVP**: sa-east-1 prover + CloudFront geo-routing (~$160/month, ~8 hours effort). Prover-first because proving is the slowest operation and biggest UX win.
+
+**Phased rollout (when ready to implement):**
+1. **21A**: ECR cross-region replication (~1 hour)
+2. **21B**: Deploy sa-east-1 prover (~4 hours)
+3. **21C**: CloudFront geo-routing via CF Function (~4 hours)
+4. **21D** *(optional)*: Deploy sa-east-1 TEE (~4 hours)
+5. **21E**: Monitoring + validation (~2 hours)
 
 ---
 
