@@ -110,7 +110,7 @@ jobs:
   publish-sdk:
     name: Publish SDK
     needs: nextnet-check
-    if: startsWith(github.event.head_commit.message, 'chore: update @aztec/')
+    if: "startsWith(github.event.head_commit.message, 'chore: update @aztec/')"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
