@@ -2,6 +2,11 @@
   "name": "@alejoamiras/tee-rex",
   "version": "0.0.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alejoamiras/tee-rex",
+    "directory": "packages/sdk"
+  },
   "exports": "./src/index.ts",
   "publishConfig": {
     "exports": {
