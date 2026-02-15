@@ -6,10 +6,13 @@ import {
   checkTeeRexServer,
   deployTestAccount,
   initializeWallet,
+  PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
   runTokenFlow,
   setUiMode,
   state,
+  TEE_CONFIGURED,
+  TEE_DISPLAY_URL,
   type UiMode,
 } from "./aztec";
 import { $, appendLog, formatDuration, setStatus, startClock } from "./ui";
@@ -22,9 +25,17 @@ startClock();
 
 // ── Service checks ──
 async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
-  const [aztec, teerex] = await Promise.all([checkAztecNode(), checkTeeRexServer()]);
+  const aztec = await checkAztecNode();
   setStatus("aztec-status", aztec);
-  setStatus("teerex-status", teerex);
+
+  let teerex = false;
+  if (PROVER_CONFIGURED) {
+    ($("mode-remote") as HTMLButtonElement).disabled = false;
+    teerex = await checkTeeRexServer();
+    setStatus("teerex-status", teerex);
+    $("teerex-label").textContent = teerex ? "available" : "unavailable";
+  }
+
   return { aztec, teerex };
 }
 
@@ -44,8 +55,6 @@ function updateModeUI(mode: UiMode): void {
   for (const [key, btn] of Object.entries(buttons)) {
     btn.className = key === mode ? ACTIVE_BTN : INACTIVE_BTN;
   }
-
-  $("tee-config").classList.toggle("hidden", mode !== "tee");
 }
 
 $("mode-local").addEventListener("click", () => {
@@ -56,58 +65,17 @@ $("mode-local").addEventListener("click", () => {
 });
 
 $("mode-remote").addEventListener("click", () => {
-  if (deploying) return;
+  if (deploying || ($("mode-remote") as HTMLButtonElement).disabled) return;
   setUiMode("remote");
   updateModeUI("remote");
   appendLog("Switched to remote proving mode");
 });
 
 $("mode-tee").addEventListener("click", () => {
-  if (deploying) return;
+  if (deploying || ($("mode-tee") as HTMLButtonElement).disabled) return;
+  setUiMode("tee");
   updateModeUI("tee");
-  const url = ($("tee-url") as HTMLInputElement).value.trim() || "/tee";
-  setUiMode("tee", url);
-  appendLog(`Switched to TEE proving mode → ${url}`);
-  runTeeCheck(url);
-});
-
-async function runTeeCheck(url: string): Promise<void> {
-  const dot = $("tee-attestation-dot");
-  const label = $("tee-attestation-label");
-  dot.className = "status-dot status-unknown";
-  label.textContent = "attestation: checking...";
-  appendLog(`Checking TEE attestation at ${url}...`);
-
-  const result = await checkTeeAttestation(url);
-  if (result.reachable) {
-    dot.className = `status-dot ${result.mode === "nitro" ? "status-online" : "status-offline"}`;
-    label.textContent = `attestation: ${result.mode ?? "unknown"}`;
-    setUiMode("tee", url);
-    appendLog(
-      `TEE server reachable — mode: ${result.mode}`,
-      result.mode === "nitro" ? "success" : "warn",
-    );
-  } else {
-    dot.className = "status-dot status-offline";
-    label.textContent = "attestation: unreachable";
-    appendLog(`TEE server unreachable at ${url}`, "error");
-  }
-}
-
-$("tee-check-btn").addEventListener("click", () => {
-  const url = ($("tee-url") as HTMLInputElement).value.trim();
-  if (!url) {
-    appendLog("Enter a TEE server URL first", "warn");
-    return;
-  }
-  runTeeCheck(url);
-});
-
-$("tee-url").addEventListener("keydown", (e) => {
-  if ((e as KeyboardEvent).key === "Enter") {
-    const url = ($("tee-url") as HTMLInputElement).value.trim();
-    if (url) runTeeCheck(url);
-  }
+  appendLog("Switched to TEE proving mode");
 });
 
 // ── Shared helpers ──
@@ -211,7 +179,9 @@ $("token-flow-btn").addEventListener("click", async () => {
 // ── Init ──
 async function init(): Promise<void> {
   $("aztec-url").textContent = AZTEC_DISPLAY_URL;
-  $("teerex-url").textContent = PROVER_DISPLAY_URL;
+  if (PROVER_CONFIGURED) {
+    $("teerex-url").textContent = PROVER_DISPLAY_URL;
+  }
 
   appendLog("Checking services...");
   const { aztec, teerex } = await checkServices();
@@ -224,11 +194,31 @@ async function init(): Promise<void> {
     return;
   }
 
-  if (teerex) {
-    setUiMode("remote");
-    updateModeUI("remote");
-  } else {
+  if (PROVER_CONFIGURED && !teerex) {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
+  }
+
+  // Auto-configure TEE when env var is set (display URL + check attestation)
+  if (TEE_CONFIGURED) {
+    $("tee-url").textContent = TEE_DISPLAY_URL;
+    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
+    const attestation = await checkTeeAttestation("/tee");
+    if (attestation.reachable) {
+      setStatus("tee-status", attestation.mode === "nitro");
+      $("tee-attestation-label").textContent =
+        attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
+      if (attestation.mode === "nitro") {
+        ($("mode-tee") as HTMLButtonElement).disabled = false;
+      }
+      appendLog(
+        `TEE attestation: ${attestation.mode ?? "unknown"}`,
+        attestation.mode === "nitro" ? "success" : "warn",
+      );
+    } else {
+      setStatus("tee-status", false);
+      $("tee-attestation-label").textContent = "unreachable";
+      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+    }
   }
 
   appendLog("Initializing wallet...");

@@ -14,7 +14,7 @@ This document outlines the planned improvements for the tee-rex project.
 - **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; spartan: `aztec-spartan.yml`; TEE: `tee.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Aztec version**: 4.0.0-nightly.20260210 (migrating to `spartan` dist-tag)
+- **Aztec version**: 4.0.0-spartan.20260214
 
 ---
 
@@ -130,26 +130,6 @@ bun run build
 
 ---
 
-## Phase 15: TEE Generalization Research
-
-**Goal**: Research whether the tee-rex implementation can be generalized to support other TEE types beyond AWS Nitro Enclaves (e.g., Intel SGX/TDX, AMD SEV, ARM CCA).
-
-**This is research only — no code changes unless the abstraction is clean.**
-
-**Questions to answer:**
-1. What's the common abstraction across TEE types? (attestation format, key provisioning, isolation model)
-2. Where does tee-rex currently hard-code Nitro-specific logic? (NSM device, COSE_Sign1 attestation format, Nitro root CA)
-3. Could we define a `TeeProvider` interface that abstracts: `generateAttestation(publicKey)` + `verifyAttestation(doc)`?
-4. What would SGX/TDX support look like? (DCAP attestation, different certificate chain)
-5. Is the complexity worth it, or is Nitro-only the right scope for this project?
-
-**Possible outcomes:**
-- Define the interface but only implement Nitro (clean extensibility without over-engineering)
-- Keep Nitro-only if the abstraction is too leaky
-- Identify a few quick wins (e.g., make attestation verification pluggable)
-
----
-
 ## Phase 17: Auto-Deploy Pipeline
 
 **Goal**: After the aztec-spartan auto-update PR passes all tests (including deployed prover + TEE), auto-merge and deploy everything to production. Nightly auto-updates keep the live system current with zero manual intervention.
@@ -195,12 +175,72 @@ aztec-spartan.yml detects new version
 | **17D** | `deploy-prod.yml` (push to main → deploy TEE + prover to prod). `_deploy-tee.yml` / `_deploy-prover.yml` parameterized with `environment` + `image_tag` inputs. IAM: `Environment: ["ci", "prod"]`. Prod EC2: TEE `m5.xlarge` + prover `t3.xlarge` with Elastic IPs. Secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID` |
 | **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
 
+**Remaining:**
+
+| Part | Summary |
+|---|---|
+| **17F** | Nextnet E2E testing — run SDK e2e and app fullstack e2e against nextnet (not just local network). Consider adding nextnet to the `test-tee` / `test-remote` CI labels so spartan auto-update PRs also validate against a live network. |
+| **17G** | SDK npm publish — add `publish-sdk` job to `deploy-prod.yml` (npm publish on push to main, version bump strategy TBD). |
+
+---
+
+## Phase 18: Frontend Improvements
+
+**Goal**: Polish the app UX — auto-configure TEE, granular benchmarks, attribution update.
+
+**18A — TEE auto-configuration via env var:**
+- Add `TEE_URL` env var support (like `PROVER_URL` and `AZTEC_NODE_URL`)
+- On init, if `TEE_URL` is set: pre-fill the TEE URL input, auto-run attestation check, mark TEE status in services panel
+- No manual URL input + "Check" button click needed when env is configured
+
+**18B — Granular benchmark UI:**
+- Add sub-step timing to deploy and token flow operations (witness generation, proving, tx send/confirm)
+- Display in a collapsible section under each result card to avoid UI clutter
+- Track: witness gen time, IVC proof time, tx submission time, tx confirmation time
+- Requires instrumenting `aztec.ts` deploy/token flow functions with finer-grained timing
+
+**18C — Attribution update:**
+- Change footer from `tee-rex · nemi.fi` to `tee-rex · inspired by nemi.fi`
+
+---
+
+## Phase 19: Dependency Updates
+
+**Goal**: Update all non-Aztec dependencies to latest versions.
+
+- Use `ncu` (npm-check-updates, already installed) to detect outdated packages
+- **Do NOT update `@aztec/*` packages** — those are managed by the spartan auto-update workflow
+- For each update: check the package's changelog/npm page for breaking changes
+- Run full test suite (`bun run test` + `bun run test:e2e`) after each batch of updates
+- Batch by risk: patch updates first, then minor, then major (one at a time for majors)
+
+---
+
+## Phase 20: Multi-Region Strategy (Research)
+
+**Goal**: Research deploying TEE, prover, and frontend across multiple AWS regions (closest to Argentina + London offices). **Research only — no implementation.**
+
+**Questions to answer:**
+1. Which AWS regions are closest to Buenos Aires and London? (sa-east-1 São Paulo, eu-west-2 London)
+2. Can we build Docker images once (in CI) and push to ECR in multiple regions? (ECR cross-region replication vs multi-push)
+3. How to route users to the nearest region? (CloudFront multi-origin, Route 53 latency-based routing, CloudFront Functions geo-routing)
+4. TEE (Nitro Enclaves) availability per region — are enclaves supported in sa-east-1?
+5. Would Terraform/OpenTofu make sense for managing multi-region infra? (vs. current shell scripts + GitHub Actions)
+6. Cost implications — running 2x EC2 instances, cross-region data transfer
+7. What's the simplest MVP? (e.g., just add sa-east-1 prover + CloudFront latency routing, keep single TEE)
+
+**Possible outcomes:**
+- A concrete plan with estimated effort and cost
+- Decision on IaC tool (Terraform vs current approach)
+- Phased rollout plan (which component to multi-region first)
+
 ---
 
 ## Backlog
 
-- Phase 6 (next-net testing) absorbed into Phase 12B/12C
+- Phase 6 (next-net testing) absorbed into Phase 12B/12C, further work in Phase 17F
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
+- Phase 15 TEE generalization research (TeeProvider interface) — tackle after core features stabilize
 - ~~**IAM trust policy audit**~~ ✅ Done — tightened `tee-rex-ci-trust-policy.json` from `refs/heads/*` to `refs/heads/main` + `refs/heads/chore/aztec-spartan-*` + `pull_request`. **Note**: apply the updated policy to AWS with `aws iam update-assume-role-policy --role-name tee-rex-ci-github --policy-document file://infra/iam/tee-rex-ci-trust-policy.json`
 
 ---
