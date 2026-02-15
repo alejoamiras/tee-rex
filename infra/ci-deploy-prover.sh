@@ -37,7 +37,7 @@ docker run -d \
 
 # ── 4. Health check ──────────────────────────────────────────────
 echo "=== Health check ==="
-for i in $(seq 1 60); do
+for i in $(seq 1 120); do
   if curl -sf http://localhost:80/attestation > /dev/null 2>&1; then
     echo "Prover healthy (attempt ${i})"
     curl -s http://localhost:80/attestation | jq '{mode}'
@@ -47,5 +47,5 @@ for i in $(seq 1 60); do
   sleep 5
 done
 
-echo "ERROR: Health check failed after 5 minutes"
+echo "ERROR: Health check failed after 10 minutes"
 exit 1

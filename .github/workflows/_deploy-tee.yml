@@ -27,7 +27,7 @@ jobs:
   deploy:
     name: Deploy TEE Enclave
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       id-token: write
       contents: read
@@ -106,7 +106,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
-            --timeout-seconds 600 \
+            --timeout-seconds 900 \
             --parameters "commands=[
               \"echo '${SCRIPT_B64}' | base64 -d > /tmp/ci-deploy.sh\",
               \"chmod +x /tmp/ci-deploy.sh\",
