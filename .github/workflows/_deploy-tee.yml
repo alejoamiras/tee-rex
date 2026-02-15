@@ -76,10 +76,11 @@ jobs:
 
           echo "Waiting for instance to be running..."
           aws ec2 wait instance-running --instance-ids "${INSTANCE_ID}"
+          echo "Instance running"
 
-          # Wait for SSM agent to come online
+          # Wait for SSM agent to come online (up to 10 min)
           echo "Waiting for SSM agent..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             STATUS=$(aws ssm describe-instance-information \
               --filters "Key=InstanceIds,Values=${INSTANCE_ID}" \
               --query 'InstanceInformationList[0].PingStatus' \
@@ -88,8 +89,10 @@ jobs:
               echo "SSM agent online (attempt $i)"
               break
             fi
-            if [ "$i" = "30" ]; then
-              echo "SSM agent not online after 5 minutes"
+            if [ "$i" = "60" ]; then
+              echo "SSM agent not online after 10 minutes"
+              aws ec2 describe-instances --instance-ids "${INSTANCE_ID}" \
+                --query 'Reservations[0].Instances[0].{State:State.Name,Launch:LaunchTime}' || true
               exit 1
             fi
             sleep 10

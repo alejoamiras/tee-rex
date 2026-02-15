@@ -38,7 +38,10 @@
     {
       "Sid": "EC2Describe",
       "Effect": "Allow",
-      "Action": "ec2:DescribeInstances",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceStatus"
+      ],
       "Resource": "*"
     },
     {
