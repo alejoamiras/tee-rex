@@ -230,19 +230,51 @@ aztec-spartan.yml detects new version
 
 ---
 
-## Phase 19: Dependency Updates
+## Phase 19: Dependency Updates — DONE (PR #38)
 
-**Goal**: Update all non-Aztec dependencies to latest versions.
-
-- Use `ncu` (npm-check-updates, already installed) to detect outdated packages
-- **Do NOT update `@aztec/*` packages** — those are managed by the spartan auto-update workflow
-- For each update: check the package's changelog/npm page for breaking changes
-- Run full test suite (`bun run test` + `bun run test:e2e`) after each batch of updates
-- Batch by risk: patch updates first, then minor, then major (one at a time for majors)
+Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 incompatible with `@aztec/stdlib` Zod 3 schemas).
 
 ---
 
-## Phase 20: Multi-Region Strategy (Research)
+## Phase 20: Deploy Pipeline Optimization
+
+**Goal**: Speed up the deploy-prod pipeline and eliminate disk space fragility on EC2 instances.
+
+**Current state**: Deploy scripts wipe `/var/lib/docker` entirely on every deploy because the EBS volumes are too small to keep cached layers. This forces a full image pull (~2GB) every time and makes deploys slow.
+
+**20A — Increase TEE EC2 EBS volume:**
+- Current root EBS is too small (~8GB?) — only 614M free after OS + Docker runtime
+- Increase to 20GB so Docker can keep base layers cached between deploys
+- Once disk is large enough, revert the nuclear `/var/lib/docker` wipe back to `docker system prune -af`
+- This alone should cut TEE deploy time significantly (pull only changed layers instead of all ~2GB)
+
+**20B — Split Docker image into base + app layers:**
+- Create a base image (`tee-rex-base:spartan-YYYYMMDD`) with OS + Bun + `@aztec/*` packages
+- App image (`tee-rex:prod`) uses `FROM tee-rex-base` + app code only
+- Base image rebuilt only on Aztec version bumps (spartan auto-update)
+- Most deploys would pull only the thin app layer (~MBs, not GBs)
+- Works well even on small disks since the base image rarely changes
+
+**20C — Early health check endpoint:**
+- Server currently takes 5-10 minutes to respond to `/attestation` on cold boot (Aztec initialization)
+- Add a lightweight `/healthz` endpoint that responds `200` as soon as Express is listening
+- Use `/healthz` for the deploy health check (confirms container is running)
+- Keep `/attestation` for readiness checks (confirms Aztec is fully initialized)
+- Would reduce perceived deploy time and avoid false timeout failures
+
+**20D — ECR registry cache for Docker builds:**
+- Current: `cache-from: type=gha` / `cache-to: type=gha` — GitHub Actions cache has 10GB limit and can evict
+- Switch to ECR as cache source: `cache-from: type=registry,ref=<ECR>/tee-rex:cache`
+- More reliable, no size limit beyond ECR storage, faster for large images
+
+**20E — Pre-build EIF in CI (research):**
+- Currently: CI builds Docker → pushes to ECR → EC2 pulls → EC2 builds EIF → EC2 runs enclave
+- If EIF could be built in CI and uploaded to S3, EC2 would skip pull + EIF build entirely
+- Constraint: `nitro-cli build-enclave` requires a Nitro-capable instance — investigate if a CI SSM step could do this, or if there's an alternative approach
+
+---
+
+## Phase 21: Multi-Region Strategy (Research)
 
 **Goal**: Research deploying TEE, prover, and frontend across multiple AWS regions (closest to Argentina + London offices). **Research only — no implementation.**
 
