@@ -103,6 +103,9 @@ bun run lint:fix
 # Run e2e tests (requires Aztec local network + tee-rex server)
 bun run test:e2e
 
+# Run nextnet smoke test (requires internet)
+bun run test:e2e:nextnet
+
 # Run all tests (lint + typecheck + unit + e2e)
 bun run test:all
 
@@ -118,7 +121,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 18A–B)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19)
 
 | Phase | Summary |
 |---|---|
@@ -139,13 +142,18 @@ bun run build
 | **14** | SDK e2e restructure — single `proving.test.ts` with nested describes, TEE `describe.skipIf`, mode-switching tests |
 | **16** | `PROVER_URL` abstraction (like `AZTEC_NODE_URL`) — configurable everywhere, Vite proxy, CI inputs |
 | **18A** | Optional remote/TEE modes via env vars. `PROVER_CONFIGURED` / `TEE_CONFIGURED` feature flags (from `PROVER_URL` / `TEE_URL` at build time). Buttons start disabled in HTML, JS enables when configured. `/prover` and `/tee` Vite proxies conditional. Service panel labels: "not configured" / "available" / "unavailable" / "attested". Fullstack e2e skip guards for remote/TEE. `deploy-prod.yml` passes `TEE_URL` to app build. |
+| **18B** | Granular benchmark UI — `NO_WAIT` + `waitForTx()` polling for prove+send/confirm sub-timings |
+| **18C** | Attribution update — footer changed to "inspired by nemi.fi" |
+| **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 
 **Key architectural decisions (from completed phases):**
 - CI gate job pattern: workflows always trigger on PRs, `changes` job detects relevant files via `gh pr diff`, gate jobs (`SDK/App/Server Status`) always run. Ruleset: `infra/rulesets/main-branch-protection.json`
 - AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. Setup: `infra/iam/README.md`
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
-- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`
+- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
+- SDK e2e tests are network-agnostic: always use Sponsored FPC + `from: AztecAddress.ZERO` (no `registerInitialLocalNetworkAccountsInWallet`)
+- CI test workflows (`sdk.yml`, `app.yml`, `server.yml`) only trigger on PRs + manual dispatch — no push-to-main triggers (deploy-prod.yml handles post-merge)
 - App e2e: Playwright with `mocked` + `fullstack` projects. Mocked tests set `PROVER_URL` via playwright.config env so `PROVER_CONFIGURED=true`. Fullstack tests skip remote/TEE describes when their env vars are not set.
 - Env-var-driven feature flags: `PROVER_CONFIGURED = !!process.env.PROVER_URL`, `TEE_CONFIGURED = !!process.env.TEE_URL`. Buttons start `disabled` in HTML; JS enables them when configured + reachable/attested. Service row labels default to "not configured" in HTML.
 
@@ -195,13 +203,8 @@ aztec-spartan.yml detects new version
 | **17C** | Spartan workflow adds `test-tee` + `test-remote` labels to auto PRs |
 | **17D** | `deploy-prod.yml` (push to main → deploy TEE + prover to prod). `_deploy-tee.yml` / `_deploy-prover.yml` parameterized with `environment` + `image_tag` inputs. IAM: `Environment: ["ci", "prod"]`. Prod EC2: TEE `m5.xlarge` + prover `t3.xlarge` with Elastic IPs. Secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID` |
 | **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
-
-**Remaining:**
-
-| Part | Summary |
-|---|---|
-| **17F** | Nextnet E2E testing — run SDK e2e and app fullstack e2e against nextnet (not just local network). Consider adding nextnet to the `test-tee` / `test-remote` CI labels so spartan auto-update PRs also validate against a live network. |
-| **17G** | SDK npm publish — add `publish-sdk` job to `deploy-prod.yml` (npm publish on push to main, version bump strategy TBD). |
+| **17F** | Nextnet connectivity smoke test (`nextnet.test.ts`) + `nextnet-check` job in `deploy-prod.yml` as pre-publish gate. `validate-prod` job runs app fullstack e2e against nextnet after all deploys complete (SSM tunnels to prod TEE + prover). |
+| **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on spartan auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag spartan` + `--provenance`, creates git tag + GitHub release. Gated by `nextnet-check`. Uses OIDC trusted publishing (no `NPM_TOKEN`). Configure at: `https://www.npmjs.com/package/@alejoamiras/tee-rex/access`. |
 
 ---
 
@@ -227,8 +230,8 @@ aztec-spartan.yml detects new version
 - For token deploy, uses `TokenContract.at()` after confirm (address deterministic from simulate)
 - UI renders "prove + send" and "confirm" sub-rows alongside existing simulation details in step breakdown
 
-**18C — Attribution update:**
-- Change footer from `tee-rex · nemi.fi` to `tee-rex · inspired by nemi.fi`
+**18C — Attribution update:** DONE
+- Changed footer from `tee-rex · nemi.fi` to `tee-rex · inspired by nemi.fi`
 
 ---
 

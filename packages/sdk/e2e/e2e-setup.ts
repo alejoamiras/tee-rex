@@ -42,16 +42,24 @@ export const config = {
   teeUrl: process.env.TEE_URL || "",
 };
 
+/** True when pointing at a local sandbox (default). */
+export const isLocalNetwork =
+  config.nodeUrl.includes("localhost") || config.nodeUrl.includes("127.0.0.1");
+
 // Assert services are available — fail fast with a clear message
 async function assertServicesAvailable(): Promise<void> {
-  const [aztecOk, teeRexOk] = await Promise.all([
-    fetch(`${config.nodeUrl}/status`, { signal: AbortSignal.timeout(5000) })
-      .then((r) => r.ok)
-      .catch(() => false),
-    fetch(`${config.proverUrl}/encryption-public-key`, { signal: AbortSignal.timeout(5000) })
-      .then((r) => r.ok)
-      .catch(() => false),
-  ]);
+  const aztecOk = await fetch(`${config.nodeUrl}/status`, { signal: AbortSignal.timeout(5000) })
+    .then((r) => r.ok)
+    .catch(() => false);
+
+  // Only check prover when running against local network (it's co-located)
+  const teeRexOk = isLocalNetwork
+    ? await fetch(`${config.proverUrl}/encryption-public-key`, {
+        signal: AbortSignal.timeout(5000),
+      })
+        .then((r) => r.ok)
+        .catch(() => false)
+    : true;
 
   if (!aztecOk || !teeRexOk) {
     throw new Error(

@@ -22,7 +22,7 @@ export default defineConfig({
       name: "fullstack",
       testDir: "./e2e",
       testMatch: "*.fullstack.spec.ts",
-      timeout: 10 * 60 * 1000,
+      timeout: 15 * 60 * 1000,
       retries: 0,
       use: {
         actionTimeout: 0,

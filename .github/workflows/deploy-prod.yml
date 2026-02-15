@@ -17,7 +17,7 @@ concurrency:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   # ── Deploy TEE enclave to production ─────────────────────────────
@@ -79,3 +79,178 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.PROD_CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/index.html"
+
+  # ── Nextnet connectivity check (gates SDK publish) ───────────────
+  nextnet-check:
+    name: Nextnet Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run nextnet smoke tests
+        run: bun run test:e2e:nextnet
+
+  # ── Publish SDK to npm (spartan auto-update merges only) ─────────
+  # Uses OIDC trusted publishing — no NPM_TOKEN needed.
+  # Configure at: https://www.npmjs.com/package/@alejoamiras/tee-rex/access
+  publish-sdk:
+    name: Publish SDK
+    needs: nextnet-check
+    if: startsWith(github.event.head_commit.message, 'chore: update @aztec/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build SDK
+        run: bun run sdk:build
+
+      - name: Read Aztec version
+        id: aztec-version
+        working-directory: packages/sdk
+        run: |
+          VERSION=$(node -p "require('./package.json').dependencies['@aztec/stdlib']")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Aztec version: $VERSION"
+
+      - name: Set SDK version
+        working-directory: packages/sdk
+        run: npm version ${{ steps.aztec-version.outputs.version }} --no-git-tag-version
+
+      - name: Publish to npm (OIDC trusted publishing)
+        working-directory: packages/sdk
+        run: npm publish --provenance --access public --tag spartan
+
+      - name: Create git tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.aztec-version.outputs.version }}"
+          TAG="@alejoamiras/tee-rex@${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Aligned with Aztec spartan version \`${VERSION}\`." \
+            --latest
+
+  # ── Post-deploy validation against nextnet ───────────────────────
+  validate-prod:
+    name: Validate Prod (nextnet)
+    needs: [deploy-tee, deploy-prover, deploy-app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install SSM plugin
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Start SSM tunnel to prod prover
+        run: |
+          aws ssm start-session \
+            --target "${{ secrets.PROD_PROVER_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+
+          echo "Waiting for prover SSM tunnel..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4002/attestation > /dev/null 2>&1; then
+              echo "Prover SSM tunnel ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Prover SSM tunnel failed to connect after 60s"
+          exit 1
+
+      - name: Start SSM tunnel to prod TEE
+        run: |
+          aws ssm start-session \
+            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+
+          echo "Waiting for TEE SSM tunnel..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4001/attestation > /dev/null 2>&1; then
+              echo "TEE SSM tunnel ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "TEE SSM tunnel failed to connect after 60s"
+          exit 1
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run app fullstack E2E against nextnet
+        env:
+          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          PROVER_URL: http://localhost:4002
+          TEE_URL: http://localhost:4001
+        run: bun run --cwd packages/app test:e2e:fullstack
