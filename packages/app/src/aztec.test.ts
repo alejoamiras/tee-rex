@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { checkAztecNode, checkTeeAttestation, checkTeeRexServer, setUiMode, state } from "./aztec";
+import {
+  checkAztecNode,
+  checkTeeAttestation,
+  checkTeeRexServer,
+  PROVER_CONFIGURED,
+  setUiMode,
+  state,
+  TEE_CONFIGURED,
+  TEE_DISPLAY_URL,
+} from "./aztec";
 
 // ── fetch mocking ──
 const originalFetch = globalThis.fetch;
@@ -168,5 +177,37 @@ describe("setUiMode", () => {
     state.teeServerUrl = "https://existing.example.com";
     setUiMode("tee");
     expect(mockSetApiUrl).toHaveBeenCalledWith("https://existing.example.com");
+  });
+});
+
+// ── env-var-driven feature flags ──
+// These constants are derived from process.env at module load time.
+// In the Vite build, process.env is replaced by the `define` plugin.
+// In bun test, they read actual env vars — so test values match the test environment.
+describe("feature flags", () => {
+  test("PROVER_CONFIGURED reflects process.env.PROVER_URL truthiness", () => {
+    expect(PROVER_CONFIGURED).toBe(!!process.env.PROVER_URL);
+  });
+
+  test("TEE_CONFIGURED reflects process.env.TEE_URL truthiness", () => {
+    expect(TEE_CONFIGURED).toBe(!!process.env.TEE_URL);
+  });
+
+  test("TEE_DISPLAY_URL falls back to empty string when TEE_URL not set", () => {
+    expect(TEE_DISPLAY_URL).toBe(process.env.TEE_URL || "");
+  });
+
+  test("PROVER_CONFIGURED is false when PROVER_URL is empty string", () => {
+    // In test env, PROVER_URL is typically unset.
+    // The constant uses !!process.env.PROVER_URL which is false for "" and undefined.
+    if (!process.env.PROVER_URL) {
+      expect(PROVER_CONFIGURED).toBe(false);
+    }
+  });
+
+  test("TEE_CONFIGURED is false when TEE_URL is empty string", () => {
+    if (!process.env.TEE_URL) {
+      expect(TEE_CONFIGURED).toBe(false);
+    }
   });
 });

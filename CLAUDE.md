@@ -99,7 +99,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16)
+## Completed Phases (1–14, 16, 18A)
 
 | Phase | Summary |
 |---|---|
@@ -119,6 +119,7 @@ bun run build
 | **13** | OpenPGP encryption review — keep everywhere, upgraded to curve25519 + AES-256-GCM (SEIPDv2) |
 | **14** | SDK e2e restructure — single `proving.test.ts` with nested describes, TEE `describe.skipIf`, mode-switching tests |
 | **16** | `PROVER_URL` abstraction (like `AZTEC_NODE_URL`) — configurable everywhere, Vite proxy, CI inputs |
+| **18A** | Optional remote/TEE modes via env vars. `PROVER_CONFIGURED` / `TEE_CONFIGURED` feature flags (from `PROVER_URL` / `TEE_URL` at build time). Buttons start disabled in HTML, JS enables when configured. `/prover` and `/tee` Vite proxies conditional. Service panel labels: "not configured" / "available" / "unavailable" / "attested". Fullstack e2e skip guards for remote/TEE. `deploy-prod.yml` passes `TEE_URL` to app build. |
 
 **Key architectural decisions (from completed phases):**
 - CI gate job pattern: workflows always trigger on PRs, `changes` job detects relevant files via `gh pr diff`, gate jobs (`SDK/App/Server Status`) always run. Ruleset: `infra/rulesets/main-branch-protection.json`
@@ -126,7 +127,8 @@ bun run build
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
 - SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`
-- App e2e: Playwright with `mocked` + `fullstack` projects
+- App e2e: Playwright with `mocked` + `fullstack` projects. Mocked tests set `PROVER_URL` via playwright.config env so `PROVER_CONFIGURED=true`. Fullstack tests skip remote/TEE describes when their env vars are not set.
+- Env-var-driven feature flags: `PROVER_CONFIGURED = !!process.env.PROVER_URL`, `TEE_CONFIGURED = !!process.env.TEE_URL`. Buttons start `disabled` in HTML; JS enables them when configured + reachable/attested. Service row labels default to "not configured" in HTML.
 
 ---
 
@@ -188,10 +190,15 @@ aztec-spartan.yml detects new version
 
 **Goal**: Polish the app UX — auto-configure TEE, granular benchmarks, attribution update.
 
-**18A — TEE auto-configuration via env var:**
-- Add `TEE_URL` env var support (like `PROVER_URL` and `AZTEC_NODE_URL`)
-- On init, if `TEE_URL` is set: pre-fill the TEE URL input, auto-run attestation check, mark TEE status in services panel
-- No manual URL input + "Check" button click needed when env is configured
+**18A — Optional remote/TEE via env vars:** DONE (PR #31)
+- `PROVER_URL` and `TEE_URL` env vars control whether remote/TEE modes are available
+- `PROVER_CONFIGURED` / `TEE_CONFIGURED` boolean exports in `aztec.ts`
+- Buttons start `disabled` in HTML; `main.ts` enables when configured (remote) or configured+attested (TEE)
+- `/prover` and `/tee` Vite proxies only created when env vars are set
+- Service panel rows: "not configured" (default) / "available" / "unavailable" / "attested" / "unreachable"
+- Removed TEE manual URL input + Check button — TEE auto-configures from env
+- `deploy-prod.yml` passes `TEE_URL` to app build
+- Fullstack e2e skip guards: remote tests skip when `PROVER_URL` not set
 
 **18B — Granular benchmark UI:**
 - Add sub-step timing to deploy and token flow operations (witness generation, proving, tx send/confirm)
