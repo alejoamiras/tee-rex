@@ -105,16 +105,26 @@ jobs:
         run: bun run test:e2e:nextnet
 
   # ── Publish SDK to npm (spartan auto-update merges only) ─────────
+  # Uses OIDC trusted publishing — no NPM_TOKEN needed.
+  # Configure at: https://www.npmjs.com/package/@alejoamiras/tee-rex/access
   publish-sdk:
     name: Publish SDK
     needs: nextnet-check
     if: startsWith(github.event.head_commit.message, 'chore: update @aztec/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -144,11 +154,9 @@ jobs:
         working-directory: packages/sdk
         run: npm version ${{ steps.aztec-version.outputs.version }} --no-git-tag-version
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC trusted publishing)
         working-directory: packages/sdk
-        run: npm publish --access public --tag spartan
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public --tag spartan
 
       - name: Create git tag and GitHub release
         env:
