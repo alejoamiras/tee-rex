@@ -28,7 +28,9 @@ echo "=== Tearing down existing enclave ==="
 sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
 pkill socat 2>/dev/null || true
 rm -f "${EIF_PATH}"
+rm -rf /tmp/nitro-artifacts 2>/dev/null || true
 docker system prune -af --volumes 2>/dev/null || true
+echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
 # ── 2. Pull Docker image ──────────────────────────────────────────
 echo "=== Pulling image ==="
