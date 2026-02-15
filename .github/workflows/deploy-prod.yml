@@ -110,7 +110,7 @@ jobs:
   publish-sdk:
     name: Publish SDK
     needs: nextnet-check
-    if: "startsWith(github.event.head_commit.message, 'chore: update @aztec/')"
+    if: "github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/')"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
