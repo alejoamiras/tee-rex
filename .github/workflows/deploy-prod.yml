@@ -3,6 +3,12 @@ name: Deploy Production
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "lessons/**"
+      - "**/e2e/**"
+      - "**/*.test.ts"
+      - "**/playwright.config.ts"
   workflow_dispatch:
 
 concurrency:
