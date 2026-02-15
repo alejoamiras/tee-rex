@@ -261,29 +261,48 @@ export async function checkTeeAttestation(
   }
 }
 
-export interface DeployResult {
-  address: string;
-  durationMs: number;
-  mode: UiMode;
+export interface SimStepDetail {
+  syncMs: number;
+  totalMs: number;
+  perFunction: { name: string; ms: number }[];
 }
 
-export interface TokenFlowStepTiming {
+export interface StepTiming {
   step: string;
   durationMs: number;
+  simulation?: SimStepDetail;
+}
+
+export interface DeployResult {
+  address: string;
+  steps: StepTiming[];
+  totalDurationMs: number;
+  mode: UiMode;
 }
 
 export interface TokenFlowResult {
   mode: UiMode;
-  steps: TokenFlowStepTiming[];
+  steps: StepTiming[];
   totalDurationMs: number;
   aliceBalance: bigint;
   bobBalance: bigint;
   tokenAddress: string;
 }
 
+/** Extract our SimStepDetail from a simulate() result with includeMetadata: true. */
+function extractSimDetail(simResult: { stats: { timings: any } }): SimStepDetail {
+  const t = simResult.stats.timings;
+  return {
+    syncMs: t.sync,
+    totalMs: t.total,
+    perFunction: (t.perFunction ?? []).map((f: any) => ({ name: f.functionName, ms: f.time })),
+  };
+}
+
 export async function deployTestAccount(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
+  onStep: (stepName: string) => void,
 ): Promise<DeployResult> {
   if (!state.wallet) {
     throw new Error("Wallet not initialized");
@@ -293,38 +312,75 @@ export async function deployTestAccount(
   }
 
   const mode = state.uiMode;
-  log(`Creating Schnorr account [${mode}]...`);
-
-  const secret = Fr.random();
-  const salt = Fr.random();
-  const accountManager = await state.wallet.createSchnorrAccount(secret, salt);
-  log(`Account: ${accountManager.address.toString().slice(0, 20)}...`);
-
-  log(`Deploying [${mode} proving]...`);
-  const startTime = Date.now();
+  const steps: StepTiming[] = [];
+  const totalStart = Date.now();
 
   const interval = setInterval(() => {
-    onTick(Date.now() - startTime);
+    onTick(Date.now() - totalStart);
   }, 100);
 
   try {
+    // Step 1: Create account
+    onStep(`creating account [${mode}]`);
+    log(`Creating Schnorr account [${mode}]...`);
+    let stepStart = Date.now();
+
+    const secret = Fr.random();
+    const salt = Fr.random();
+    const accountManager = await state.wallet.createSchnorrAccount(secret, salt);
     const deployMethod = await accountManager.getDeployMethod();
-    const deployed = await deployMethod.send({
+
+    steps.push({ step: "create account", durationMs: Date.now() - stepStart });
+    log(`Account: ${accountManager.address.toString().slice(0, 20)}...`);
+
+    const sendOpts = {
       from: state.proofsRequired ? AztecAddress.ZERO : state.registeredAddresses[0],
       skipClassPublication: true,
       fee: { paymentMethod: state.feePaymentMethod! },
+    };
+
+    // Step 2: Simulate (captures witness gen timing)
+    // Simulate may fail with AztecAddress.ZERO (first deploy on live networks)
+    onStep(`simulating deploy [${mode}]`);
+    log(`Simulating deploy [${mode}]...`);
+    stepStart = Date.now();
+
+    let simDetail: SimStepDetail | undefined;
+    try {
+      const simResult = await deployMethod.simulate({ ...sendOpts, includeMetadata: true });
+      simDetail = extractSimDetail(simResult);
+    } catch {
+      log("Simulation stats unavailable (first deploy)", "warn");
+    }
+
+    steps.push({
+      step: "simulate",
+      durationMs: Date.now() - stepStart,
+      simulation: simDetail,
     });
 
-    const durationMs = Date.now() - startTime;
+    // Step 3: Prove + send
+    onStep(`proving + sending [${mode}]`);
+    log(`Deploying [${mode} proving]...`);
+    stepStart = Date.now();
+
+    const deployed = await deployMethod.send(sendOpts);
+
+    steps.push({ step: "prove + send", durationMs: Date.now() - stepStart });
+
+    const totalDurationMs = Date.now() - totalStart;
     const address = deployed.address?.toString() ?? "unknown";
-    log(`Deployed in ${(durationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`, "success");
+    log(
+      `Deployed in ${(totalDurationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`,
+      "success",
+    );
 
     // On live networks, store the deployed address for use in subsequent operations
     if (state.proofsRequired) {
       state.registeredAddresses.push(accountManager.address);
     }
 
-    return { address, durationMs, mode };
+    return { address, steps, totalDurationMs, mode };
   } finally {
     clearInterval(interval);
   }
@@ -342,7 +398,7 @@ export async function runTokenFlow(
   const mode = state.uiMode;
   const alice = state.registeredAddresses[0];
   const fee = { paymentMethod: state.feePaymentMethod! };
-  const steps: TokenFlowStepTiming[] = [];
+  const steps: StepTiming[] = [];
   const totalStart = Date.now();
 
   const interval = setInterval(() => {
@@ -361,16 +417,18 @@ export async function runTokenFlow(
 
       const bobManager = await state.wallet.createSchnorrAccount(Fr.random(), Fr.random());
       const bobDeploy = await bobManager.getDeployMethod();
-      await bobDeploy.send({
-        from: AztecAddress.ZERO,
-        skipClassPublication: true,
-        fee,
-      });
+      const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
+      const bobSim = await bobDeploy.simulate({ ...bobSendOpts, includeMetadata: true });
+      await bobDeploy.send(bobSendOpts);
       bob = bobManager.address;
       state.registeredAddresses.push(bob);
 
       const stepDuration = Date.now() - stepStart;
-      steps.push({ step: "deploy bob", durationMs: stepDuration });
+      steps.push({
+        step: "deploy bob",
+        durationMs: stepDuration,
+        simulation: extractSimDetail(bobSim),
+      });
       log(`Bob deployed in ${(stepDuration / 1000).toFixed(1)}s`, "success");
     }
 
@@ -379,13 +437,16 @@ export async function runTokenFlow(
     log(`Deploying TokenContract (admin=Alice) [${mode}]...`);
     let stepStart = Date.now();
 
-    const token = await TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18).send({
-      from: alice,
-      fee,
-    });
+    const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
+    const tokenSim = await tokenDeploy.simulate({ from: alice, fee, includeMetadata: true });
+    const token = await tokenDeploy.send({ from: alice, fee });
 
     let stepDuration = Date.now() - stepStart;
-    steps.push({ step: "deploy token", durationMs: stepDuration });
+    steps.push({
+      step: "deploy token",
+      durationMs: stepDuration,
+      simulation: extractSimDetail(tokenSim),
+    });
     log(
       `Token deployed in ${(stepDuration / 1000).toFixed(1)}s — ${token.address.toString().slice(0, 20)}...`,
       "success",
@@ -396,10 +457,16 @@ export async function runTokenFlow(
     log(`Minting 1000 TREX to Alice [${mode}]...`);
     stepStart = Date.now();
 
-    await token.methods.mint_to_private(alice, 1000n).send({ from: alice, fee });
+    const mintCall = token.methods.mint_to_private(alice, 1000n);
+    const mintSim = await mintCall.simulate({ from: alice, fee, includeMetadata: true });
+    await mintCall.send({ from: alice, fee });
 
     stepDuration = Date.now() - stepStart;
-    steps.push({ step: "mint to private", durationMs: stepDuration });
+    steps.push({
+      step: "mint to private",
+      durationMs: stepDuration,
+      simulation: extractSimDetail(mintSim),
+    });
     log(`Minted in ${(stepDuration / 1000).toFixed(1)}s`, "success");
 
     // Step 3: Transfer 500 TREX Alice → Bob (private)
@@ -407,10 +474,16 @@ export async function runTokenFlow(
     log(`Transferring 500 TREX Alice → Bob [${mode}]...`);
     stepStart = Date.now();
 
-    await token.methods.transfer(bob, 500n).send({ from: alice, fee });
+    const transferCall = token.methods.transfer(bob, 500n);
+    const transferSim = await transferCall.simulate({ from: alice, fee, includeMetadata: true });
+    await transferCall.send({ from: alice, fee });
 
     stepDuration = Date.now() - stepStart;
-    steps.push({ step: "private transfer", durationMs: stepDuration });
+    steps.push({
+      step: "private transfer",
+      durationMs: stepDuration,
+      simulation: extractSimDetail(transferSim),
+    });
     log(`Transferred in ${(stepDuration / 1000).toFixed(1)}s`, "success");
 
     // Step 4: Check balances (simulate, no proof needed)

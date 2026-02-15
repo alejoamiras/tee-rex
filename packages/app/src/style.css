@@ -98,3 +98,52 @@
 .log-success {
   @apply text-emerald-500/80;
 }
+
+/* ── Step breakdown details/summary ── */
+.result-filled details summary {
+  list-style: none;
+  cursor: pointer;
+  @apply text-[10px] text-gray-500 uppercase tracking-wider;
+}
+
+.result-filled details summary::-webkit-details-marker {
+  display: none;
+}
+
+.result-filled details summary::before {
+  content: "\25B8 ";
+}
+
+.result-filled details[open] summary::before {
+  content: "\25BE ";
+}
+
+/* ── Step rows with dot leaders ── */
+.step-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  @apply text-[10px];
+}
+
+.step-dots {
+  flex: 1;
+  border-bottom: 1px dotted var(--color-gray-800);
+  min-width: 8px;
+  margin-bottom: 3px;
+}
+
+.step-sim {
+  @apply pl-3 mt-0.5 space-y-px;
+}
+
+.step-sim-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  @apply text-[9px] text-gray-700;
+}
+
+.step-sim-row .step-dots {
+  border-bottom-color: var(--color-gray-900);
+}
