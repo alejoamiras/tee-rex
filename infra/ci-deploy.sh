@@ -29,9 +29,14 @@ sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
 pkill socat 2>/dev/null || true
 rm -f "${EIF_PATH}"
 rm -rf /tmp/nitro-artifacts 2>/dev/null || true
-# Remove all Docker images explicitly — tagged images survive `docker system prune`
+# Nuclear Docker cleanup: stop daemon, wipe all data, restart.
+# docker system prune doesn't reclaim overlay2 layers reliably on small disks.
 docker rmi -f $(docker images -aq) 2>/dev/null || true
-docker system prune -af --volumes 2>/dev/null || true
+systemctl stop docker 2>/dev/null || true
+rm -rf /var/lib/docker/*
+systemctl start docker
+# Also clean system logs that accumulate over time
+journalctl --vacuum-size=50M 2>/dev/null || true
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
 # ── 2. Pull Docker image ──────────────────────────────────────────
