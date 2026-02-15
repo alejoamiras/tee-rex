@@ -64,7 +64,7 @@ disown
 
 # ── 6. Health check ───────────────────────────────────────────────
 echo "=== Health check ==="
-for i in $(seq 1 60); do
+for i in $(seq 1 120); do
   if curl -sf http://localhost:4000/attestation > /dev/null 2>&1; then
     echo "Enclave healthy (attempt ${i})"
     curl -s http://localhost:4000/attestation | jq '{mode, hasDoc: (.attestationDocument != null)}'
@@ -74,5 +74,5 @@ for i in $(seq 1 60); do
   sleep 5
 done
 
-echo "ERROR: Health check failed after 5 minutes"
+echo "ERROR: Health check failed after 10 minutes"
 exit 1
