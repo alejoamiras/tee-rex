@@ -34,7 +34,7 @@ jobs:
     secrets: inherit
     with:
       environment: prod
-      image_tag: prod
+      image_tag: prod-tee
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── Deploy prover container to production ────────────────────────
@@ -45,7 +45,7 @@ jobs:
     secrets: inherit
     with:
       environment: prod
-      image_tag: prod
+      image_tag: prod-prover
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
