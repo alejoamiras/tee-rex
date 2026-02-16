@@ -11,28 +11,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      relevant: ${{ steps.filter.outputs.relevant }}
+      relevant: ${{ steps.override.outputs.relevant || steps.filter.outputs.relevant }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check paths
+      - uses: dorny/paths-filter@v3
         id: filter
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Dispatch events — always relevant
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          PATHS="packages/sdk/ tsconfig.json biome.json package.json bun.lock .github/workflows/sdk.yml .github/workflows/_e2e-sdk.yml .github/actions/setup-aztec/ .github/actions/start-services/"
-          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
-          for path in $PATHS; do
-            if echo "$CHANGED" | grep -q "^${path}"; then
-              echo "relevant=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          done
-          echo "relevant=false" >> "$GITHUB_OUTPUT"
+        with:
+          filters: |
+            relevant:
+              - 'packages/sdk/**'
+              - 'tsconfig.json'
+              - 'biome.json'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/sdk.yml'
+              - '.github/workflows/_e2e-sdk.yml'
+              - '.github/actions/setup-aztec/**'
+              - '.github/actions/start-services/**'
+      - name: Override for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        id: override
+        run: echo "relevant=true" >> "$GITHUB_OUTPUT"
 
   lint:
     name: Lint

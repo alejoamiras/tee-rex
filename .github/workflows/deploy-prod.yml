@@ -20,16 +20,54 @@ permissions:
   contents: write
 
 jobs:
+  # ── Detect which components changed ─────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      servers: ${{ steps.override.outputs.servers || steps.filter.outputs.servers }}
+      app: ${{ steps.override.outputs.app || steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            servers:
+              - 'packages/server/**'
+              - 'packages/sdk/**'
+              - 'Dockerfile'
+              - 'Dockerfile.base'
+              - 'Dockerfile.nitro'
+              - 'infra/**'
+              - 'package.json'
+              - 'bun.lock'
+            app:
+              - 'packages/app/**'
+              - 'packages/sdk/**'
+              - 'package.json'
+              - 'bun.lock'
+      - name: Override for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        id: override
+        run: |
+          echo "servers=true" >> "$GITHUB_OUTPUT"
+          echo "app=true" >> "$GITHUB_OUTPUT"
+
   # ── Build base image (idempotent — skips if already in ECR) ─────
   ensure-base:
     name: Build Base Image
+    needs: changes
+    if: needs.changes.outputs.servers == 'true'
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
   # ── Deploy TEE enclave to production ─────────────────────────────
   deploy-tee:
     name: Deploy TEE (prod)
-    needs: ensure-base
+    needs: [changes, ensure-base]
+    if: needs.changes.outputs.servers == 'true'
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
@@ -40,7 +78,8 @@ jobs:
   # ── Deploy prover container to production ────────────────────────
   deploy-prover:
     name: Deploy Prover (prod)
-    needs: ensure-base
+    needs: [changes, ensure-base]
+    if: needs.changes.outputs.servers == 'true'
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
     with:
@@ -51,6 +90,8 @@ jobs:
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:
     name: Deploy App (prod)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -190,7 +231,8 @@ jobs:
   # Deploys succeed independently; this job is best-effort validation.
   validate-prod:
     name: Validate Prod (nextnet)
-    needs: [deploy-tee, deploy-prover, deploy-app]
+    needs: [changes, deploy-tee, deploy-prover, deploy-app]
+    if: "!cancelled() && (needs.changes.outputs.servers == 'true' || needs.changes.outputs.app == 'true')"
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 60
