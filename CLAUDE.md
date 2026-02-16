@@ -11,7 +11,7 @@ This document outlines the planned improvements for the tee-rex project.
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
 - **Linting/Formatting**: Biome (lint + format in one tool)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits)
-- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; spartan: `aztec-spartan.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`)
+- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; spartan: `aztec-spartan.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
 - **Aztec version**: 4.0.0-spartan.20260214
@@ -121,7 +121,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B)
 
 | Phase | Summary |
 |---|---|
@@ -324,6 +324,42 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 **22C — CI pipeline documentation:** DONE (PR #61)
 - Moved `lessons/ci-pipeline-audit.md` to `docs/ci-pipeline.md` as a living reference
 - Covers all 15 workflow files with mermaid diagrams, change detection paths, conditional deploy logic, Docker image strategy, and key design decisions
+
+---
+
+## Phase 23: Devnet Support
+
+**Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`spartan`). Long-lived `devnet` branch, `workflow_dispatch`-triggered deploy, own infrastructure. No auto-update — Aztec devnet versions are managed manually (cherry-pick from main or direct commits to `devnet` branch).
+
+**Architecture:**
+
+```
+main branch (spartan/nextnet) → deploy-prod.yml (on push)     → prod EC2s + S3 + CF
+devnet branch (devnet Aztec)  → deploy-devnet.yml (manual)    → devnet EC2s + S3 + CF
+
+deploy-devnet.yml flow:
+  workflow_dispatch
+    → ensure-base
+    → deploy-tee + deploy-prover (devnet EC2s)
+    → e2e-sdk + e2e-app (against deployed devnet infra)  ← quality gate
+    → deploy-app (devnet S3/CF)
+    → publish-sdk (npm --tag devnet)  ← only if e2e green
+```
+
+No branch protection ruleset on `devnet` — the workflow itself is the quality gate. E2e must pass before app deploys and SDK publishes.
+
+**Completed parts:**
+
+| Part | Summary |
+|---|---|
+| **23A** | IAM templates updated: `refs/heads/devnet` in trust policy, `devnet` in Environment tags / S3 / CloudFront. `_deploy-tee.yml` / `_deploy-prover.yml` extended with devnet instance ID resolution. AWS provisioning (EC2, S3, CF, secrets) done via CLI after merge. |
+| **23B** | `deploy-devnet.yml`: `workflow_dispatch`-only pipeline. Jobs: `ensure-base` → `deploy-tee` + `deploy-prover` → `validate-devnet` (blocking SSM tunnels + SDK e2e + app fullstack e2e) → `deploy-app` + `publish-sdk`. Extracted `_publish-sdk.yml` reusable workflow (parameterized `dist_tag` + `latest`) — `deploy-prod.yml` refactored to call it with `spartan`/`true`, devnet calls with `devnet`/`false`. Git tag `|| true` handles same-version edge case. |
+
+**Remaining:**
+
+**23C — Create `devnet` branch:**
+- Branch from `main`, update Aztec deps to devnet version, update `AZTEC_NODE_URL` references
+- First `workflow_dispatch` run validates the full pipeline
 
 ---
 

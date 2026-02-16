@@ -39,7 +39,7 @@ jobs:
       deployed: ${{ steps.health.outputs.deployed }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_PROVER_INSTANCE_ID || secrets.PROVER_INSTANCE_ID }}
+      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_PROVER_INSTANCE_ID || inputs.environment == 'devnet' && secrets.DEVNET_PROVER_INSTANCE_ID || secrets.PROVER_INSTANCE_ID }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
       IMAGE_TAG: ${{ inputs.image_tag }}
     steps:

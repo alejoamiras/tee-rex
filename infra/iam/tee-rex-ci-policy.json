@@ -31,7 +31,7 @@
       "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Environment": ["ci", "prod"]
+          "aws:ResourceTag/Environment": ["ci", "prod", "devnet"]
         }
       }
     },
@@ -51,7 +51,7 @@
       "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Environment": ["ci", "prod"]
+          "aws:ResourceTag/Environment": ["ci", "prod", "devnet"]
         }
       }
     },
@@ -71,7 +71,7 @@
       "Resource": "arn:aws:ec2:eu-west-2:<ACCOUNT_ID>:instance/*",
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Environment": ["ci", "prod"]
+          "aws:ResourceTag/Environment": ["ci", "prod", "devnet"]
         }
       }
     },
@@ -102,14 +102,19 @@
       ],
       "Resource": [
         "arn:aws:s3:::tee-rex-app-prod",
-        "arn:aws:s3:::tee-rex-app-prod/*"
+        "arn:aws:s3:::tee-rex-app-prod/*",
+        "arn:aws:s3:::tee-rex-app-devnet",
+        "arn:aws:s3:::tee-rex-app-devnet/*"
       ]
     },
     {
       "Sid": "CloudFrontInvalidation",
       "Effect": "Allow",
       "Action": "cloudfront:CreateInvalidation",
-      "Resource": "arn:aws:cloudfront::<ACCOUNT_ID>:distribution/<DISTRIBUTION_ID>"
+      "Resource": [
+        "arn:aws:cloudfront::<ACCOUNT_ID>:distribution/<DISTRIBUTION_ID>",
+        "arn:aws:cloudfront::<ACCOUNT_ID>:distribution/<DEVNET_DISTRIBUTION_ID>"
+      ]
     }
   ]
 }
