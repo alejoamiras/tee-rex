@@ -1,0 +1,182 @@
+name: Deploy Devnet
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-devnet
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  # ── Build base image (idempotent — skips if already in ECR) ─────
+  ensure-base:
+    name: Build Base Image
+    uses: ./.github/workflows/_build-base.yml
+    secrets: inherit
+
+  # ── Deploy TEE enclave to devnet ────────────────────────────────
+  deploy-tee:
+    name: Deploy TEE (devnet)
+    needs: ensure-base
+    uses: ./.github/workflows/_deploy-tee.yml
+    secrets: inherit
+    with:
+      environment: devnet
+      image_tag: devnet-tee
+      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
+
+  # ── Deploy prover container to devnet ───────────────────────────
+  deploy-prover:
+    name: Deploy Prover (devnet)
+    needs: ensure-base
+    uses: ./.github/workflows/_deploy-prover.yml
+    secrets: inherit
+    with:
+      environment: devnet
+      image_tag: devnet-prover
+      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
+
+  # ── Validate devnet (BLOCKING — must pass before app/SDK) ──────
+  validate-devnet:
+    name: Validate Devnet
+    needs: [deploy-tee, deploy-prover]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install SSM plugin
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Start SSM tunnel to devnet prover
+        run: |
+          aws ssm start-session \
+            --target "${{ secrets.DEVNET_PROVER_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+
+          echo "Waiting for prover SSM tunnel..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4002/attestation > /dev/null 2>&1; then
+              echo "Prover SSM tunnel ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Prover SSM tunnel failed to connect after 60s"
+          exit 1
+
+      - name: Start SSM tunnel to devnet TEE
+        run: |
+          aws ssm start-session \
+            --target "${{ secrets.DEVNET_TEE_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+
+          echo "Waiting for TEE SSM tunnel..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4001/attestation > /dev/null 2>&1; then
+              echo "TEE SSM tunnel ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "TEE SSM tunnel failed to connect after 60s"
+          exit 1
+
+      - name: Run SDK E2E tests
+        env:
+          AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
+          PROVER_URL: http://localhost:4002
+          TEE_URL: http://localhost:4001
+        run: bun run --cwd packages/sdk test:e2e
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run app fullstack E2E
+        env:
+          AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
+          PROVER_URL: http://localhost:4002
+          TEE_URL: http://localhost:4001
+        run: bunx playwright test --project=fullstack --workers=1 e2e/demo.fullstack.spec.ts
+        working-directory: packages/app
+
+  # ── Build & deploy app to S3 + invalidate CloudFront ────────────
+  deploy-app:
+    name: Deploy App (devnet)
+    needs: validate-devnet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build app
+        run: bun run --cwd packages/app build
+        env:
+          AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
+          PROVER_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/prover
+          TEE_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/tee
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync packages/app/dist/ s3://${{ secrets.DEVNET_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "max-age=31536000,immutable" \
+            --exclude "index.html"
+
+          aws s3 cp packages/app/dist/index.html s3://${{ secrets.DEVNET_S3_BUCKET }}/index.html \
+            --cache-control "max-age=60"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.DEVNET_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/index.html"
+
+  # ── Publish SDK to npm (devnet dist-tag) ────────────────────────
+  publish-sdk:
+    name: Publish SDK (devnet)
+    needs: validate-devnet
+    uses: ./.github/workflows/_publish-sdk.yml
+    secrets: inherit
+    with:
+      dist_tag: devnet
+      latest: false
