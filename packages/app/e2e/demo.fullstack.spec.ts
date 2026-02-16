@@ -21,6 +21,15 @@ test.beforeAll(async ({ browser }) => {
   // Workaround: clear IDB and reload on failure.
   sharedPage = await browser.newPage();
 
+  sharedPage.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") {
+      console.log(`[browser:${msg.type()}] ${msg.text()}`);
+    }
+  });
+  sharedPage.on("pageerror", (err) => {
+    console.log(`[browser:pageerror] ${err.message}`);
+  });
+
   const MAX_INIT_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
     // Navigate to app, then clear IndexedDB and reload for a clean slate.
@@ -74,6 +83,11 @@ async function deployAndAssert(page: Page, mode: "local" | "remote" | "tee"): Pr
     timeout: 10 * 60 * 1000,
   });
 
+  const deployLog = await page.locator("#log").textContent();
+  expect(deployLog, "Deploy should not have failed — check browser console above").not.toContain(
+    "Deploy failed:",
+  );
+
   await expect(page.locator("#progress")).toHaveClass(/hidden/);
   await expect(page.locator("#results")).not.toHaveClass(/hidden/);
 
@@ -104,6 +118,11 @@ async function runTokenFlowAndAssert(page: Page, mode: "local" | "remote" | "tee
   await expect(page.locator("#token-flow-btn")).toHaveText("Run Token Flow", {
     timeout: 10 * 60 * 1000,
   });
+
+  const flowLog = await page.locator("#log").textContent();
+  expect(flowLog, "Token flow should not have failed — check browser console above").not.toContain(
+    "Token flow failed:",
+  );
 
   await expect(page.locator("#progress")).toHaveClass(/hidden/);
   await expect(page.locator("#results")).not.toHaveClass(/hidden/);
