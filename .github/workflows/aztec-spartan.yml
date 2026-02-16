@@ -159,9 +159,8 @@ jobs:
           # Get PR number
           PR_NUM=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
 
-          # Add labels (triggers tee.yml and remote.yml)
-          gh pr edit "$PR_NUM" --add-label "test-tee" 2>/dev/null || true
-          gh pr edit "$PR_NUM" --add-label "test-remote" 2>/dev/null || true
+          # Add label (triggers infra.yml — combined TEE + Remote deploy + e2e)
+          gh pr edit "$PR_NUM" --add-label "test-infra" 2>/dev/null || true
 
           # Enable auto-merge (merges when required status checks pass)
           gh pr merge "$PR_NUM" --auto --squash --delete-branch
