@@ -207,11 +207,11 @@ After:  preload checks only for local network → nextnet.test.ts handles its ow
 
 ### Immediate Fix: deploy-prod Structure
 
-**Problem**: `nextnet-check` failure marks entire workflow as failed.
+**Problem**: `validate-prod` failure marks entire workflow as failed even though deploys succeeded.
 
-**Fix**: Add `continue-on-error: true` to `nextnet-check`. The `publish-sdk` job already has an `if:` gate — it simply won't run if nextnet-check fails. But the workflow won't show as failed just because an external service is down.
+**Fix**: Add `continue-on-error: true` to `validate-prod` since it depends on an external network we don't control. Deploys succeed independently; validation is best-effort.
 
-Similarly, `validate-prod` should use `continue-on-error: true` since it validates against an external network we don't control.
+**Note**: `nextnet-check` is intentionally left as a hard failure because it gates `publish-sdk`. With `continue-on-error`, `needs.nextnet-check.result` would return `'success'` even on failure, which would incorrectly allow publishing when nextnet is down. The workflow will still show a red X when nextnet is down, but `publish-sdk` correctly won't run.
 
 ### Future: Separate Deploy Status from Validation Status
 
@@ -228,4 +228,5 @@ Consider adding a final `deploy-status` gate job that only checks deploy jobs, s
 | File | Change | Why |
 |------|--------|-----|
 | `packages/sdk/e2e/e2e-setup.ts` | Skip Aztec reachability check when not local network | Preload kills tests when nextnet is down |
-| `.github/workflows/deploy-prod.yml` | Add `continue-on-error: true` to `nextnet-check` and `validate-prod` | External service outages shouldn't mark deploy as failed |
+| `packages/app/e2e/fullstack.fixture.ts` | Context-aware error messages (local vs remote) | Error said "Start local network" even when targeting nextnet |
+| `.github/workflows/deploy-prod.yml` | Add `continue-on-error: true` to `validate-prod` | External service outage shouldn't mark deploy as failed |
