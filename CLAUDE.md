@@ -274,10 +274,7 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 
 **~~20D — ECR registry cache for Docker builds:~~** Bundled into 20B
 
-**20E — Pre-build EIF in CI (research):**
-- Currently: CI builds Docker → pushes to ECR → EC2 pulls → EC2 builds EIF → EC2 runs enclave
-- If EIF could be built in CI and uploaded to S3, EC2 would skip pull + EIF build entirely
-- Constraint: `nitro-cli build-enclave` requires a Nitro-capable instance — investigate if a CI SSM step could do this, or if there's an alternative approach
+**~~20E — Pre-build EIF in CI (research):~~** Cancelled — diminishing returns after 20A+20B optimizations. `nitro-cli` requires a Nitro instance anyway.
 
 ---
 
