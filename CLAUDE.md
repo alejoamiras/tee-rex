@@ -121,7 +121,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A, 21)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21)
 
 | Phase | Summary |
 |---|---|
@@ -255,12 +255,14 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 - Docker layer cache now persists between deploys — pulls only changed layers instead of full ~2GB
 - Validated via CI: Remote Prover deploy + e2e (green), TEE deploy + e2e (green)
 
-**20B — Split Docker image into base + app layers:**
-- Create a base image (`tee-rex-base:spartan-YYYYMMDD`) with OS + Bun + `@aztec/*` packages
-- App image (`tee-rex:prod`) uses `FROM tee-rex-base` + app code only
-- Base image rebuilt only on Aztec version bumps (spartan auto-update)
-- Most deploys would pull only the thin app layer (~MBs, not GBs)
-- Works well even on small disks since the base image rarely changes
+**20B — Split Docker image into base + app layers:** DONE
+- `Dockerfile.base`: shared base image (Bun + system deps + `bun install` ~2.4GB), tagged `tee-rex:base-<aztec-version>` in ECR
+- `Dockerfile` (prover) and `Dockerfile.nitro` stage 2 (builder): `ARG BASE_IMAGE` / `FROM ${BASE_IMAGE}`, removed dep install layers
+- `_build-base.yml`: idempotent reusable workflow — reads Aztec version, checks ECR, builds+pushes only if missing. ECR registry cache.
+- `_deploy-tee.yml` / `_deploy-prover.yml`: accept `base_image` input, pass as `--build-arg`, switched from GHA cache to ECR registry cache (bundles Phase 20D)
+- `deploy-prod.yml`, `tee.yml`, `remote.yml`: added `ensure-base` job before deploy jobs
+- Deploy scripts (`ci-deploy.sh`, `ci-deploy-prover.sh`): reordered pull-before-prune so Docker reuses cached layers
+- Local build scripts: two-step `build:base` + `build` / `build:nitro` in root `package.json`
 
 **20C — Early health check endpoint:**
 - Server currently takes 5-10 minutes to respond to `/attestation` on cold boot (Aztec initialization)
@@ -269,10 +271,8 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 - Keep `/attestation` for readiness checks (confirms Aztec is fully initialized)
 - Would reduce perceived deploy time and avoid false timeout failures
 
-**20D — ECR registry cache for Docker builds:**
-- Current: `cache-from: type=gha` / `cache-to: type=gha` — GitHub Actions cache has 10GB limit and can evict
-- Switch to ECR as cache source: `cache-from: type=registry,ref=<ECR>/tee-rex:cache`
-- More reliable, no size limit beyond ECR storage, faster for large images
+**~~20D — ECR registry cache for Docker builds:~~** Bundled into 20B
+- Switched all CI Docker builds from GHA cache to ECR registry cache (`cache-from/to: type=registry`)
 
 **20E — Pre-build EIF in CI (research):**
 - Currently: CI builds Docker → pushes to ECR → EC2 pulls → EC2 builds EIF → EC2 runs enclave

@@ -6,8 +6,9 @@
     "packages/app"
   ],
   "scripts": {
-    "build": "docker build -t tee-rex --platform linux/amd64 .",
-    "build:nitro": "docker build -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
+    "build:base": "docker build -f Dockerfile.base -t tee-rex-base --platform linux/amd64 .",
+    "build": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -t tee-rex --platform linux/amd64 .",
+    "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
     "dev": "bun run --cwd packages/server dev",
     "start": "bun run --cwd packages/server start",
     "lint": "biome check .",

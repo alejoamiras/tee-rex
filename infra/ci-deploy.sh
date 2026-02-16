@@ -23,33 +23,33 @@ echo "=== TEE-Rex CI Deploy ==="
 echo "Image: ${IMAGE_URI}"
 echo "Region: ${REGION}"
 
-# ── 1. Tear down existing enclave + proxy + old images ───────────
+# ── 1. Tear down existing enclave + proxy ────────────────────────
 echo "=== Tearing down existing enclave ==="
 sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
 pkill socat 2>/dev/null || true
 rm -f "${EIF_PATH}"
 rm -rf /tmp/nitro-artifacts 2>/dev/null || true
-# Clean up old Docker resources (images, containers, build cache).
-# EBS volumes are 20GB — docker prune reliably reclaims overlay2 layers.
-docker system prune -af
-# Also clean system logs that accumulate over time
-journalctl --vacuum-size=50M 2>/dev/null || true
-echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
-# ── 2. Pull Docker image ──────────────────────────────────────────
+# ── 2. Pull Docker image (reuses cached layers from previous deploy)
 echo "=== Pulling image ==="
 aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
 docker pull "${IMAGE_URI}"
 
-# ── 3. Build EIF (as ec2-user — needs NITRO_CLI_ARTIFACTS) ───────
+# ── 3. Clean up old images (after pull, so layers are reused) ────
+echo "=== Cleaning up old images ==="
+docker image prune -af
+journalctl --vacuum-size=50M 2>/dev/null || true
+echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
+
+# ── 4. Build EIF (as ec2-user — needs NITRO_CLI_ARTIFACTS) ──────
 echo "=== Building EIF ==="
 sudo -u ec2-user bash -lc \
   "NITRO_CLI_ARTIFACTS=/tmp/nitro-artifacts nitro-cli build-enclave \
     --docker-uri '${IMAGE_URI}' \
     --output-file '${EIF_PATH}'"
 
-# ── 4. Run enclave (as ec2-user) ──────────────────────────────────
+# ── 5. Run enclave (as ec2-user) ────────────────────────────────
 echo "=== Running enclave ==="
 ENCLAVE_OUT=$(sudo -u ec2-user bash -lc \
   "nitro-cli run-enclave \
@@ -62,13 +62,13 @@ echo "${ENCLAVE_OUT}"
 CID=$(echo "${ENCLAVE_OUT}" | jq -r '.EnclaveCID // 16')
 echo "Enclave CID: ${CID}"
 
-# ── 5. Start socat proxy (detached from SSM) ──────────────────────
+# ── 6. Start socat proxy (detached from SSM) ────────────────────
 echo "=== Starting proxy (CID=${CID}) ==="
 setsid socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:${CID}:5000 \
   > /dev/null 2>&1 &
 disown
 
-# ── 6. Health check ───────────────────────────────────────────────
+# ── 7. Health check ─────────────────────────────────────────────
 echo "=== Health check ==="
 for i in $(seq 1 120); do
   if curl -sf http://localhost:4000/attestation > /dev/null 2>&1; then

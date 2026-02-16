@@ -15,24 +15,18 @@ echo "=== TEE-Rex Prover CI Deploy ==="
 echo "Image: ${IMAGE_URI}"
 echo "Region: ${REGION}"
 
-# ── 1. Stop and remove existing container + old images ────────────
-echo "=== Tearing down existing container ==="
+# ── 1. Stop existing container ──────────────────────────────────
+echo "=== Stopping existing container ==="
 docker stop "${CONTAINER_NAME}" 2>/dev/null || true
 docker rm "${CONTAINER_NAME}" 2>/dev/null || true
-# Clean up old Docker resources (images, containers, build cache).
-# EBS volumes are 20GB — docker prune reliably reclaims overlay2 layers.
-docker system prune -af
-# Also clean system logs that accumulate over time
-journalctl --vacuum-size=50M 2>/dev/null || true
-echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
-# ── 2. Pull Docker image ─────────────────────────────────────────
+# ── 2. Pull new image (reuses cached layers from previous deploy) ─
 echo "=== Pulling image ==="
 aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
 docker pull "${IMAGE_URI}"
 
-# ── 3. Run container ─────────────────────────────────────────────
+# ── 3. Run container ───────────────────────────────────────────
 echo "=== Starting container ==="
 docker run -d \
   --name "${CONTAINER_NAME}" \
@@ -40,7 +34,13 @@ docker run -d \
   --restart unless-stopped \
   "${IMAGE_URI}"
 
-# ── 4. Health check ──────────────────────────────────────────────
+# ── 4. Clean up old images (after pull, so layers are reused) ──
+echo "=== Cleaning up old images ==="
+docker image prune -af
+journalctl --vacuum-size=50M 2>/dev/null || true
+echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
+
+# ── 5. Health check ────────────────────────────────────────────
 echo "=== Health check ==="
 for i in $(seq 1 120); do
   if curl -sf http://localhost:80/attestation > /dev/null 2>&1; then

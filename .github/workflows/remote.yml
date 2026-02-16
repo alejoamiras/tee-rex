@@ -22,12 +22,21 @@ jobs:
     steps:
       - run: echo "Remote prover workflow triggered"
 
+  # ── Build base image (idempotent — skips if already in ECR) ─────
+  ensure-base:
+    name: Build Base Image
+    needs: check
+    uses: ./.github/workflows/_build-base.yml
+    secrets: inherit
+
   # ── Deploy prover container ──────────────────────────────────────
   deploy-prover:
     name: Deploy Prover
-    needs: check
+    needs: [check, ensure-base]
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
+    with:
+      base_image: ${{ needs.ensure-base.outputs.base_image }}
 
   # ── SDK E2E with deployed prover ─────────────────────────────────
   e2e-sdk:

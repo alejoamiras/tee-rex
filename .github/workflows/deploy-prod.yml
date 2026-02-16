@@ -20,23 +20,33 @@ permissions:
   contents: write
 
 jobs:
+  # ── Build base image (idempotent — skips if already in ECR) ─────
+  ensure-base:
+    name: Build Base Image
+    uses: ./.github/workflows/_build-base.yml
+    secrets: inherit
+
   # ── Deploy TEE enclave to production ─────────────────────────────
   deploy-tee:
     name: Deploy TEE (prod)
+    needs: ensure-base
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
       environment: prod
       image_tag: prod
+      base_image: ${{ needs.ensure-base.outputs.base_image }}
 
   # ── Deploy prover container to production ────────────────────────
   deploy-prover:
     name: Deploy Prover (prod)
+    needs: ensure-base
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
     with:
       environment: prod
       image_tag: prod
+      base_image: ${{ needs.ensure-base.outputs.base_image }}
 
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:
