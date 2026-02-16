@@ -302,19 +302,12 @@ async function init(): Promise<void> {
   appendLog("Checking services...");
   const { aztec, teerex } = await checkServices();
 
-  if (!aztec) {
-    appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
-    appendLog("Start the Aztec node before using the demo", "warn");
-    $("wallet-state").textContent = "aztec unavailable";
-    setStatus("wallet-dot", false);
-    return;
-  }
-
   if (PROVER_CONFIGURED && !teerex) {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
   }
 
   // Auto-configure TEE when env var is set (display URL + check attestation)
+  // Runs regardless of Aztec node status — service checks are independent.
   if (TEE_CONFIGURED) {
     $("tee-url").textContent = TEE_DISPLAY_URL;
     appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
@@ -335,6 +328,14 @@ async function init(): Promise<void> {
       $("tee-attestation-label").textContent = "unreachable";
       appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
     }
+  }
+
+  if (!aztec) {
+    appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
+    appendLog("Start the Aztec node before using the demo", "warn");
+    $("wallet-state").textContent = "aztec unavailable";
+    setStatus("wallet-dot", false);
+    return;
   }
 
   appendLog("Initializing wallet...");
