@@ -1,18 +1,7 @@
-FROM oven/bun:1.3-debian
-
-# system dependencies for native modules
-RUN apt update && apt install -y git build-essential libc++-dev python3 curl && rm -rf /var/lib/apt/lists/*
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
-
-# Copy workspace config first for layer caching
-COPY package.json bun.lock ./
-COPY packages/sdk/package.json ./packages/sdk/
-COPY packages/server/package.json ./packages/server/
-COPY packages/app/package.json ./packages/app/
-
-# Install dependencies
-RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY . .

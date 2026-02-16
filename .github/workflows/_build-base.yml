@@ -1,0 +1,77 @@
+name: _Build Base Image (reusable)
+
+on:
+  workflow_call:
+    outputs:
+      base_image:
+        description: Full ECR URI of the base image
+        value: ${{ jobs.build.outputs.base_image }}
+
+jobs:
+  build:
+    name: Build Base Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      base_image: ${{ steps.check.outputs.base_image }}
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Read Aztec version to derive base image tag ────────────────
+      - name: Read Aztec version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/sdk/package.json').dependencies['@aztec/stdlib']")
+          echo "aztec_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Aztec version: ${VERSION}"
+
+      # ── AWS Credentials via OIDC ───────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Check if base image already exists in ECR ──────────────────
+      - name: Check ECR for existing base image
+        id: check
+        run: |
+          TAG="base-${{ steps.version.outputs.aztec_version }}"
+          IMAGE="${ECR_REGISTRY}/tee-rex:${TAG}"
+          echo "base_image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+          if aws ecr describe-images \
+            --repository-name tee-rex \
+            --image-ids imageTag="${TAG}" \
+            --region "${AWS_REGION}" > /dev/null 2>&1; then
+            echo "Base image already exists: ${IMAGE}"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Base image not found, will build: ${IMAGE}"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Build & push base image (only if missing) ─────────────────
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push base image
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.base
+          push: true
+          tags: ${{ steps.check.outputs.base_image }}
+          cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-base
+          cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-base,mode=max

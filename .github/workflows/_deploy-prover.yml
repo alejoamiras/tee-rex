@@ -18,6 +18,10 @@ on:
         required: false
         type: string
         default: "prover"
+      base_image:
+        description: Full ECR URI of the base image (from _build-base.yml)
+        required: true
+        type: string
     outputs:
       deployed:
         description: Whether the prover was deployed successfully
@@ -65,8 +69,9 @@ jobs:
           file: Dockerfile
           push: true
           tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ env.IMAGE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: BASE_IMAGE=${{ inputs.base_image }}
+          cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover
+          cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover,mode=max
 
       # ── Start EC2 Instance ───────────────────────────────────────
       - name: Start EC2 instance

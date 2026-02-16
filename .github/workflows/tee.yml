@@ -22,12 +22,21 @@ jobs:
     steps:
       - run: echo "TEE workflow triggered"
 
+  # ── Build base image (idempotent — skips if already in ECR) ─────
+  ensure-base:
+    name: Build Base Image
+    needs: check
+    uses: ./.github/workflows/_build-base.yml
+    secrets: inherit
+
   # ── Deploy TEE enclave ────────────────────────────────────────────
   deploy-tee:
     name: Deploy TEE
-    needs: check
+    needs: [check, ensure-base]
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
+    with:
+      base_image: ${{ needs.ensure-base.outputs.base_image }}
 
   # ── SDK E2E with TEE ──────────────────────────────────────────────
   e2e-sdk:
