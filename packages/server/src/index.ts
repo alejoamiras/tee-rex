@@ -1,3 +1,4 @@
+// test: server-only change detection
 import { mapSchema, schemas } from "@aztec/stdlib/schemas";
 import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
