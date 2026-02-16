@@ -36,18 +36,20 @@ aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
 docker pull "${IMAGE_URI}"
 
-# ── 3. Clean up old images (after pull, so layers are reused) ────
-echo "=== Cleaning up old images ==="
-docker image prune -af
-journalctl --vacuum-size=50M 2>/dev/null || true
-echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
-
-# ── 4. Build EIF (as ec2-user — needs NITRO_CLI_ARTIFACTS) ──────
+# ── 3. Build EIF (as ec2-user — needs NITRO_CLI_ARTIFACTS) ──────
+# Must happen before prune: nitro-cli reads the Docker image directly,
+# so the image must still be on disk.
 echo "=== Building EIF ==="
 sudo -u ec2-user bash -lc \
   "NITRO_CLI_ARTIFACTS=/tmp/nitro-artifacts nitro-cli build-enclave \
     --docker-uri '${IMAGE_URI}' \
     --output-file '${EIF_PATH}'"
+
+# ── 4. Clean up old images (after EIF build, image no longer needed) ─
+echo "=== Cleaning up old images ==="
+docker image prune -af
+journalctl --vacuum-size=50M 2>/dev/null || true
+echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
 # ── 5. Run enclave (as ec2-user) ────────────────────────────────
 echo "=== Running enclave ==="
