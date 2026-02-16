@@ -36,7 +36,7 @@ jobs:
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
-      base_image: ${{ needs.ensure-base.outputs.base_image }}
+      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── SDK E2E with TEE ──────────────────────────────────────────────
   e2e-sdk:

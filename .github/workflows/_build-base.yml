@@ -3,9 +3,9 @@ name: _Build Base Image (reusable)
 on:
   workflow_call:
     outputs:
-      base_image:
-        description: Full ECR URI of the base image
-        value: ${{ jobs.build.outputs.base_image }}
+      base_tag:
+        description: "ECR image tag for the base image (e.g. base-4.0.0-spartan.20260215)"
+        value: ${{ jobs.build.outputs.base_tag }}
 
 jobs:
   build:
@@ -16,7 +16,7 @@ jobs:
       id-token: write
       contents: read
     outputs:
-      base_image: ${{ steps.check.outputs.base_image }}
+      base_tag: ${{ steps.check.outputs.base_tag }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
@@ -46,17 +46,16 @@ jobs:
         id: check
         run: |
           TAG="base-${{ steps.version.outputs.aztec_version }}"
-          IMAGE="${ECR_REGISTRY}/tee-rex:${TAG}"
-          echo "base_image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "base_tag=${TAG}" >> "$GITHUB_OUTPUT"
 
           if aws ecr describe-images \
             --repository-name tee-rex \
             --image-ids imageTag="${TAG}" \
             --region "${AWS_REGION}" > /dev/null 2>&1; then
-            echo "Base image already exists: ${IMAGE}"
+            echo "Base image already exists: tee-rex:${TAG}"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Base image not found, will build: ${IMAGE}"
+            echo "Base image not found, will build: tee-rex:${TAG}"
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -72,6 +71,6 @@ jobs:
           context: .
           file: Dockerfile.base
           push: true
-          tags: ${{ steps.check.outputs.base_image }}
+          tags: ${{ env.ECR_REGISTRY }}/tee-rex:${{ steps.check.outputs.base_tag }}
           cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-base
           cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-base,mode=max

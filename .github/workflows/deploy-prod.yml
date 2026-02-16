@@ -35,7 +35,7 @@ jobs:
     with:
       environment: prod
       image_tag: prod
-      base_image: ${{ needs.ensure-base.outputs.base_image }}
+      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── Deploy prover container to production ────────────────────────
   deploy-prover:
@@ -46,7 +46,7 @@ jobs:
     with:
       environment: prod
       image_tag: prod
-      base_image: ${{ needs.ensure-base.outputs.base_image }}
+      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:
