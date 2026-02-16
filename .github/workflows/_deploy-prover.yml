@@ -18,8 +18,8 @@ on:
         required: false
         type: string
         default: "prover"
-      base_image:
-        description: Full ECR URI of the base image (from _build-base.yml)
+      base_tag:
+        description: "ECR image tag for base image (e.g. base-4.0.0-spartan.20260215)"
         required: true
         type: string
     outputs:
@@ -69,7 +69,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ env.IMAGE_TAG }}
-          build-args: BASE_IMAGE=${{ inputs.base_image }}
+          build-args: BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
           cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover
           cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover,mode=max
 
