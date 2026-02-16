@@ -1,3 +1,6 @@
+# Global ARG — must be before the first FROM for --build-arg to work
+ARG BASE_IMAGE
+
 # -------------------------------------------------------------------
 # Stage 1: Build libnsm.so from source (NSM device interaction)
 # -------------------------------------------------------------------
