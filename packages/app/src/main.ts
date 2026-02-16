@@ -1,3 +1,4 @@
+// test: app-only change detection
 import "./style.css";
 import {
   AZTEC_DISPLAY_URL,
