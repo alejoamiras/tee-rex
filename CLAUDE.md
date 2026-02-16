@@ -270,15 +270,9 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
   2. **Multi-stage Dockerfile `ARG` scoping**: `--build-arg` only populates `ARG` declarations at global scope (before the first `FROM`). In multi-stage builds, add a global `ARG` before stage 1, then re-declare it inside the stage that uses it (e.g. `ARG BASE_IMAGE` before `FROM rust AS nsm`, then again before `FROM ${BASE_IMAGE} AS builder`).
   3. **`docker image prune -af` vs `nitro-cli`**: Prune deletes all images not referenced by running containers. For TEE deploys, `nitro-cli build-enclave` reads the Docker image directly (no container), so prune must happen **after** EIF build. For prover deploys, `docker run` starts the container first, protecting the image from prune.
 
-**20C — Early health check endpoint:**
-- Server currently takes 5-10 minutes to respond to `/attestation` on cold boot (Aztec initialization)
-- Add a lightweight `/healthz` endpoint that responds `200` as soon as Express is listening
-- Use `/healthz` for the deploy health check (confirms container is running)
-- Keep `/attestation` for readiness checks (confirms Aztec is fully initialized)
-- Would reduce perceived deploy time and avoid false timeout failures
+**~~20C — Early health check endpoint:~~** Removed — server already listens immediately. `ProverService` initializes asynchronously (`setTimeout`), `/attestation` doesn't depend on it.
 
 **~~20D — ECR registry cache for Docker builds:~~** Bundled into 20B
-- Switched all CI Docker builds from GHA cache to ECR registry cache (`cache-from/to: type=registry`)
 
 **20E — Pre-build EIF in CI (research):**
 - Currently: CI builds Docker → pushes to ECR → EC2 pulls → EC2 builds EIF → EC2 runs enclave
