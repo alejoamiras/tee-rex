@@ -121,7 +121,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22)
 
 | Phase | Summary |
 |---|---|
@@ -147,7 +147,7 @@ bun run build
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 
 **Key architectural decisions (from completed phases):**
-- CI gate job pattern: workflows always trigger on PRs, `changes` job detects relevant files via `gh pr diff`, gate jobs (`SDK/App/Server Status`) always run. Ruleset: `infra/rulesets/main-branch-protection.json`
+- CI gate job pattern: workflows always trigger on PRs, `changes` job uses `dorny/paths-filter@v3` for declarative path-based change detection, gate jobs (`SDK/App/Server Status`) always run. `workflow_dispatch` overrides filters to `true`. Full CI reference: `docs/ci-pipeline.md`. Ruleset: `infra/rulesets/main-branch-protection.json`
 - AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. Setup: `infra/iam/README.md`
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
@@ -302,6 +302,31 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 3. **21C**: CloudFront geo-routing via CF Function (~4 hours)
 4. **21D** *(optional)*: Deploy sa-east-1 TEE (~4 hours)
 5. **21E**: Monitoring + validation (~2 hours)
+
+---
+
+## Phase 22: CI Change Detection & Conditional Deploys — DONE (PRs #57, #61)
+
+**Goal**: Eliminate redundant CI work — skip unrelated PR test jobs and skip deploy-prod jobs for unchanged components.
+
+**22A — Unified change detection with `dorny/paths-filter`:** DONE (PR #57)
+- Replaced copy-pasted shell scripts (`gh pr diff` + grep loop) in `sdk.yml`, `app.yml`, `server.yml` with declarative `dorny/paths-filter@v3`
+- Works for both `pull_request` and `push` events (the old scripts only worked for PRs)
+- `workflow_dispatch` override step sets `relevant=true` to bypass filters on manual runs
+
+**22B — Conditional deploy-prod:** DONE (PR #57)
+- Added `changes` job to `deploy-prod.yml` with two outputs: `servers` and `app`
+- `servers` filter: `packages/server/**`, `packages/sdk/**`, `Dockerfile*`, `infra/**`, `package.json`, `bun.lock`
+- `app` filter: `packages/app/**`, `packages/sdk/**`, `package.json`, `bun.lock`
+- `ensure-base`, `deploy-tee`, `deploy-prover` gated on `servers == 'true'`
+- `deploy-app` gated on `app == 'true'`
+- `validate-prod` runs when either changed (`!cancelled()` + OR condition)
+- `nextnet-check` and `publish-sdk` remain ungated (independent of what changed)
+- App-only merges now skip ~50 min of server deploys; workflow-only merges skip all deploys
+
+**22C — CI pipeline documentation:** DONE (PR #61)
+- Moved `lessons/ci-pipeline-audit.md` to `docs/ci-pipeline.md` as a living reference
+- Covers all 15 workflow files with mermaid diagrams, change detection paths, conditional deploy logic, Docker image strategy, and key design decisions
 
 ---
 
