@@ -158,6 +158,9 @@ bun run build
 - **EC2 deploy**: Use `instance-status-ok` (2/2 checks) instead of `instance-running` for SSM readiness. SSM agent needs the OS fully booted + IAM instance profile with `AmazonSSMManagedInstanceCore`.
 - App e2e: Playwright with `mocked` + `fullstack` projects. Mocked tests set `PROVER_URL` via playwright.config env so `PROVER_CONFIGURED=true`. Fullstack tests skip remote/TEE describes when their env vars are not set.
 - Env-var-driven feature flags: `PROVER_CONFIGURED = !!process.env.PROVER_URL`, `TEE_CONFIGURED = !!process.env.TEE_URL`. Buttons start `disabled` in HTML; JS enables them when configured + reachable/attested. Service row labels default to "not configured" in HTML.
+- **GHA workflow outputs cannot contain secrets**: GitHub masks any output whose value contains a secret string — the output silently becomes empty. Pass non-secret identifiers (e.g. image tags) and reconstruct full URIs in consuming jobs.
+- **Multi-stage Dockerfile `ARG`**: `--build-arg` only reaches global-scope `ARG` (before any `FROM`). Must re-declare `ARG` inside each stage that uses it.
+- **Docker prune ordering**: `docker image prune -af` deletes images not referenced by running containers. TEE deploy reads images via `nitro-cli` (no container), so prune must follow EIF build. Prover deploy starts a container first, protecting the image.
 
 ---
 
@@ -255,14 +258,18 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 - Docker layer cache now persists between deploys — pulls only changed layers instead of full ~2GB
 - Validated via CI: Remote Prover deploy + e2e (green), TEE deploy + e2e (green)
 
-**20B — Split Docker image into base + app layers:** DONE
+**20B — Split Docker image into base + app layers:** DONE (PRs #46, #48, #49, #51)
 - `Dockerfile.base`: shared base image (Bun + system deps + `bun install` ~2.4GB), tagged `tee-rex:base-<aztec-version>` in ECR
 - `Dockerfile` (prover) and `Dockerfile.nitro` stage 2 (builder): `ARG BASE_IMAGE` / `FROM ${BASE_IMAGE}`, removed dep install layers
-- `_build-base.yml`: idempotent reusable workflow — reads Aztec version, checks ECR, builds+pushes only if missing. ECR registry cache.
-- `_deploy-tee.yml` / `_deploy-prover.yml`: accept `base_image` input, pass as `--build-arg`, switched from GHA cache to ECR registry cache (bundles Phase 20D)
+- `_build-base.yml`: idempotent reusable workflow — reads Aztec version, checks ECR, builds+pushes only if missing. ECR registry cache. Outputs `base_tag` (not full URI — see lessons).
+- `_deploy-tee.yml` / `_deploy-prover.yml`: accept `base_tag` input, construct full URI internally from `ECR_REGISTRY` secret + tag, ECR registry cache (bundles Phase 20D)
 - `deploy-prod.yml`, `tee.yml`, `remote.yml`: added `ensure-base` job before deploy jobs
-- Deploy scripts (`ci-deploy.sh`, `ci-deploy-prover.sh`): reordered pull-before-prune so Docker reuses cached layers
+- Deploy scripts: reordered for layer caching. `ci-deploy-prover.sh`: stop → pull → run container → prune (container protects image). `ci-deploy.sh`: teardown → pull → build EIF → prune → run enclave (EIF build needs image on disk).
 - Local build scripts: two-step `build:base` + `build` / `build:nitro` in root `package.json`
+- **CI lessons (critical)**:
+  1. **GHA secret masking on outputs**: Workflow outputs containing secret values (e.g. ECR registry URI) are silently redacted to empty string. Warning: `Skip output 'X' since it may contain secret.` Fix: output only non-secret parts (e.g. image tag) and let consumers reconstruct the full value from their own secrets.
+  2. **Multi-stage Dockerfile `ARG` scoping**: `--build-arg` only populates `ARG` declarations at global scope (before the first `FROM`). In multi-stage builds, add a global `ARG` before stage 1, then re-declare it inside the stage that uses it (e.g. `ARG BASE_IMAGE` before `FROM rust AS nsm`, then again before `FROM ${BASE_IMAGE} AS builder`).
+  3. **`docker image prune -af` vs `nitro-cli`**: Prune deletes all images not referenced by running containers. For TEE deploys, `nitro-cli build-enclave` reads the Docker image directly (no container), so prune must happen **after** EIF build. For prover deploys, `docker run` starts the container first, protecting the image from prune.
 
 **20C — Early health check endpoint:**
 - Server currently takes 5-10 minutes to respond to `/attestation` on cold boot (Aztec initialization)
