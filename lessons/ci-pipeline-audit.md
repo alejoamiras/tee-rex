@@ -52,9 +52,26 @@ graph LR
     srv_skip --> srv_gate
 ```
 
-### Label-Triggered Workflows (TEE + Remote)
+### Label-Triggered Workflows (Infrastructure)
 
-Added to PRs (manually or by aztec-spartan auto-updater) to test deployed infrastructure.
+**Combined workflow** (`infra.yml`): triggered by `test-infra` label (used by aztec-spartan auto-updater). Deploys both TEE + prover, runs e2e once with all modes available.
+
+```mermaid
+graph TD
+    label_infra["label: test-infra"] --> infra["infra.yml"]
+
+    infra --> base["Build Base Image"]
+    base --> deploy_tee["Deploy TEE (CI EC2)"]
+    base --> deploy_prover["Deploy Prover (CI EC2)"]
+    deploy_tee --> sdk_e2e["SDK E2E (TEE + Remote)"]
+    deploy_prover --> sdk_e2e
+    deploy_tee --> app_e2e["App E2E (TEE + Remote)"]
+    deploy_prover --> app_e2e
+    sdk_e2e --> teardown["Teardown (stop both EC2s)"]
+    app_e2e --> teardown
+```
+
+**Individual workflows** (`tee.yml`, `remote.yml`): triggered by `test-tee` / `test-remote` labels for isolated debugging.
 
 ```mermaid
 graph TD
@@ -62,18 +79,14 @@ graph TD
     label_remote["label: test-remote"] --> remote["remote.yml"]
 
     tee --> tee_base["Build Base Image"]
-    tee_base --> tee_deploy["Deploy TEE (CI EC2)"]
-    tee_deploy --> tee_sdk_e2e["SDK E2E (SSM tunnel)"]
-    tee_deploy --> tee_app_e2e["App E2E (SSM tunnel)"]
-    tee_sdk_e2e --> tee_teardown["Teardown (stop EC2)"]
-    tee_app_e2e --> tee_teardown
+    tee_base --> tee_deploy["Deploy TEE"]
+    tee_deploy --> tee_e2e["SDK + App E2E (TEE only)"]
+    tee_e2e --> tee_teardown["Teardown"]
 
     remote --> rem_base["Build Base Image"]
-    rem_base --> rem_deploy["Deploy Prover (CI EC2)"]
-    rem_deploy --> rem_sdk_e2e["SDK E2E (SSM tunnel)"]
-    rem_deploy --> rem_app_e2e["App E2E (SSM tunnel)"]
-    rem_sdk_e2e --> rem_teardown["Teardown (stop EC2)"]
-    rem_app_e2e --> rem_teardown
+    rem_base --> rem_deploy["Deploy Prover"]
+    rem_deploy --> rem_e2e["SDK + App E2E (Remote only)"]
+    rem_e2e --> rem_teardown["Teardown"]
 ```
 
 ### Deploy Production (push to main)
@@ -105,8 +118,8 @@ graph TD
 graph LR
     cron["Daily 08:00 UTC"] --> check["Check spartan version"]
     check -->|new version| update["Update @aztec/* deps"]
-    update --> pr["Create PR with labels:<br/>test-tee + test-remote"]
-    pr --> ci["All CI workflows run"]
+    update --> pr["Create PR with label:<br/>test-infra"]
+    pr --> ci["All CI workflows run<br/>(sdk + app + server + infra)"]
     ci -->|green| merge["Auto-merge to main"]
     merge --> deploy["deploy-prod.yml triggers"]
 ```
