@@ -186,9 +186,12 @@ jobs:
             --latest
 
   # ── Post-deploy validation against nextnet ───────────────────────
+  # continue-on-error: nextnet is an external service we don't control.
+  # Deploys succeed independently; this job is best-effort validation.
   validate-prod:
     name: Validate Prod (nextnet)
     needs: [deploy-tee, deploy-prover, deploy-app]
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
