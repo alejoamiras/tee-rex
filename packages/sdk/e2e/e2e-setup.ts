@@ -46,20 +46,21 @@ export const config = {
 export const isLocalNetwork =
   config.nodeUrl.includes("localhost") || config.nodeUrl.includes("127.0.0.1");
 
-// Assert services are available — fail fast with a clear message
-async function assertServicesAvailable(): Promise<void> {
+// Assert local services are available — fail fast with a clear message.
+// Only checks when targeting local network. Remote networks (nextnet) are
+// validated by the test files themselves (nextnet.test.ts, etc.).
+async function assertLocalServicesAvailable(): Promise<void> {
+  if (!isLocalNetwork) return;
+
   const aztecOk = await fetch(`${config.nodeUrl}/status`, { signal: AbortSignal.timeout(5000) })
     .then((r) => r.ok)
     .catch(() => false);
 
-  // Only check prover when running against local network (it's co-located)
-  const teeRexOk = isLocalNetwork
-    ? await fetch(`${config.proverUrl}/encryption-public-key`, {
-        signal: AbortSignal.timeout(5000),
-      })
-        .then((r) => r.ok)
-        .catch(() => false)
-    : true;
+  const teeRexOk = await fetch(`${config.proverUrl}/encryption-public-key`, {
+    signal: AbortSignal.timeout(5000),
+  })
+    .then((r) => r.ok)
+    .catch(() => false);
 
   if (!aztecOk || !teeRexOk) {
     throw new Error(
@@ -71,4 +72,4 @@ async function assertServicesAvailable(): Promise<void> {
   }
 }
 
-await assertServicesAvailable();
+await assertLocalServicesAvailable();
