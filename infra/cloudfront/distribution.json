@@ -21,7 +21,7 @@
           "HTTPPort": 80,
           "HTTPSPort": 443,
           "OriginProtocolPolicy": "http-only",
-          "OriginReadTimeout": 60,
+          "OriginReadTimeout": 120,
           "OriginKeepaliveTimeout": 5
         }
       },
@@ -32,7 +32,7 @@
           "HTTPPort": 4000,
           "HTTPSPort": 443,
           "OriginProtocolPolicy": "http-only",
-          "OriginReadTimeout": 60,
+          "OriginReadTimeout": 120,
           "OriginKeepaliveTimeout": 5
         }
       }
