@@ -51,7 +51,7 @@ Testing is decent for the project's stage — 70 unit tests across 3 packages pl
   - Concurrent requests
   - Server startup/shutdown lifecycle
 - **Effort**: Small-Medium
-- **Resolution**: Added tests for missing body (400) and malformed JSON (400) error responses. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Added tests for missing body (400) and malformed JSON (400) error responses. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### G3. No failure-injection tests in e2e
 - **Files**: All e2e test files

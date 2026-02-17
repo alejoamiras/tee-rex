@@ -57,7 +57,7 @@ The CI/CD system is well-designed with reusable workflows, OIDC-based AWS auth (
 - **Category**: Timing
 - **Fix**: Increase health check to 2-3 minutes (60 attempts × 2s).
 - **Effort**: Trivial
-- **Resolution**: Increased from 30 to 90 attempts (3 minutes) in both `_deploy-tee.yml` and `_deploy-prover.yml`. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Increased from 30 to 90 attempts (3 minutes) in both `_deploy-tee.yml` and `_deploy-prover.yml`. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### M2. Ports hardcoded in 20+ locations
 - **Files**: Multiple workflows and scripts
@@ -109,7 +109,7 @@ The CI/CD system is well-designed with reusable workflows, OIDC-based AWS auth (
 - **Category**: Cost
 - **Fix**: Add `retention-days: 7` to artifact upload steps.
 - **Effort**: Trivial
-- **Resolution**: Added `retention-days: 7` to both artifact upload steps. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Added `retention-days: 7` to both artifact upload steps. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### L4. Playwright installed twice on fullstack e2e runs
 - **Files**: `app.yml:93`, `_e2e-app.yml:101`

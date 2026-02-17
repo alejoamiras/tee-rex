@@ -34,7 +34,7 @@ This audit is designed to survive context window resets. Each audit area produce
 
 ### Resolution Progress
 
-**21 of 60 findings resolved** across PRs [#67](https://github.com/alejoamiras/tee-rex/pull/67) and [#68](https://github.com/alejoamiras/tee-rex/pull/68):
+**21 of 60 findings resolved** across PRs [#67](https://github.com/alejoamiras/tee-rex/pull/67) and [#69](https://github.com/alejoamiras/tee-rex/pull/69):
 
 **PR #67** — Security + CI + infra hardening (13 findings):
 

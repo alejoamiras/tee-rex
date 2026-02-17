@@ -33,7 +33,7 @@ None.
 - **Category**: Security / Availability
 - **Fix**: Add `express-rate-limit` with per-IP limits (e.g., 2 concurrent, 10/hour). Or add request queuing.
 - **Effort**: Small
-- **Resolution**: Added `express-rate-limit` with 10 requests/hour per IP on `/prove`. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Added `express-rate-limit` with 10 requests/hour per IP on `/prove`. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 ### Medium
 
@@ -44,7 +44,7 @@ None.
 - **Category**: DX / Error Handling
 - **Fix**: Return 400 for validation/parsing errors (ZodError, base64 decode), 408 for timeouts, 500 for unexpected errors.
 - **Effort**: Small
-- **Resolution**: Added structured error responses: ZodError → 400 with details, SyntaxError → 400 "Malformed request body", others → 500. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Added structured error responses: ZodError → 400 with details, SyntaxError → 400 "Malformed request body", others → 500. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### M2. TEE_MODE env var cast without runtime validation — RESOLVED (#67)
 - **File**: `src/index.ts:104`

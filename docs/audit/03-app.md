@@ -41,7 +41,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Type Safety
 - **Fix**: Define a type for expected timings shape, use optional chaining with defaults: `t?.sync ?? 0`.
 - **Effort**: Small
-- **Resolution**: Replaced `any` with `SimTimings` interface, added `?? 0` defaults. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Replaced `any` with `SimTimings` interface, added `?? 0` defaults. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### H3. Accessibility is poor — no ARIA labels, color-only indicators — RESOLVED (#68)
 - **File**: `index.html` (multiple lines), `src/style.css`
@@ -55,7 +55,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Accessibility
 - **Fix**: Add `aria-label` to status dots and buttons, `role="log"` to log panel, `title` on disabled buttons explaining "Not configured", `aria-busy` on progress container.
 - **Effort**: Medium
-- **Resolution**: Added `role="log"` + `aria-live="polite"` to log panel, `aria-label="Service status"` and `aria-label="Activity log"` to sections, `title` on disabled mode buttons. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: Added `role="log"` + `aria-live="polite"` to log panel, `aria-label="Service status"` and `aria-label="Activity log"` to sections, `title` on disabled mode buttons. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 ### Medium
 
@@ -81,7 +81,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Security
 - **Fix**: Use `VITE_` prefix for app env vars or explicitly list which vars to expose in `define`.
 - **Effort**: Small
-- **Resolution**: All env vars still loaded for proxy config use, but explicitly pick only `AZTEC_NODE_URL`, `PROVER_URL`, `TEE_URL` into a filtered object. Only those 3 are exposed via `define`. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
+- **Resolution**: All env vars still loaded for proxy config use, but explicitly pick only `AZTEC_NODE_URL`, `PROVER_URL`, `TEE_URL` into a filtered object. Only those 3 are exposed via `define`. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### M4. Log panel can grow unbounded — no max entries
 - **File**: `src/ui.ts:20-35`
