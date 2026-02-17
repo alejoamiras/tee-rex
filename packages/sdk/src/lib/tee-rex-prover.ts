@@ -1,5 +1,4 @@
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
-import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
@@ -94,7 +93,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
     const executionStepsSerialized = executionSteps.map((step) => ({
       functionName: step.functionName,
-      witness: JSON.parse(jsonStringify(step.witness)),
+      witness: Array.from(step.witness.entries()),
       bytecode: Base64.fromBytes(step.bytecode),
       vk: Base64.fromBytes(step.vk),
       timings: step.timings,
