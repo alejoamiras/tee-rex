@@ -38,7 +38,7 @@
       </header>
 
       <!-- ═══ SERVICES ═══ -->
-      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm" aria-label="Service status">
         <div class="border-b border-gray-800 px-4 py-1.5">
           <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">services</span>
         </div>
@@ -84,6 +84,7 @@
           <button
             id="mode-remote"
             disabled
+            title="Remote proving not configured"
             class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
           >
             ▸ Remote <span class="text-gray-600 normal-case tracking-normal">(server)</span>
@@ -91,6 +92,7 @@
           <button
             id="mode-tee"
             disabled
+            title="TEE proving not configured"
             class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
           >
             ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
@@ -157,13 +159,15 @@
       </section>
 
       <!-- ═══ LOG ═══ -->
-      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm" aria-label="Activity log">
         <div class="border-b border-gray-800 px-4 py-1.5 flex items-center">
           <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">log</span>
           <span id="log-count" class="ml-auto text-[10px] text-gray-700 tabular-nums">0 entries</span>
         </div>
         <div
           id="log"
+          role="log"
+          aria-live="polite"
           class="h-56 overflow-y-auto text-[11px] leading-[1.6] text-gray-500 bg-black/40 px-3 py-2 space-y-px scroll-smooth"
         ></div>
       </section>

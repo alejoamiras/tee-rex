@@ -34,7 +34,9 @@ This audit is designed to survive context window resets. Each audit area produce
 
 ### Resolution Progress
 
-**13 of 60 findings resolved** in PR [#67](https://github.com/alejoamiras/tee-rex/pull/67) (security + CI + infra hardening):
+**21 of 60 findings resolved** across PRs [#67](https://github.com/alejoamiras/tee-rex/pull/67) and [#69](https://github.com/alejoamiras/tee-rex/pull/69):
+
+**PR #67** — Security + CI + infra hardening (13 findings):
 
 | Resolved Finding | Source | Severity |
 |---|---|---|
@@ -51,6 +53,19 @@ This audit is designed to survive context window resets. Each audit area produce
 | Base64 input validation | Server M3 | Medium |
 | NSM library pinned to SHA | Infra M3 / Security M3 | Medium |
 | Clock skew tolerance | SDK L2 / Security L2 | Low |
+
+**PR #68** — Server hardening + app quality + CI polish (8 findings):
+
+| Resolved Finding | Source | Severity |
+|---|---|---|
+| Rate limiting on `/prove` | Server H2 | High |
+| Structured error responses | Server M1 | Medium |
+| `extractSimDetail()` typing | App H2 | High |
+| Accessibility (ARIA/a11y) | App H3 | High |
+| Vite loadEnv env var scope | App M3 | Medium |
+| Health check timeout | CI M1 | Medium |
+| Artifact retention | CI L3 | Low |
+| Server error handling tests | Testing G2 | High |
 
 ---
 

@@ -80,6 +80,44 @@ describe("GET /encryption-public-key", () => {
   });
 });
 
+describe("POST /prove — error handling", () => {
+  test("returns 400 for missing body", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid request body");
+    } finally {
+      close();
+    }
+  });
+
+  test("returns 400 for malformed JSON", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not json",
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("Malformed request body");
+    } finally {
+      close();
+    }
+  });
+});
+
 describe("POST /prove", () => {
   test("returns 200 with proof for valid encrypted payload", async () => {
     const { app, prover, encryption } = createTestApp();

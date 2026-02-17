@@ -74,7 +74,14 @@ function bbWorkerPlugin(): Plugin {
 }
 
 export default defineConfig(({ mode, command }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+  // Load all env vars for config use (proxy targets). Only AZTEC_NODE_URL, PROVER_URL,
+  // and TEE_URL are exposed to the browser via the explicit `define` block below.
+  const allEnv = loadEnv(mode, process.cwd(), "");
+  const env = {
+    AZTEC_NODE_URL: allEnv.AZTEC_NODE_URL,
+    PROVER_URL: allEnv.PROVER_URL,
+    TEE_URL: allEnv.TEE_URL,
+  };
   return {
     plugins: [
       nodePolyfills({

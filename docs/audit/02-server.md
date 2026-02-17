@@ -26,23 +26,25 @@ None.
 - **Effort**: Trivial
 - **Resolution**: Reduced to 10MB, removed TODO comment. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
-#### H2. No rate limiting on `/prove` endpoint
+#### H2. No rate limiting on `/prove` endpoint — RESOLVED (#68)
 - **File**: `src/index.ts:33-69`
 - **Issue**: Proof generation is computationally expensive (1-5 minutes CPU). No rate limiting, API keys, or request queuing.
 - **Impact**: A single client can monopolize the prover by submitting concurrent requests.
 - **Category**: Security / Availability
 - **Fix**: Add `express-rate-limit` with per-IP limits (e.g., 2 concurrent, 10/hour). Or add request queuing.
 - **Effort**: Small
+- **Resolution**: Added `express-rate-limit` with 10 requests/hour per IP on `/prove`. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 ### Medium
 
-#### M1. All errors return generic 500 with "Internal server error"
+#### M1. All errors return generic 500 with "Internal server error" — RESOLVED (#68)
 - **File**: `src/index.ts:91-96`
 - **Issue**: The error handler returns `{ error: "Internal server error" }` for ALL errors: Zod validation failures, base64 decode errors, decryption failures, and actual server bugs.
 - **Impact**: Clients cannot distinguish between bad requests (their fault) and server errors. Debugging is harder.
 - **Category**: DX / Error Handling
 - **Fix**: Return 400 for validation/parsing errors (ZodError, base64 decode), 408 for timeouts, 500 for unexpected errors.
 - **Effort**: Small
+- **Resolution**: Added structured error responses: ZodError → 400 with details, SyntaxError → 400 "Malformed request body", others → 500. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### M2. TEE_MODE env var cast without runtime validation — RESOLVED (#67)
 - **File**: `src/index.ts:104`

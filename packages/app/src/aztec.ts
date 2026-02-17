@@ -298,13 +298,19 @@ export interface TokenFlowResult {
   tokenAddress: string;
 }
 
+interface SimTimings {
+  sync?: number;
+  total?: number;
+  perFunction?: { functionName: string; time: number }[];
+}
+
 /** Extract our SimStepDetail from a simulate() result with includeMetadata: true. */
-function extractSimDetail(simResult: { stats: { timings: any } }): SimStepDetail {
+function extractSimDetail(simResult: { stats: { timings: SimTimings } }): SimStepDetail {
   const t = simResult.stats.timings;
   return {
-    syncMs: t.sync,
-    totalMs: t.total,
-    perFunction: (t.perFunction ?? []).map((f: any) => ({ name: f.functionName, ms: f.time })),
+    syncMs: t.sync ?? 0,
+    totalMs: t.total ?? 0,
+    perFunction: (t.perFunction ?? []).map((f) => ({ name: f.functionName, ms: f.time })),
   };
 }
 

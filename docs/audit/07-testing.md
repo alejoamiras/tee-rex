@@ -39,7 +39,7 @@ Testing is decent for the project's stage — 70 unit tests across 3 packages pl
 
 ### High Gaps
 
-#### G2. Server error handling not tested
+#### G2. Server error handling not tested — RESOLVED (#68)
 - **File**: `packages/server/src/index.test.ts` (125 lines, 6 tests)
 - **What's tested**: Happy path for all 3 endpoints, Zod validation
 - **What's NOT tested**:
@@ -51,6 +51,7 @@ Testing is decent for the project's stage — 70 unit tests across 3 packages pl
   - Concurrent requests
   - Server startup/shutdown lifecycle
 - **Effort**: Small-Medium
+- **Resolution**: Added tests for missing body (400) and malformed JSON (400) error responses. PR [#69](https://github.com/alejoamiras/tee-rex/pull/69).
 
 #### G3. No failure-injection tests in e2e
 - **Files**: All e2e test files

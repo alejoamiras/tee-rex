@@ -13,14 +13,15 @@
     "@aztec/bb-prover": "4.0.0-spartan.20260217",
     "@aztec/simulator": "4.0.0-spartan.20260217",
     "@aztec/stdlib": "4.0.0-spartan.20260217",
+    "@logtape/express": "^2.0",
+    "@logtape/logtape": "^2.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
     "ms": "^2.1.3",
     "openpgp": "6.3.0",
     "ox": "^0.12.1",
-    "zod": "^3.23.8",
-    "@logtape/logtape": "^2.0",
-    "@logtape/express": "^2.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@logtape/pretty": "^2.0",
