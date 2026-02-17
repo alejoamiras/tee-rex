@@ -11,8 +11,9 @@
     "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
     "dev": "bun run --cwd packages/server dev",
     "start": "bun run --cwd packages/server start",
-    "lint": "biome check .",
+    "lint": "biome check . && shellcheck infra/*.sh",
     "lint:actions": "actionlint",
+    "lint:shell": "shellcheck infra/*.sh",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "test": "bun run lint && bun run test:typecheck && bun run test:unit",
@@ -33,6 +34,9 @@
     ],
     ".github/workflows/*.yml": [
       "actionlint"
+    ],
+    "*.sh": [
+      "shellcheck"
     ]
   },
   "devDependencies": {
