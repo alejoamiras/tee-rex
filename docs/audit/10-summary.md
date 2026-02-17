@@ -39,7 +39,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | # | Finding | Source | Effort | Impact |
 |---|---------|--------|--------|--------|
 | 1 | ~~**`waitForTx()` infinite loop**~~ | App C1 | Trivial | RESOLVED (#67) |
-| 2 | **CloudFront origin timeout 60s** — proofs take 1-5 min, users get 504 errors | Infra C1 | Small | Production-breaking |
+| 2 | ~~**CloudFront origin timeout 60s** — proofs take 1-5 min, users get 504 errors~~ | Infra C1 | Small | RESOLVED (#76) |
 | 3 | ~~**SSM tunnel processes leaked on CI failure**~~ | CI C1 | Small | RESOLVED (#67) |
 | 4 | ~~**Attestation has zero happy-path unit tests**~~ | Testing G1 | Medium | RESOLVED (#71) |
 | 5 | ~~**Root README.md is 23 lines**~~ | Docs H1 | Medium | RESOLVED (#71) |

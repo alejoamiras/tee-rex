@@ -27,7 +27,7 @@ CloudFront (https://<CLOUDFRONT_DOMAIN>)
 
 - **No custom domain**: CloudFront default `*.cloudfront.net` domain with free HTTPS.
 - **COOP/COEP headers**: Required for SharedArrayBuffer (multi-threaded WASM proving). Applied via response headers policy on all behaviors.
-- **Origin timeout**: 60s (default max). Proving requests that exceed 60s will 504. Request a quota increase via AWS Support to raise to 180s if needed.
+- **Origin timeout**: 120s (quota max without support ticket). Covers most proof generation (1-2 min). For proofs exceeding 120s, request a quota increase to 180s via AWS Support (`Response timeout per origin` quota in Service Quotas console).
 - **SPA fallback**: 403/404 custom error responses return `/index.html` with status 200.
 - **Cache strategy**: Assets use Vite content-hash filenames -> `CachingOptimized`. Backend behaviors use `CachingDisabled`.
 - **Security group**: Single rule using CloudFront managed prefix list (`<CF_PREFIX_LIST_ID>`) for ports 80-4000 to stay within the 60-rule SG quota.
