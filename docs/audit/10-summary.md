@@ -81,7 +81,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 27 | ~~Vite `loadEnv` loads all env vars (no VITE_ prefix)~~ | App M3, Security M2 | Small | RESOLVED (#69) |
 | 28 | ~~`innerHTML` usage in main.ts~~ | App M7, Security H3 | Small | RESOLVED (#67) |
 | 29 | ~~Health check timeout asymmetry in CI~~ | CI M1 | Trivial | RESOLVED (#69) |
-| 30 | socat proxy is a fragile background process | Infra M1 | Small |
+| 30 | ~~socat proxy is a fragile background process~~ | Infra M1 | Small | RESOLVED |
 | 31 | No monitoring or alerting on EC2 | Infra M4 | Medium |
 | 32 | ~~CLAUDE.md is the primary docs but not discoverable~~ | Docs M1 | Small | RESOLVED (#71) |
 | 33 | ~~No contribution guide (CONTRIBUTING.md)~~ | Docs M3 | Small | RESOLVED (#71) |
