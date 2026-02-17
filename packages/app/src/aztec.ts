@@ -87,7 +87,12 @@ export async function checkTeeRexServer(): Promise<boolean> {
 
 async function clearIndexedDB(): Promise<void> {
   const dbs = await indexedDB.databases();
-  await Promise.all(dbs.filter((db) => db.name).map((db) => indexedDB.deleteDatabase(db.name!)));
+  const aztecPrefixes = ["pxe-", "wallet-", "aztec-"];
+  await Promise.all(
+    dbs
+      .filter((db) => db.name && aztecPrefixes.some((prefix) => db.name!.startsWith(prefix)))
+      .map((db) => indexedDB.deleteDatabase(db.name!)),
+  );
 }
 
 /**
@@ -303,13 +308,17 @@ function extractSimDetail(simResult: { stats: { timings: any } }): SimStepDetail
   };
 }
 
-/** Poll until a transaction is no longer pending. Throws on dropped txs. */
+/** Poll until a transaction is no longer pending. Throws on dropped or timed-out txs. */
 async function waitForTx(txHash: TxHash): Promise<void> {
+  const deadline = Date.now() + 10 * 60 * 1000; // 10 minutes
   while (true) {
     const receipt = await state.node!.getTxReceipt(txHash);
     if (!receipt.isPending()) {
       if (receipt.isDropped()) throw new Error("Transaction dropped");
       return;
+    }
+    if (Date.now() > deadline) {
+      throw new Error("Transaction confirmation timed out after 10 minutes");
     }
     await new Promise((r) => setTimeout(r, 1000));
   }

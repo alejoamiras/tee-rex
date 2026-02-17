@@ -108,9 +108,10 @@ export async function verifyNitroAttestation(
     throw new AttestationError("COSE_Sign1 signature verification failed");
   }
 
-  // 5. Check freshness
+  // 5. Check freshness (with 30s tolerance for clock skew between client and enclave)
+  const CLOCK_SKEW_TOLERANCE_MS = 30_000;
   const docAge = Date.now() - attestationDoc.timestamp;
-  if (docAge > maxAgeMs) {
+  if (docAge > maxAgeMs + CLOCK_SKEW_TOLERANCE_MS) {
     throw new AttestationError(
       `Attestation document is too old (${Math.round(docAge / 1000)}s > ${Math.round(maxAgeMs / 1000)}s)`,
     );

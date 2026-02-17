@@ -8,10 +8,11 @@ FROM rust:1.85-slim AS nsm
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-ENV AWS_NE_NSM_API_VER="v0.4.0"
-RUN git clone --depth 1 -b ${AWS_NE_NSM_API_VER} \
-        https://github.com/aws/aws-nitro-enclaves-nsm-api.git && \
+# Pin to v0.4.0 commit SHA for supply chain integrity
+ENV AWS_NE_NSM_API_SHA="5798fec36f49e1d199c77947f4e51f86b663750f"
+RUN git clone https://github.com/aws/aws-nitro-enclaves-nsm-api.git && \
     cd aws-nitro-enclaves-nsm-api && \
+    git checkout ${AWS_NE_NSM_API_SHA} && \
     cargo build --release -p nsm-lib
 
 # -------------------------------------------------------------------
@@ -37,12 +38,16 @@ FROM oven/bun:1.3-debian
 # Install socat for vsock bridging, curl for health checks, iproute2 for lo setup
 RUN apt-get update && apt-get install -y socat curl iproute2 net-tools && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user (entrypoint drops privileges after network setup)
+RUN useradd --create-home --shell /bin/bash appuser
+
 # Copy libnsm.so built from aws-nitro-enclaves-nsm-api
 COPY --from=nsm /aws-nitro-enclaves-nsm-api/target/release/libnsm.so /usr/lib/libnsm.so
 RUN ldconfig
 
 # Copy the built application from the builder stage
 COPY --from=builder /app /app
+RUN chown -R appuser:appuser /app
 WORKDIR /app/packages/server
 
 # Nitro Enclaves communicate via vsock, not TCP.
@@ -69,8 +74,8 @@ ifconfig lo 127.0.0.1 2>/dev/null || {
 # WORKDIR not preserved by enclave init
 cd /app/packages/server
 
-# Start the Express server in the background
-bun run src/index.ts &
+# Drop privileges: run server and socat as non-root appuser
+su appuser -s /bin/bash -c "bun run src/index.ts" &
 SERVER_PID=$!
 
 # Wait for server to be ready
@@ -84,7 +89,7 @@ for i in $(seq 1 30); do
 done
 
 # Bridge vsock port 5000 to TCP port 4000
-socat VSOCK-LISTEN:5000,fork,reuseaddr TCP:localhost:${PORT} &
+su appuser -s /bin/bash -c "socat VSOCK-LISTEN:5000,fork,reuseaddr TCP:localhost:${PORT}" &
 SOCAT_PID=$!
 
 echo "Enclave ready: TEE_MODE=${TEE_MODE}, vsock:5000 -> tcp:${PORT}"

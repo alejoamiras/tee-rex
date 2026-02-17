@@ -15,6 +15,15 @@ echo "=== TEE-Rex Prover CI Deploy ==="
 echo "Image: ${IMAGE_URI}"
 echo "Region: ${REGION}"
 
+# ── 0. Disk space pre-check ──────────────────────────────────────
+AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
+echo "Disk space available: ${AVAIL_MB}MB"
+if [[ "${AVAIL_MB}" -lt 4096 ]]; then
+  echo "ERROR: Insufficient disk space (${AVAIL_MB}MB < 4096MB required)"
+  echo "Consider increasing EBS volume or running docker system prune"
+  exit 1
+fi
+
 # ── 1. Stop existing container ──────────────────────────────────
 echo "=== Stopping existing container ==="
 docker stop "${CONTAINER_NAME}" 2>/dev/null || true

@@ -95,8 +95,34 @@ function shortFnName(name: string): string {
   return i >= 0 ? name.slice(i + 1) : name;
 }
 
+/** Build a "label ··· value" row using safe DOM APIs (no innerHTML). */
+function buildDotRow(
+  className: string,
+  label: string,
+  labelClass: string,
+  value: string,
+  valueClass: string,
+): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = className;
+
+  const labelSpan = document.createElement("span");
+  labelSpan.className = labelClass;
+  labelSpan.textContent = label;
+
+  const dots = document.createElement("span");
+  dots.className = "step-dots";
+
+  const valueSpan = document.createElement("span");
+  valueSpan.className = valueClass;
+  valueSpan.textContent = value;
+
+  row.append(labelSpan, dots, valueSpan);
+  return row;
+}
+
 function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
-  container.innerHTML = "";
+  container.replaceChildren();
   const details = document.createElement("details");
   const summary = document.createElement("summary");
   summary.textContent = `${steps.length} steps`;
@@ -109,13 +135,15 @@ function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
     const group = document.createElement("div");
 
     // Step header row
-    const row = document.createElement("div");
-    row.className = "step-row";
-    row.innerHTML =
-      `<span class="text-gray-300">${step.step}</span>` +
-      `<span class="step-dots"></span>` +
-      `<span class="text-emerald-500/80 tabular-nums">${formatMs(step.durationMs)}</span>`;
-    group.appendChild(row);
+    group.appendChild(
+      buildDotRow(
+        "step-row",
+        step.step,
+        "text-gray-300",
+        formatMs(step.durationMs),
+        "text-emerald-500/80 tabular-nums",
+      ),
+    );
 
     // Sub-phase details (simulation + prove/send + confirm)
     if (step.simulation || step.proveSendMs != null) {
@@ -125,53 +153,60 @@ function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
       // Simulation sub-details
       if (step.simulation) {
         const sim = step.simulation;
-
-        const header = document.createElement("div");
-        header.className = "step-sim-row";
-        header.innerHTML =
-          `<span class="text-gray-600">sim</span>` +
-          `<span class="step-dots"></span>` +
-          `<span class="tabular-nums">${formatMs(sim.totalMs)}</span>`;
-        sub.appendChild(header);
-
-        const syncRow = document.createElement("div");
-        syncRow.className = "step-sim-row";
-        syncRow.innerHTML =
-          `<span class="text-gray-600">sync</span>` +
-          `<span class="step-dots"></span>` +
-          `<span class="tabular-nums">${formatMs(sim.syncMs)}</span>`;
-        sub.appendChild(syncRow);
-
+        sub.appendChild(
+          buildDotRow(
+            "step-sim-row",
+            "sim",
+            "text-gray-600",
+            formatMs(sim.totalMs),
+            "tabular-nums",
+          ),
+        );
+        sub.appendChild(
+          buildDotRow(
+            "step-sim-row",
+            "sync",
+            "text-gray-600",
+            formatMs(sim.syncMs),
+            "tabular-nums",
+          ),
+        );
         for (const fn of sim.perFunction) {
-          const fnRow = document.createElement("div");
-          fnRow.className = "step-sim-row";
-          fnRow.innerHTML =
-            `<span class="text-gray-600">${shortFnName(fn.name)}</span>` +
-            `<span class="step-dots"></span>` +
-            `<span class="tabular-nums">${formatMs(fn.ms)}</span>`;
-          sub.appendChild(fnRow);
+          sub.appendChild(
+            buildDotRow(
+              "step-sim-row",
+              shortFnName(fn.name),
+              "text-gray-600",
+              formatMs(fn.ms),
+              "tabular-nums",
+            ),
+          );
         }
       }
 
       // Prove + send / confirm sub-rows
       if (step.proveSendMs != null) {
-        const psRow = document.createElement("div");
-        psRow.className = "step-sim-row";
-        psRow.innerHTML =
-          `<span class="text-gray-600">prove + send</span>` +
-          `<span class="step-dots"></span>` +
-          `<span class="tabular-nums">${formatMs(step.proveSendMs)}</span>`;
-        sub.appendChild(psRow);
+        sub.appendChild(
+          buildDotRow(
+            "step-sim-row",
+            "prove + send",
+            "text-gray-600",
+            formatMs(step.proveSendMs),
+            "tabular-nums",
+          ),
+        );
       }
 
       if (step.confirmMs != null) {
-        const cRow = document.createElement("div");
-        cRow.className = "step-sim-row";
-        cRow.innerHTML =
-          `<span class="text-gray-600">confirm</span>` +
-          `<span class="step-dots"></span>` +
-          `<span class="tabular-nums">${formatMs(step.confirmMs)}</span>`;
-        sub.appendChild(cRow);
+        sub.appendChild(
+          buildDotRow(
+            "step-sim-row",
+            "confirm",
+            "text-gray-600",
+            formatMs(step.confirmMs),
+            "tabular-nums",
+          ),
+        );
       }
 
       group.appendChild(sub);

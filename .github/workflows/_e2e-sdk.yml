@@ -61,6 +61,7 @@ jobs:
             --target "${{ secrets.TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+          echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
           echo "Waiting for TEE SSM tunnel..."
           for i in $(seq 1 30); do
@@ -80,6 +81,7 @@ jobs:
             --target "${{ secrets.PROVER_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
           echo "Waiting for prover SSM tunnel..."
           for i in $(seq 1 30); do
@@ -116,3 +118,9 @@ jobs:
           name: aztec-node-logs-sdk
           path: /tmp/aztec-node.log
           if-no-files-found: ignore
+
+      - name: Cleanup SSM tunnels
+        if: always()
+        run: |
+          kill "$TEE_TUNNEL_PID" 2>/dev/null || true
+          kill "$PROVER_TUNNEL_PID" 2>/dev/null || true
