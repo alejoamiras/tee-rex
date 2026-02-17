@@ -1,3 +1,4 @@
+import type { ValueOf } from "ts-essentials";
 import { logger } from "./logger.js";
 
 /**
@@ -44,6 +45,8 @@ export interface AttestationVerifyOptions {
    * a challenge in the attestation request.
    */
   expectedNonce?: string;
+  /** @internal Override the root CA for testing. Defaults to the AWS Nitro Enclaves Root CA. */
+  rootCaPem?: string;
 }
 
 /**
@@ -76,7 +79,7 @@ export async function verifyNitroAttestation(
   const coseSign1: unknown = decodeCbor(raw);
 
   if (!Array.isArray(coseSign1) || coseSign1.length !== 4) {
-    throw new AttestationError("Invalid COSE_Sign1 structure");
+    throw new AttestationError("Invalid COSE_Sign1 structure", AttestationErrorCode.INVALID_COSE);
   }
 
   const [protectedHeaders, , payload, signature] = coseSign1 as [
@@ -92,7 +95,7 @@ export async function verifyNitroAttestation(
 
   // 3. Build and verify certificate chain
   const leafCert = new X509Certificate(attestationDoc.certificate);
-  const rootCa = new X509Certificate(AWS_NITRO_ROOT_CA_PEM);
+  const rootCa = new X509Certificate(options.rootCaPem ?? AWS_NITRO_ROOT_CA_PEM);
 
   // Build chain: cabundle contains certs from root to intermediate(s)
   const caBundleCerts = attestationDoc.cabundle.map((der) => new X509Certificate(der));
@@ -111,7 +114,10 @@ export async function verifyNitroAttestation(
   );
 
   if (!signatureValid) {
-    throw new AttestationError("COSE_Sign1 signature verification failed");
+    throw new AttestationError(
+      "COSE_Sign1 signature verification failed",
+      AttestationErrorCode.SIGNATURE_FAILED,
+    );
   }
 
   // 5. Check freshness (with 30s tolerance for clock skew between client and enclave)
@@ -120,6 +126,7 @@ export async function verifyNitroAttestation(
   if (docAge > maxAgeMs + CLOCK_SKEW_TOLERANCE_MS) {
     throw new AttestationError(
       `Attestation document is too old (${Math.round(docAge / 1000)}s > ${Math.round(maxAgeMs / 1000)}s)`,
+      AttestationErrorCode.EXPIRED,
     );
   }
 
@@ -129,12 +136,16 @@ export async function verifyNitroAttestation(
       const pcrIndex = Number(index);
       const actual = attestationDoc.pcrs.get(pcrIndex);
       if (!actual) {
-        throw new AttestationError(`PCR${pcrIndex} not found in attestation document`);
+        throw new AttestationError(
+          `PCR${pcrIndex} not found in attestation document`,
+          AttestationErrorCode.PCR_MISMATCH,
+        );
       }
       const actualHex = Buffer.from(actual).toString("hex");
       if (actualHex !== expectedHex.toLowerCase()) {
         throw new AttestationError(
           `PCR${pcrIndex} mismatch: expected ${expectedHex}, got ${actualHex}`,
+          AttestationErrorCode.PCR_MISMATCH,
         );
       }
     }
@@ -143,19 +154,26 @@ export async function verifyNitroAttestation(
   // 7. Check nonce if specified
   if (options.expectedNonce) {
     if (!attestationDoc.nonce) {
-      throw new AttestationError("Attestation document does not contain a nonce");
+      throw new AttestationError(
+        "Attestation document does not contain a nonce",
+        AttestationErrorCode.NONCE_MISMATCH,
+      );
     }
     const actualNonce = Buffer.from(attestationDoc.nonce).toString("hex");
     if (actualNonce !== options.expectedNonce.toLowerCase()) {
       throw new AttestationError(
         `Nonce mismatch: expected ${options.expectedNonce}, got ${actualNonce}`,
+        AttestationErrorCode.NONCE_MISMATCH,
       );
     }
   }
 
   // 8. Extract public key
   if (!attestationDoc.publicKey) {
-    throw new AttestationError("Attestation document does not contain a public key");
+    throw new AttestationError(
+      "Attestation document does not contain a public key",
+      AttestationErrorCode.MISSING_KEY,
+    );
   }
 
   const publicKey = new TextDecoder().decode(attestationDoc.publicKey);
@@ -226,7 +244,7 @@ function verifyCertificateChain(
 ): void {
   // Verify root is self-signed
   if (!root.verify(root.publicKey)) {
-    throw new AttestationError("Root CA is not self-signed");
+    throw new AttestationError("Root CA is not self-signed", AttestationErrorCode.CHAIN_FAILED);
   }
 
   // Build ordered chain: root → intermediates → leaf
@@ -237,20 +255,43 @@ function verifyCertificateChain(
     const issuer = chain[i - 1]!;
 
     if (!cert.verify(issuer.publicKey)) {
-      throw new AttestationError(`Certificate chain verification failed at index ${i}`);
+      throw new AttestationError(
+        `Certificate chain verification failed at index ${i}`,
+        AttestationErrorCode.CHAIN_FAILED,
+      );
     }
 
     // Check validity period
     const now = new Date();
     if (now < new Date(cert.validFrom) || now > new Date(cert.validTo)) {
-      throw new AttestationError(`Certificate at index ${i} is not within its validity period`);
+      throw new AttestationError(
+        `Certificate at index ${i} is not within its validity period`,
+        AttestationErrorCode.CHAIN_FAILED,
+      );
     }
   }
 }
 
+/** Machine-readable error codes for attestation verification failures. */
+export type AttestationErrorCode = ValueOf<typeof AttestationErrorCode>;
+export const AttestationErrorCode = {
+  INVALID_COSE: "INVALID_COSE",
+  INVALID_DOCUMENT: "INVALID_DOCUMENT",
+  CHAIN_FAILED: "CHAIN_FAILED",
+  SIGNATURE_FAILED: "SIGNATURE_FAILED",
+  EXPIRED: "EXPIRED",
+  PCR_MISMATCH: "PCR_MISMATCH",
+  NONCE_MISMATCH: "NONCE_MISMATCH",
+  MISSING_KEY: "MISSING_KEY",
+} as const;
+
+/** Error thrown when Nitro attestation verification fails. Includes a machine-readable {@link AttestationErrorCode}. */
 export class AttestationError extends Error {
-  constructor(message: string) {
+  readonly code: AttestationErrorCode;
+
+  constructor(message: string, code: AttestationErrorCode = AttestationErrorCode.INVALID_DOCUMENT) {
     super(message);
     this.name = "AttestationError";
+    this.code = code;
   }
 }

@@ -112,7 +112,9 @@ export function createApp(deps: AppDependencies): express.Express {
         res.status(400).json({ error: "Malformed request body" });
         return;
       }
-      logger.error("Unhandled error", { error: err });
+      logger.error("Unhandled error", {
+        error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
+      });
       res.status(500).json({ error: "Internal server error" });
     },
   );

@@ -44,14 +44,32 @@ prover.setProvingMode(ProvingMode.remote);
 prover.setProvingMode(ProvingMode.local);
 ```
 
+### Configure attestation verification
+
+```ts
+prover.setAttestationConfig({
+  // reject servers not running in a TEE
+  requireAttestation: true,
+  // verify enclave identity via PCR values
+  expectedPCRs: { 0: "abc123..." },
+  // attestation freshness (default: 5 minutes)
+  maxAgeMs: 5 * 60 * 1000,
+});
+```
+
 ## API
 
 ### `TeeRexProver`
+
+Aztec private kernel prover that can generate proofs locally or on a remote
+tee-rex server running inside an AWS Nitro Enclave.
 
 ```ts
 class TeeRexProver extends BBLazyPrivateKernelProver {
   constructor(apiUrl: string, ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>)
   setProvingMode(mode: ProvingMode): void
+  setApiUrl(url: string): void
+  setAttestationConfig(config: TeeRexAttestationConfig): void
   createChonkProof(executionSteps: PrivateExecutionStep[]): Promise<ChonkProofWithPublicInputs>
 }
 ```
@@ -59,6 +77,8 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 - **`apiUrl`** — TEE-Rex server endpoint (e.g. `http://localhost:4000`)
 - **`...args`** — forwarded to `BBLazyPrivateKernelProver` (typically a `CircuitSimulator` instance)
 - **`setProvingMode(mode)`** — switch between `"remote"` (TEE) and `"local"` (WASM) proving
+- **`setApiUrl(url)`** — update the tee-rex server URL at runtime
+- **`setAttestationConfig(config)`** — configure attestation verification (PCR checks, freshness, require TEE)
 - **`createChonkProof(steps)`** — overrides the parent to route proofs through the TEE server in remote mode
 
 ### `ProvingMode`
@@ -68,25 +88,68 @@ const ProvingMode = { local: "local", remote: "remote" } as const;
 type ProvingMode = "local" | "remote";
 ```
 
+### `TeeRexAttestationConfig`
+
+```ts
+interface TeeRexAttestationConfig {
+  requireAttestation?: boolean;  // reject servers in standard (non-TEE) mode
+  expectedPCRs?: Record<number, string>;  // expected PCR values (hex strings)
+  maxAgeMs?: number;  // max attestation age in ms (default: 5 min)
+}
+```
+
+### `verifyNitroAttestation`
+
+Verify a Nitro attestation document and extract the embedded public key. Used internally by `TeeRexProver` but exported for advanced use cases.
+
+```ts
+function verifyNitroAttestation(
+  attestationDocumentBase64: string,
+  options?: AttestationVerifyOptions,
+): Promise<{ publicKey: string; document: NitroAttestationDocument }>
+```
+
+### `AttestationError`
+
+Error thrown when attestation verification fails. Includes a machine-readable `code` for programmatic handling.
+
+```ts
+class AttestationError extends Error {
+  readonly code: AttestationErrorCode;
+}
+
+const AttestationErrorCode = {
+  INVALID_COSE: "INVALID_COSE",
+  INVALID_DOCUMENT: "INVALID_DOCUMENT",
+  CHAIN_FAILED: "CHAIN_FAILED",
+  SIGNATURE_FAILED: "SIGNATURE_FAILED",
+  EXPIRED: "EXPIRED",
+  PCR_MISMATCH: "PCR_MISMATCH",
+  NONCE_MISMATCH: "NONCE_MISMATCH",
+  MISSING_KEY: "MISSING_KEY",
+} as const;
+```
+
 ## How It Works
 
 `TeeRexProver` extends Aztec's `BBLazyPrivateKernelProver` and overrides `createChonkProof` — the single method responsible for generating the cryptographic proof (ClientIVC). All other operations (witness generation, kernel circuit simulation) run locally in the PXE.
 
 In **remote** mode, `createChonkProof`:
 
-1. Serializes execution steps (bytecodes, witnesses, VKs) to JSON
-2. Encrypts the payload with the TEE server's OpenPGP public key (fetched from `/encryption-public-key`)
-3. POSTs the encrypted data to `/prove`
-4. Deserializes and returns the proof
+1. Fetches the server's attestation document from `/attestation`
+2. Verifies the Nitro attestation (COSE_Sign1 signature, certificate chain, PCRs)
+3. Encrypts the proving inputs with the server's attested public key (curve25519 + AES-256-GCM)
+4. POSTs the encrypted data to `/prove` (with automatic retry on transient failures)
+5. Deserializes and returns the proof
 
 In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createChonkProof` which runs Barretenberg WASM in the browser or Node.js.
 
 ## Requirements
 
-- Aztec `4.0.0-nightly.20260204` or compatible nightly
+- Aztec `4.0.0-spartan` or compatible version
 - A running TEE-Rex server for remote proving
 - A running Aztec node for PXE connectivity
 
 ## Contributors
 
-Made with ❤️ by [Alejo Amiras](https://github.com/alejoamiras)
+Made with love by [Alejo Amiras](https://github.com/alejoamiras)

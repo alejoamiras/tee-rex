@@ -38,7 +38,7 @@ export function appendLog(
 }
 
 export function formatDuration(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 }
 
 export function startClock(): void {

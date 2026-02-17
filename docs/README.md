@@ -7,6 +7,13 @@
 | [CI Pipeline](./ci-pipeline.md) | All GitHub Actions workflows, change detection, conditional deploys, and Docker caching strategy |
 | [Nitro Deployment](./nitro-deployment.md) | Step-by-step guide for deploying the Nitro Enclave on EC2 |
 
+## Development
+
+| Document | Description |
+|----------|-------------|
+| [CLAUDE.md](../CLAUDE.md) | Full development roadmap, architectural decisions, and phase history |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Setup, workflow, testing, and code style guide |
+
 ## Audit Reports
 
 The `audit/` folder contains a comprehensive codebase audit (60 findings across 10 categories):
