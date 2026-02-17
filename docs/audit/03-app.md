@@ -34,17 +34,18 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Effort**: Trivial
 - **Resolution**: Scoped to `pxe-`, `wallet-`, `aztec-` prefixed databases only. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
-#### H2. `extractSimDetail()` uses `any` without validation
+#### H2. `extractSimDetail()` uses `any` without validation — RESOLVED (#68)
 - **File**: `src/aztec.ts:297-304`
 - **Code**: `function extractSimDetail(simResult: { stats: { timings: any } }): SimStepDetail`
 - **Issue**: Parameter type uses `any` for timings. Accesses `t.sync`, `t.total`, `t.perFunction` without checking they exist. If Aztec changes the timings shape, this crashes silently or returns wrong data.
 - **Category**: Type Safety
 - **Fix**: Define a type for expected timings shape, use optional chaining with defaults: `t?.sync ?? 0`.
 - **Effort**: Small
+- **Resolution**: Replaced `any` with `SimTimings` interface, added `?? 0` defaults. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
 
-#### H3. Accessibility is poor — no ARIA labels, color-only indicators
+#### H3. Accessibility is poor — no ARIA labels, color-only indicators — RESOLVED (#68)
 - **File**: `index.html` (multiple lines), `src/style.css`
-- **Issue**: 
+- **Issue**:
   - Status dots convey state via color only (green/red/gray) — no text alternative
   - Mode buttons and result cards lack `aria-label`
   - Log panel not marked as `role="log"` with `aria-live="polite"`
@@ -54,6 +55,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Accessibility
 - **Fix**: Add `aria-label` to status dots and buttons, `role="log"` to log panel, `title` on disabled buttons explaining "Not configured", `aria-busy` on progress container.
 - **Effort**: Medium
+- **Resolution**: Added `role="log"` + `aria-live="polite"` to log panel, `aria-label="Service status"` and `aria-label="Activity log"` to sections, `title` on disabled mode buttons. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
 
 ### Medium
 
@@ -71,7 +73,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Fix**: Add a comment explaining the distinction, or rename the constant to `PROVER_PROXY_PATH`.
 - **Effort**: Trivial
 
-#### M3. Vite `loadEnv` loads all env vars (no VITE_ prefix filtering)
+#### M3. Vite `loadEnv` loads all env vars (no VITE_ prefix filtering) — RESOLVED (#68)
 - **File**: `vite.config.ts:77`
 - **Code**: `loadEnv(mode, process.cwd(), "")`
 - **Issue**: Third argument `""` means ALL env vars are loaded, not just `VITE_`-prefixed ones. Sensitive env vars (PATH, HOME, AWS credentials) could be accidentally exposed via `process.env` replacements.
@@ -79,6 +81,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Security
 - **Fix**: Use `VITE_` prefix for app env vars or explicitly list which vars to expose in `define`.
 - **Effort**: Small
+- **Resolution**: All env vars still loaded for proxy config use, but explicitly pick only `AZTEC_NODE_URL`, `PROVER_URL`, `TEE_URL` into a filtered object. Only those 3 are exposed via `define`. PR [#68](https://github.com/alejoamiras/tee-rex/pull/68).
 
 #### M4. Log panel can grow unbounded — no max entries
 - **File**: `src/ui.ts:20-35`

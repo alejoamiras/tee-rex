@@ -3,6 +3,7 @@ import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
 import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import ms from "ms";
 import { Base64, Bytes } from "ox";
 import { z } from "zod";
@@ -30,7 +31,15 @@ export function createApp(deps: AppDependencies): express.Express {
   app.use(express.json({ limit: "10mb" }));
   app.use(expressLogger());
 
-  app.post("/prove", async (req, res, next) => {
+  const proveLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    limit: 10, // 10 requests per hour per IP
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: "Too many prove requests, try again later" },
+  });
+
+  app.post("/prove", proveLimiter, async (req, res, next) => {
     try {
       req.socket.setTimeout(ms("5 min"));
 
@@ -95,6 +104,14 @@ export function createApp(deps: AppDependencies): express.Express {
 
   app.use(
     (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ error: "Validation error", details: err.issues });
+        return;
+      }
+      if (err instanceof SyntaxError && "body" in err) {
+        res.status(400).json({ error: "Malformed request body" });
+        return;
+      }
       logger.error("Unhandled error", { error: err });
       res.status(500).json({ error: "Internal server error" });
     },

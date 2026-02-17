@@ -197,7 +197,7 @@ jobs:
           TUNNEL_PID=$!
           trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
 
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if curl -sf http://localhost:4002/attestation > /dev/null 2>&1; then
               echo "Prover healthy (attempt $i)"
               curl -s http://localhost:4002/attestation | jq '{mode}'
@@ -206,6 +206,6 @@ jobs:
             fi
             sleep 2
           done
-          echo "Health check failed after 60s"
+          echo "Health check failed after 3 minutes"
           echo "deployed=false" >> "$GITHUB_OUTPUT"
           exit 1

@@ -121,6 +121,7 @@ jobs:
           name: aztec-node-logs-app
           path: /tmp/aztec-node.log
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Cleanup SSM tunnels
         if: always()
