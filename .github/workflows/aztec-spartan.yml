@@ -40,9 +40,11 @@ jobs:
         run: |
           if [ -n "${{ inputs.version }}" ]; then
             CURRENT=$(bun -e "console.log(JSON.parse(require('fs').readFileSync('packages/sdk/package.json','utf8')).devDependencies['@aztec/aztec.js'])")
-            echo "needs_update=true" >> "$GITHUB_OUTPUT"
-            echo "new_version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            {
+              echo "needs_update=true"
+              echo "new_version=${{ inputs.version }}"
+              echo "current_version=$CURRENT"
+            } >> "$GITHUB_OUTPUT"
             echo "Forced update to ${{ inputs.version }} (current: $CURRENT)"
           else
             RESULT=$(bun scripts/check-aztec-spartan.ts)
@@ -50,9 +52,11 @@ jobs:
             NEEDS=$(echo "$RESULT" | jq -r .needsUpdate)
             LATEST=$(echo "$RESULT" | jq -r .latest)
             CURRENT=$(echo "$RESULT" | jq -r .current)
-            echo "needs_update=$NEEDS" >> "$GITHUB_OUTPUT"
-            echo "new_version=$LATEST" >> "$GITHUB_OUTPUT"
-            echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            {
+              echo "needs_update=$NEEDS"
+              echo "new_version=$LATEST"
+              echo "current_version=$CURRENT"
+            } >> "$GITHUB_OUTPUT"
             if [ "$NEEDS" = "true" ]; then
               echo "New spartan available: $CURRENT → $LATEST"
             else
@@ -85,7 +89,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Update @aztec/* versions
-        run: bun scripts/update-aztec-version.ts $NEW_VERSION
+        run: bun scripts/update-aztec-version.ts "$NEW_VERSION"
 
       - name: Install dependencies with new versions
         run: bun install
