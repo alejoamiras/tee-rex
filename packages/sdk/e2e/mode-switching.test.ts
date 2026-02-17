@@ -13,7 +13,6 @@
 
 import { describe, expect, test } from "bun:test";
 import { ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
-import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
@@ -22,7 +21,8 @@ import { WASMSimulator } from "@aztec/simulator/client";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
 import { EmbeddedWallet } from "@aztec/wallets/embedded";
 import { getLogger } from "@logtape/logtape";
-import { config } from "./e2e-setup";
+import { deploySchnorrAccount } from "./e2e-helpers.js";
+import { config } from "./e2e-setup.js";
 
 const logger = getLogger(["tee-rex", "sdk", "e2e", "mode-switching"]);
 
@@ -31,28 +31,6 @@ let node: ReturnType<typeof createAztecNodeClient>;
 let prover: TeeRexProver;
 let wallet: EmbeddedWallet;
 let feePaymentMethod: SponsoredFeePaymentMethod;
-
-/** Deploy a new Schnorr account using the current prover mode with Sponsored FPC. */
-async function deploySchnorrAccount(label: string) {
-  logger.debug(`Creating Schnorr account (${label})`);
-  const secret = Fr.random();
-  const salt = Fr.random();
-  const accountManager = await wallet.createSchnorrAccount(secret, salt);
-
-  logger.debug(`Deploying account (${label})`);
-  const startTime = Date.now();
-  const deployMethod = await accountManager.getDeployMethod();
-  const deployedContract = await deployMethod.send({
-    from: AztecAddress.ZERO,
-    skipClassPublication: true,
-    fee: { paymentMethod: feePaymentMethod },
-  });
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-  expect(deployedContract).toBeDefined();
-  logger.info(`${label} deploy completed`, { durationSec: elapsed });
-  return deployedContract;
-}
 
 describe("Mode Switching", () => {
   describe("Setup", () => {
@@ -99,7 +77,7 @@ describe("Mode Switching", () => {
   describe("Remote → Local Transition", () => {
     test("should deploy first account with remote proving", async () => {
       expect(wallet).toBeDefined();
-      await deploySchnorrAccount("remote mode");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "remote mode");
     }, 600000);
 
     test("should switch to local mode and deploy second account", async () => {
@@ -108,7 +86,7 @@ describe("Mode Switching", () => {
       prover.setProvingMode(ProvingMode.local);
       logger.info("Switched to local proving mode");
 
-      await deploySchnorrAccount("local mode");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "local mode");
     }, 600000);
   });
 
@@ -120,7 +98,7 @@ describe("Mode Switching", () => {
       prover.setProvingMode(ProvingMode.remote);
       logger.info("Switched to TEE mode", { teeUrl: config.teeUrl });
 
-      await deploySchnorrAccount("TEE mode");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "TEE mode");
     }, 600000);
 
     test("should switch from TEE to local and deploy", async () => {
@@ -129,7 +107,7 @@ describe("Mode Switching", () => {
       prover.setProvingMode(ProvingMode.local);
       logger.info("Switched from TEE to local proving mode");
 
-      await deploySchnorrAccount("local after TEE");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "local after TEE");
     }, 600000);
 
     test("should switch from local back to standard remote and deploy", async () => {
@@ -139,7 +117,7 @@ describe("Mode Switching", () => {
       prover.setProvingMode(ProvingMode.remote);
       logger.info("Switched from local back to standard remote", { apiUrl: config.proverUrl });
 
-      await deploySchnorrAccount("standard remote after TEE");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "standard remote after TEE");
     }, 600000);
   });
 });

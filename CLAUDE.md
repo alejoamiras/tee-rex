@@ -74,7 +74,18 @@ Every step must include a validation strategy. Think about how to verify the ste
 
 If you're unsure how to validate a step, that's a sign the step might be too big — break it down further.
 
-### 6. Branch, commit & CI
+### 6. Local validation gate
+
+Before pushing to CI, run the **full local validation suite** to catch issues early. CI round-trips are expensive (10-15 min per cycle) — local validation takes under 2 minutes and prevents wasted iterations.
+
+**Required before every push:**
+1. `bun run test` — lint + typecheck + unit tests across all packages
+2. `bun run lint:actions` — actionlint on any modified workflow files
+3. If infrastructure scripts changed: review with `shellcheck` where feasible
+
+**Only push when local validation is fully green.** If lint or tests fail locally, they will fail in CI — fix them first. The goal is to treat CI as a confirmation step, not a discovery step.
+
+### 7. Branch, commit & CI
 
 When the work is complete and validated locally:
 

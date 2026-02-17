@@ -38,6 +38,12 @@ export interface AttestationVerifyOptions {
   expectedPCRs?: Record<number, string>;
   /** Maximum age of the attestation document in milliseconds. Default: 5 minutes. */
   maxAgeMs?: number;
+  /**
+   * Expected nonce value (hex string). When provided, the attestation document's
+   * nonce field must match exactly. Use this to prevent replay attacks by including
+   * a challenge in the attestation request.
+   */
+  expectedNonce?: string;
 }
 
 /**
@@ -67,18 +73,18 @@ export async function verifyNitroAttestation(
 
   // 1. Decode the COSE_Sign1 envelope
   const raw = Buffer.from(attestationDocumentBase64, "base64");
-  const coseSign1 = decodeCbor(raw) as [
-    Uint8Array,
-    Record<string, unknown>,
-    Uint8Array,
-    Uint8Array,
-  ];
+  const coseSign1: unknown = decodeCbor(raw);
 
   if (!Array.isArray(coseSign1) || coseSign1.length !== 4) {
     throw new AttestationError("Invalid COSE_Sign1 structure");
   }
 
-  const [protectedHeaders, , payload, signature] = coseSign1;
+  const [protectedHeaders, , payload, signature] = coseSign1 as [
+    Uint8Array,
+    unknown,
+    Uint8Array,
+    Uint8Array,
+  ];
 
   // 2. Parse the attestation document from the payload
   const doc = decodeCbor(payload) as Record<string, unknown>;
@@ -134,7 +140,20 @@ export async function verifyNitroAttestation(
     }
   }
 
-  // 7. Extract public key
+  // 7. Check nonce if specified
+  if (options.expectedNonce) {
+    if (!attestationDoc.nonce) {
+      throw new AttestationError("Attestation document does not contain a nonce");
+    }
+    const actualNonce = Buffer.from(attestationDoc.nonce).toString("hex");
+    if (actualNonce !== options.expectedNonce.toLowerCase()) {
+      throw new AttestationError(
+        `Nonce mismatch: expected ${options.expectedNonce}, got ${actualNonce}`,
+      );
+    }
+  }
+
+  // 8. Extract public key
   if (!attestationDoc.publicKey) {
     throw new AttestationError("Attestation document does not contain a public key");
   }
@@ -171,13 +190,29 @@ function parseAttestationDocument(doc: Record<string, unknown>): NitroAttestatio
     throw new AttestationError("Missing or invalid cabundle");
   }
 
+  // Validate pcrs Map entries (CBOR maps decode as Map<number, Uint8Array>)
+  const pcrs = doc.pcrs as Map<unknown, unknown>;
+  for (const [key, value] of pcrs) {
+    if (typeof key !== "number" || !(value instanceof Uint8Array)) {
+      throw new AttestationError("Invalid pcrs entry: expected Map<number, Uint8Array>");
+    }
+  }
+
+  // Validate cabundle entries
+  const cabundle = doc.cabundle as unknown[];
+  for (const entry of cabundle) {
+    if (!(entry instanceof Uint8Array)) {
+      throw new AttestationError("Invalid cabundle entry: expected Uint8Array[]");
+    }
+  }
+
   return {
-    moduleId: doc.module_id,
-    timestamp: doc.timestamp,
-    digest: doc.digest,
-    pcrs: doc.pcrs as Map<number, Uint8Array>,
-    certificate: doc.certificate,
-    cabundle: doc.cabundle as Uint8Array[],
+    moduleId: doc.module_id as string,
+    timestamp: doc.timestamp as number,
+    digest: doc.digest as string,
+    pcrs: pcrs as Map<number, Uint8Array>,
+    certificate: doc.certificate as Uint8Array,
+    cabundle: cabundle as Uint8Array[],
     publicKey: doc.public_key instanceof Uint8Array ? doc.public_key : undefined,
     userData: doc.user_data instanceof Uint8Array ? doc.user_data : undefined,
     nonce: doc.nonce instanceof Uint8Array ? doc.nonce : undefined,

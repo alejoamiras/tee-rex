@@ -59,7 +59,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 12 | ~~All containers run as root~~ | Infra H1, Security M1 | Medium | RESOLVED (#67) |
 | 13 | IAM `s3:DeleteObject` unrestricted on prod bucket | Infra H2, Security M4 | Medium | |
 | 14 | ~~Deploy scripts don't check disk space~~ | Infra H3 | Trivial | RESOLVED (#67) |
-| 15 | No architecture diagram anywhere | Docs H2 | Small | |
+| 15 | ~~No architecture diagram anywhere~~ | Docs H2 | Small | RESOLVED (#70) |
 | 16 | `extractSimDetail()` uses `any` without validation | App H2 | Small | |
 | 17 | Accessibility: no ARIA labels, color-only indicators | App H3 | Medium | |
 
@@ -74,10 +74,10 @@ These issues could cause visible failures or represent fundamental gaps.
 | 20 | ~~Base64 input not validated before decoding~~ | Server M3 | Trivial | RESOLVED (#67) |
 | 21 | No request logging or request IDs | Server M4 | Small |
 | 22 | Witness serialization triple-encodes large data | SDK H2 | Medium |
-| 23 | Unsafe type casts in attestation.ts CBOR decoding | SDK M1 | Small |
+| 23 | ~~Unsafe type casts in attestation.ts CBOR decoding~~ | SDK M1 | Small | RESOLVED (#70) |
 | 24 | No retry logic for remote proving | SDK M2 | Small |
-| 25 | Attestation nonce not validated by SDK | SDK M5, Security H2 | Medium |
-| 26 | Mutable global state in app (document or refactor) | Quality M1 | Trivial |
+| 25 | ~~Attestation nonce not validated by SDK~~ | SDK M5, Security H2 | Medium | RESOLVED (#70) |
+| 26 | ~~Mutable global state in app (document or refactor)~~ | Quality M1 | Trivial | RESOLVED (#70) |
 | 27 | Vite `loadEnv` loads all env vars (no VITE_ prefix) | App M3, Security M2 | Small |
 | 28 | ~~`innerHTML` usage in main.ts~~ | App M7, Security H3 | Small | RESOLVED (#67) |
 | 29 | Health check timeout asymmetry in CI | CI M1 | Trivial |

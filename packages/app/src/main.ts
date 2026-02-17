@@ -91,8 +91,9 @@ function formatMs(ms: number): string {
 
 /** Shorten "ContractName:function_name" → "function_name" */
 function shortFnName(name: string): string {
+  if (!name) return "unknown";
   const i = name.lastIndexOf(":");
-  return i >= 0 ? name.slice(i + 1) : name;
+  return i >= 0 && i < name.length - 1 ? name.slice(i + 1) : name;
 }
 
 /** Build a "label ··· value" row using safe DOM APIs (no innerHTML). */

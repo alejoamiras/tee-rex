@@ -19,7 +19,8 @@ export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success")
 export type UiMode = "local" | "remote" | "tee";
 
 const AZTEC_NODE_URL = process.env.AZTEC_NODE_URL || "/aztec";
-const PROVER_URL = "/prover"; // Proxied via Vite dev server / CloudFront
+/** Vite dev server / CloudFront proxy path for the prover (not the actual URL). */
+const PROVER_PROXY_PATH = "/prover";
 
 /** Display-friendly Aztec node URL for the services panel (reads env set by Vite define). */
 export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
@@ -27,7 +28,7 @@ export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
 /** Display-friendly prover URL for the services panel (reads env set by Vite define). */
 export const PROVER_DISPLAY_URL = process.env.PROVER_URL || "localhost:4000";
 
-/** True when PROVER_URL was set at build time — enables remote proving. */
+/** True when the PROVER_URL env var was set at build time — enables remote proving. */
 export const PROVER_CONFIGURED = !!process.env.PROVER_URL;
 
 /** True when TEE_URL was set at build time — enables auto-configuration. */
@@ -49,6 +50,11 @@ export interface AztecState {
   feePaymentMethod: SponsoredFeePaymentMethod | undefined;
 }
 
+/**
+ * Global mutable application state. Concurrent mutations are prevented at
+ * the UI layer via the `deploying` flag in main.ts, which disables action
+ * buttons while an async operation is in flight.
+ */
 export const state: AztecState = {
   node: null,
   prover: null,
@@ -74,7 +80,7 @@ export async function checkAztecNode(): Promise<boolean> {
 
 export async function checkTeeRexServer(): Promise<boolean> {
   try {
-    const res = await fetch(`${PROVER_URL}/encryption-public-key`, {
+    const res = await fetch(`${PROVER_PROXY_PATH}/encryption-public-key`, {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return false;
@@ -124,7 +130,7 @@ const lazyAccountContracts = {
 
 async function doInitializeWallet(log: LogFn): Promise<boolean> {
   log("Creating TeeRexProver...");
-  state.prover = new TeeRexProver(PROVER_URL, new WASMSimulator());
+  state.prover = new TeeRexProver(PROVER_PROXY_PATH, new WASMSimulator());
   state.prover.setProvingMode(state.provingMode);
 
   log("Connecting to Aztec node...");
@@ -234,13 +240,13 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
     case "local":
       state.provingMode = "local";
       state.prover.setProvingMode("local");
-      state.prover.setApiUrl(PROVER_URL);
+      state.prover.setApiUrl(PROVER_PROXY_PATH);
       state.prover.setAttestationConfig({});
       break;
     case "remote":
       state.provingMode = "remote";
       state.prover.setProvingMode("remote");
-      state.prover.setApiUrl(PROVER_URL);
+      state.prover.setApiUrl(PROVER_PROXY_PATH);
       state.prover.setAttestationConfig({});
       break;
     case "tee":
