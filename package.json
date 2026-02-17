@@ -30,6 +30,9 @@
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
       "biome check --write --no-errors-on-unmatched"
+    ],
+    ".github/workflows/*.yml": [
+      "actionlint"
     ]
   },
   "devDependencies": {
