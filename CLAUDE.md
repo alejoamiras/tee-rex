@@ -167,7 +167,7 @@ bun run build
 
 **Key architectural decisions (from completed phases):**
 - CI gate job pattern: workflows always trigger on PRs, `changes` job uses `dorny/paths-filter@v3` for declarative path-based change detection, gate jobs (`SDK/App/Server Status`) always run. `workflow_dispatch` overrides filters to `true`. Full CI reference: `docs/ci-pipeline.md`. Ruleset: `infra/rulesets/main-branch-protection.json`
-- AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. Setup: `infra/iam/README.md`
+- AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. S3 permissions split: `S3AppDeploy` (put/list) and `S3AppCleanup` (delete, object-level ARNs only). Setup: `infra/iam/README.md`
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
 - SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
@@ -389,6 +389,8 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - Phase 15 TEE generalization research (TeeProvider interface) — tackle after core features stabilize
 - **Gate `publish-sdk` on `validate-prod` instead of `nextnet-check`** — Currently `nextnet-check` (3 lightweight API calls, ~1 min) gates SDK publishing as a cheap pre-flight. The real validation is `validate-prod` (full Playwright e2e against prod servers + nextnet, ~30-60 min) but it has `continue-on-error` and is too slow/fragile to be a hard gate today. The proper fix: (1) extract `publish-sdk` into a reusable `_publish-sdk.yml` so it can be called from `deploy-prod.yml` after validation AND triggered standalone via `workflow_dispatch` for retries without re-running deploys, (2) make `publish-sdk` depend on `validate-prod` instead of `nextnet-check` for auto-update merges, (3) handle `continue-on-error` carefully — either remove it and accept that nextnet outages block publishes, or check `validate-prod`'s actual conclusion/outcome instead of its result. Tradeoff: more correct but slower, and nextnet outages would block auto-update SDK publishes until the network recovers.
 - ~~**IAM trust policy audit**~~ ✅ Done — tightened `tee-rex-ci-trust-policy.json` from `refs/heads/*` to `refs/heads/main` + `refs/heads/chore/aztec-spartan-*` + `pull_request`. **Note**: apply the updated policy to AWS with `aws iam update-assume-role-policy --role-name tee-rex-ci-github --policy-document file://infra/iam/tee-rex-ci-trust-policy.json`
+- ~~**IAM S3 DeleteObject scoping**~~ ✅ Done (#73) — split `S3AppDeploy` into two IAM statements: `S3AppDeploy` (PutObject, ListBucket, GetBucketLocation) and `S3AppCleanup` (DeleteObject on object-level ARNs only). Policy applied to AWS.
+- ~~**SDK witness triple-encoding**~~ ✅ Done (#73) — replaced `JSON.parse(jsonStringify(step.witness))` with `Array.from(step.witness.entries())` in `tee-rex-prover.ts`, eliminating a redundant serialization roundtrip for witness data.
 
 ---
 
