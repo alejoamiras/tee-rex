@@ -96,7 +96,6 @@
       "Effect": "Allow",
       "Action": [
         "s3:PutObject",
-        "s3:DeleteObject",
         "s3:ListBucket",
         "s3:GetBucketLocation"
       ],
@@ -104,6 +103,15 @@
         "arn:aws:s3:::tee-rex-app-prod",
         "arn:aws:s3:::tee-rex-app-prod/*",
         "arn:aws:s3:::tee-rex-app-devnet",
+        "arn:aws:s3:::tee-rex-app-devnet/*"
+      ]
+    },
+    {
+      "Sid": "S3AppCleanup",
+      "Effect": "Allow",
+      "Action": "s3:DeleteObject",
+      "Resource": [
+        "arn:aws:s3:::tee-rex-app-prod/*",
         "arn:aws:s3:::tee-rex-app-devnet/*"
       ]
     },

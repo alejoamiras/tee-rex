@@ -57,7 +57,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 10 | ~~Path filters don't include workflow file changes~~ | CI H2 | Trivial | RESOLVED (#67) |
 | 11 | ~~Required secrets not validated before use in deploys~~ | CI H3 | Small | RESOLVED (#67) |
 | 12 | ~~All containers run as root~~ | Infra H1, Security M1 | Medium | RESOLVED (#67) |
-| 13 | IAM `s3:DeleteObject` unrestricted on prod bucket | Infra H2, Security M4 | Medium | |
+| 13 | ~~IAM `s3:DeleteObject` unrestricted on prod bucket~~ | Infra H2, Security M4 | Medium | RESOLVED (#73) |
 | 14 | ~~Deploy scripts don't check disk space~~ | Infra H3 | Trivial | RESOLVED (#67) |
 | 15 | ~~No architecture diagram anywhere~~ | Docs H2 | Small | RESOLVED (#70) |
 | 16 | ~~`extractSimDetail()` uses `any` without validation~~ | App H2 | Small | RESOLVED (#69) |
@@ -73,7 +73,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 19 | ~~TEE_MODE env var cast without runtime validation~~ | Server M2 | Trivial | RESOLVED (#67) |
 | 20 | ~~Base64 input not validated before decoding~~ | Server M3 | Trivial | RESOLVED (#67) |
 | 21 | No request logging or request IDs | Server M4 | Small |
-| 22 | Witness serialization triple-encodes large data | SDK H2 | Medium |
+| 22 | ~~Witness serialization triple-encodes large data~~ | SDK H2 | Medium | RESOLVED (#73) |
 | 23 | ~~Unsafe type casts in attestation.ts CBOR decoding~~ | SDK M1 | Small | RESOLVED (#70) |
 | 24 | ~~No retry logic for remote proving~~ | SDK M2 | Small | RESOLVED (#71) |
 | 25 | ~~Attestation nonce not validated by SDK~~ | SDK M5, Security H2 | Medium | RESOLVED (#70) |
