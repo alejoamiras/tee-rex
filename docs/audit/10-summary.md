@@ -72,7 +72,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 18 | ~~Server returns generic 500 for all errors (no 400 for validation)~~ | Server M1 | Small | RESOLVED (#69) |
 | 19 | ~~TEE_MODE env var cast without runtime validation~~ | Server M2 | Trivial | RESOLVED (#67) |
 | 20 | ~~Base64 input not validated before decoding~~ | Server M3 | Trivial | RESOLVED (#67) |
-| 21 | No request logging or request IDs | Server M4 | Small |
+| 21 | ~~No request logging or request IDs~~ | Server M4 | Small | RESOLVED (#78) |
 | 22 | ~~Witness serialization triple-encodes large data~~ | SDK H2 | Medium | RESOLVED (#73) |
 | 23 | ~~Unsafe type casts in attestation.ts CBOR decoding~~ | SDK M1 | Small | RESOLVED (#70) |
 | 24 | ~~No retry logic for remote proving~~ | SDK M2 | Small | RESOLVED (#71) |
@@ -81,7 +81,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 27 | ~~Vite `loadEnv` loads all env vars (no VITE_ prefix)~~ | App M3, Security M2 | Small | RESOLVED (#69) |
 | 28 | ~~`innerHTML` usage in main.ts~~ | App M7, Security H3 | Small | RESOLVED (#67) |
 | 29 | ~~Health check timeout asymmetry in CI~~ | CI M1 | Trivial | RESOLVED (#69) |
-| 30 | ~~socat proxy is a fragile background process~~ | Infra M1 | Small | RESOLVED |
+| 30 | ~~socat proxy is a fragile background process~~ | Infra M1 | Small | RESOLVED (#74) |
 | 31 | No monitoring or alerting on EC2 | Infra M4 | Medium |
 | 32 | ~~CLAUDE.md is the primary docs but not discoverable~~ | Docs M1 | Small | RESOLVED (#71) |
 | 33 | ~~No contribution guide (CONTRIBUTING.md)~~ | Docs M3 | Small | RESOLVED (#71) |

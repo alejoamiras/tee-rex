@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mapSchema, schemas } from "@aztec/stdlib/schemas";
 import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
@@ -16,6 +17,14 @@ import { EncryptionService } from "./lib/encryption-service.js";
 import { setupLogging } from "./lib/logging.js";
 import { ProverService } from "./lib/prover-service.js";
 
+declare global {
+  namespace Express {
+    interface Request {
+      id: string;
+    }
+  }
+}
+
 const logger = getLogger(["tee-rex", "server"]);
 
 export interface AppDependencies {
@@ -29,6 +38,15 @@ export function createApp(deps: AppDependencies): express.Express {
 
   app.use(cors());
   app.use(express.json({ limit: "10mb" }));
+
+  // Assign a unique request ID to each request, returned in X-Request-Id header
+  app.use((req, res, next) => {
+    const id = (req.headers["x-request-id"] as string) || randomUUID();
+    req.id = id;
+    res.setHeader("X-Request-Id", id);
+    next();
+  });
+
   app.use(expressLogger());
 
   const proveLimiter = rateLimit({
@@ -42,10 +60,13 @@ export function createApp(deps: AppDependencies): express.Express {
   app.post("/prove", proveLimiter, async (req, res, next) => {
     try {
       req.socket.setTimeout(ms("5 min"));
+      logger.info("Prove request received", { requestId: req.id });
 
       const body = z.object({ data: z.string().min(1) }).safeParse(req.body);
       if (!body.success) {
-        res.status(400).json({ error: "Invalid request body: expected { data: string }" });
+        res
+          .status(400)
+          .json({ error: "Invalid request body: expected { data: string }", requestId: req.id });
         return;
       }
       const encryptedData = Base64.toBytes(body.data.data);
@@ -74,6 +95,7 @@ export function createApp(deps: AppDependencies): express.Express {
         })
         .parse(decryptedData);
       const proof = await deps.prover.createChonkProof(data.executionSteps);
+      logger.info("Prove request completed", { requestId: req.id });
       res.json({
         proof: Base64.fromBytes(proof.toBuffer()), // proof will be publicly posted on chain, so no need to encrypt
       });
@@ -103,19 +125,21 @@ export function createApp(deps: AppDependencies): express.Express {
   });
 
   app.use(
-    (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    (err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      const requestId = req.id;
       if (err instanceof z.ZodError) {
-        res.status(400).json({ error: "Validation error", details: err.issues });
+        res.status(400).json({ error: "Validation error", details: err.issues, requestId });
         return;
       }
       if (err instanceof SyntaxError && "body" in err) {
-        res.status(400).json({ error: "Malformed request body" });
+        res.status(400).json({ error: "Malformed request body", requestId });
         return;
       }
       logger.error("Unhandled error", {
+        requestId,
         error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
       });
-      res.status(500).json({ error: "Internal server error" });
+      res.status(500).json({ error: "Internal server error", requestId });
     },
   );
 

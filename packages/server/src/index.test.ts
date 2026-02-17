@@ -63,6 +63,54 @@ describe("GET /attestation", () => {
   });
 });
 
+describe("X-Request-Id", () => {
+  test("generates a request ID when none provided", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/attestation`);
+      const requestId = res.headers.get("x-request-id");
+      expect(requestId).toBeDefined();
+      expect(requestId).toMatch(/^[0-9a-f]{8}-/);
+    } finally {
+      close();
+    }
+  });
+
+  test("echoes client-provided request ID", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/attestation`, {
+        headers: { "X-Request-Id": "client-123" },
+      });
+      expect(res.headers.get("x-request-id")).toBe("client-123");
+    } finally {
+      close();
+    }
+  });
+
+  test("includes requestId in error responses", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const body = (await res.json()) as { error: string; requestId: string };
+      expect(body.requestId).toBeDefined();
+      expect(res.headers.get("x-request-id")).toBe(body.requestId);
+    } finally {
+      close();
+    }
+  });
+});
+
 describe("GET /encryption-public-key", () => {
   test("returns 200 with a valid PGP public key (backward compat)", async () => {
     const { app } = createTestApp();
