@@ -52,9 +52,10 @@ echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available
 # ── 5. Health check ────────────────────────────────────────────
 echo "=== Health check ==="
 for i in $(seq 1 120); do
-  if curl -sf http://localhost:80/attestation > /dev/null 2>&1; then
+  if RESPONSE=$(curl -sf http://localhost:80/attestation 2>/dev/null) && \
+     echo "${RESPONSE}" | jq -e '.mode' > /dev/null 2>&1; then
     echo "Prover healthy (attempt ${i})"
-    curl -s http://localhost:80/attestation | jq '{mode}'
+    echo "${RESPONSE}" | jq '{mode}'
     echo "=== Deploy complete ==="
     exit 0
   fi

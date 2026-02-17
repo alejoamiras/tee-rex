@@ -52,6 +52,10 @@ jobs:
         working-directory: packages/sdk
         run: |
           VERSION=$(node -p "require('./package.json').dependencies['@aztec/stdlib']")
+          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
+            echo "::error::@aztec/stdlib not found in packages/sdk/package.json dependencies"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Aztec version: $VERSION"
 

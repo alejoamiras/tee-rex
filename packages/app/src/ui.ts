@@ -29,6 +29,9 @@ export function appendLog(
   line.className = `log-${level}`;
   line.textContent = `${time} ${prefix}  ${msg}`;
   log.appendChild(line);
+  while (log.childElementCount > 500) {
+    log.firstElementChild?.remove();
+  }
   log.scrollTop = log.scrollHeight;
   logCount++;
   $("log-count").textContent = `${logCount} ${logCount === 1 ? "entry" : "entries"}`;

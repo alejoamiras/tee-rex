@@ -71,6 +71,11 @@ ENCLAVE_OUT=$(sudo -u ec2-user bash -lc \
 echo "${ENCLAVE_OUT}"
 
 CID=$(echo "${ENCLAVE_OUT}" | jq -r '.EnclaveCID // 16')
+if [ -z "${CID}" ] || [ "${CID}" = "null" ]; then
+  echo "ERROR: Failed to extract enclave CID from nitro-cli output"
+  echo "nitro-cli output: ${ENCLAVE_OUT}"
+  exit 1
+fi
 echo "Enclave CID: ${CID}"
 
 # ── 6. Start socat proxy (detached from SSM) ────────────────────
@@ -82,9 +87,10 @@ disown
 # ── 7. Health check ─────────────────────────────────────────────
 echo "=== Health check ==="
 for i in $(seq 1 120); do
-  if curl -sf http://localhost:4000/attestation > /dev/null 2>&1; then
+  if RESPONSE=$(curl -sf http://localhost:4000/attestation 2>/dev/null) && \
+     echo "${RESPONSE}" | jq -e '.mode' > /dev/null 2>&1; then
     echo "Enclave healthy (attempt ${i})"
-    curl -s http://localhost:4000/attestation | jq '{mode, hasDoc: (.attestationDocument != null)}'
+    echo "${RESPONSE}" | jq '{mode, hasDoc: (.attestationDocument != null)}'
     echo "=== Deploy complete ==="
     exit 0
   fi
