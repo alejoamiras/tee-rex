@@ -181,6 +181,7 @@ bun run build
 - **Multi-stage Dockerfile `ARG`**: `--build-arg` only reaches global-scope `ARG` (before any `FROM`). Must re-declare `ARG` inside each stage that uses it.
 - **Docker prune ordering**: `docker image prune -af` deletes images not referenced by running containers. TEE deploy reads images via `nitro-cli` (no container), so prune must follow EIF build. Prover deploy starts a container first, protecting the image.
 - **nitro-cli orphaned overlay2 layers**: `nitro-cli build-enclave` creates overlay2 layers that Docker's metadata doesn't track. These layers are invisible to `docker images` and `docker system prune -af` but accumulate ~2-3GB per deploy on disk. Partial cleanup (wiping only overlay2) corrupts Docker's internal state (`failed to register layer`). The correct fix: stop Docker, wipe all of `/var/lib/docker/*`, restart Docker. This is a [known Docker limitation](https://github.com/moby/moby/issues/45939) affecting tools that use `docker export` or similar internal operations. Layer caching is sacrificed but the impact is minimal (~30s extra pull time) since the base image strategy (Phase 20B) keeps the app layer small.
+- **CloudFront origin timeout**: `OriginReadTimeout` set to 120s for prover and TEE origins (up from 60s default). 120s is the quota max without an AWS support ticket. For proofs exceeding 120s, request a quota increase to 180s via the Service Quotas console (`Response timeout per origin`). Config: `infra/cloudfront/distribution.json`.
 - **TEE socat proxy**: managed via systemd service (`tee-rex-proxy.service`) — `Restart=always`, `RestartSec=3`, `After=nitro-enclaves-allocator.service`, `WantedBy=multi-user.target`. Deploy script writes `ENCLAVE_CID` to `/etc/tee-rex/proxy.env` and installs the unit inline via heredoc. Survives crashes and EC2 reboots. Source-of-truth file: `infra/tee-rex-proxy.service`.
 
 ---
@@ -394,6 +395,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - ~~**IAM S3 DeleteObject scoping**~~ ✅ Done (#73) — split `S3AppDeploy` into two IAM statements: `S3AppDeploy` (PutObject, ListBucket, GetBucketLocation) and `S3AppCleanup` (DeleteObject on object-level ARNs only). Policy applied to AWS.
 - ~~**SDK witness triple-encoding**~~ ✅ Done (#73) — replaced `JSON.parse(jsonStringify(step.witness))` with `Array.from(step.witness.entries())` in `tee-rex-prover.ts`, eliminating a redundant serialization roundtrip for witness data.
 - ~~**Socat proxy fragile background process (audit #30)**~~ ✅ Done (#74) — replaced `setsid socat ... & disown` with systemd service (`tee-rex-proxy.service`). Auto-restarts on crash, starts on boot. Also fixed recurring disk space failures: reordered teardown before disk check, nuclear Docker wipe to handle nitro-cli orphaned overlay2 layers.
+- ~~**CloudFront origin timeout 60s (audit #2)**~~ ✅ Done (#76) — increased `OriginReadTimeout` from 60s to 120s for both prover and TEE origins. Applied to live distribution. 120s is the quota max without AWS support ticket; request increase to 180s if needed.
 
 ---
 
