@@ -13,6 +13,7 @@ import { type AttestationVerifyOptions, verifyNitroAttestation } from "./attesta
 import { encrypt } from "./encrypt.js";
 import { logger } from "./logger.js";
 
+/** Whether proofs are generated locally (WASM) or on a remote tee-rex server. */
 export type ProvingMode = ValueOf<typeof ProvingMode>;
 export const ProvingMode = {
   local: "local",
@@ -28,6 +29,13 @@ export interface TeeRexAttestationConfig {
   maxAgeMs?: number;
 }
 
+/**
+ * Aztec private kernel prover that can generate proofs locally or on a remote
+ * tee-rex server running inside an AWS Nitro Enclave.
+ *
+ * In remote mode, witness data is encrypted with the server's attested public
+ * key (curve25519 + AES-256-GCM) before being sent over the network.
+ */
 export class TeeRexProver extends BBLazyPrivateKernelProver {
   #provingMode: ProvingMode = ProvingMode.remote;
   #attestationConfig: TeeRexAttestationConfig = {};
@@ -39,14 +47,17 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     super(...args);
   }
 
+  /** Switch between local WASM proving and remote TEE proving. */
   setProvingMode(mode: ProvingMode) {
     this.#provingMode = mode;
   }
 
+  /** Update the tee-rex server URL used for remote proving. */
   setApiUrl(url: string) {
     this.apiUrl = url;
   }
 
+  /** Configure attestation verification (PCR checks, freshness, require TEE). */
   setAttestationConfig(config: TeeRexAttestationConfig) {
     this.#attestationConfig = config;
   }
@@ -81,18 +92,18 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
     logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
-    const executionsStepsSerialized = executionSteps.map((step) => ({
+    const executionStepsSerialized = executionSteps.map((step) => ({
       functionName: step.functionName,
       witness: JSON.parse(jsonStringify(step.witness)),
       bytecode: Base64.fromBytes(step.bytecode),
       vk: Base64.fromBytes(step.vk),
       timings: step.timings,
     }));
-    logger.debug("Serialized payload", { chars: JSON.stringify(executionsStepsSerialized).length });
+    logger.debug("Serialized payload", { chars: JSON.stringify(executionStepsSerialized).length });
     const encryptionPublicKey = await this.#fetchEncryptionPublicKey();
     const encryptedData = Base64.fromBytes(
       await encrypt({
-        data: Bytes.fromString(JSON.stringify({ executionSteps: executionsStepsSerialized })),
+        data: Bytes.fromString(JSON.stringify({ executionSteps: executionStepsSerialized })),
         encryptionPublicKey,
       }),
     ); // TODO(perf): serialize executionSteps -> bytes without intermediate encoding. Needs Aztec to support serialization of the PrivateExecutionStep class.
@@ -100,6 +111,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       .post(joinURL(this.apiUrl, "prove"), {
         json: { data: encryptedData },
         timeout: ms("5 min"),
+        retry: 2,
       })
       .json();
     const data = z
@@ -111,7 +123,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   }
 
   async #fetchEncryptionPublicKey() {
-    const response = await ky.get(joinURL(this.apiUrl, "attestation")).json();
+    const response = await ky.get(joinURL(this.apiUrl, "attestation"), { retry: 2 }).json();
     const data = z
       .discriminatedUnion("mode", [
         z.object({ mode: z.literal("standard"), publicKey: z.string() }),

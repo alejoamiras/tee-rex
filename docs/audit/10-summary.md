@@ -41,8 +41,8 @@ These issues could cause visible failures or represent fundamental gaps.
 | 1 | ~~**`waitForTx()` infinite loop**~~ | App C1 | Trivial | RESOLVED (#67) |
 | 2 | **CloudFront origin timeout 60s** — proofs take 1-5 min, users get 504 errors | Infra C1 | Small | Production-breaking |
 | 3 | ~~**SSM tunnel processes leaked on CI failure**~~ | CI C1 | Small | RESOLVED (#67) |
-| 4 | **Attestation has zero happy-path unit tests** — most security-critical code untested | Testing G1 | Medium | Security confidence |
-| 5 | **Root README.md is 23 lines** — first impression for the team reviewing | Docs H1 | Medium | Perception |
+| 4 | ~~**Attestation has zero happy-path unit tests**~~ | Testing G1 | Medium | RESOLVED (#71) |
+| 5 | ~~**Root README.md is 23 lines**~~ | Docs H1 | Medium | RESOLVED (#71) |
 
 ---
 
@@ -52,7 +52,7 @@ These issues could cause visible failures or represent fundamental gaps.
 |---|---------|--------|--------|
 | 6 | ~~`clearIndexedDB()` wipes ALL databases, not just Aztec~~ | App H1 | Trivial | RESOLVED (#67) |
 | 7 | ~~50MB JSON body limit on server (DoS vector)~~ | Server H1 | Trivial | RESOLVED (#67) |
-| 8 | No rate limiting on `/prove` endpoint | Server H2, Security H1 | Small | |
+| 8 | ~~No rate limiting on `/prove` endpoint~~ | Server H2, Security H1 | Small | RESOLVED (#69) |
 | 9 | `publish-sdk` gated by smoke test, not full validation | CI H1 | Medium | |
 | 10 | ~~Path filters don't include workflow file changes~~ | CI H2 | Trivial | RESOLVED (#67) |
 | 11 | ~~Required secrets not validated before use in deploys~~ | CI H3 | Small | RESOLVED (#67) |
@@ -60,8 +60,8 @@ These issues could cause visible failures or represent fundamental gaps.
 | 13 | IAM `s3:DeleteObject` unrestricted on prod bucket | Infra H2, Security M4 | Medium | |
 | 14 | ~~Deploy scripts don't check disk space~~ | Infra H3 | Trivial | RESOLVED (#67) |
 | 15 | ~~No architecture diagram anywhere~~ | Docs H2 | Small | RESOLVED (#70) |
-| 16 | `extractSimDetail()` uses `any` without validation | App H2 | Small | |
-| 17 | Accessibility: no ARIA labels, color-only indicators | App H3 | Medium | |
+| 16 | ~~`extractSimDetail()` uses `any` without validation~~ | App H2 | Small | RESOLVED (#69) |
+| 17 | ~~Accessibility: no ARIA labels, color-only indicators~~ | App H3 | Medium | RESOLVED (#69) |
 
 ---
 
@@ -69,23 +69,23 @@ These issues could cause visible failures or represent fundamental gaps.
 
 | # | Finding | Source | Effort |
 |---|---------|--------|--------|
-| 18 | Server returns generic 500 for all errors (no 400 for validation) | Server M1 | Small |
+| 18 | ~~Server returns generic 500 for all errors (no 400 for validation)~~ | Server M1 | Small | RESOLVED (#69) |
 | 19 | ~~TEE_MODE env var cast without runtime validation~~ | Server M2 | Trivial | RESOLVED (#67) |
 | 20 | ~~Base64 input not validated before decoding~~ | Server M3 | Trivial | RESOLVED (#67) |
 | 21 | No request logging or request IDs | Server M4 | Small |
 | 22 | Witness serialization triple-encodes large data | SDK H2 | Medium |
 | 23 | ~~Unsafe type casts in attestation.ts CBOR decoding~~ | SDK M1 | Small | RESOLVED (#70) |
-| 24 | No retry logic for remote proving | SDK M2 | Small |
+| 24 | ~~No retry logic for remote proving~~ | SDK M2 | Small | RESOLVED (#71) |
 | 25 | ~~Attestation nonce not validated by SDK~~ | SDK M5, Security H2 | Medium | RESOLVED (#70) |
 | 26 | ~~Mutable global state in app (document or refactor)~~ | Quality M1 | Trivial | RESOLVED (#70) |
-| 27 | Vite `loadEnv` loads all env vars (no VITE_ prefix) | App M3, Security M2 | Small |
+| 27 | ~~Vite `loadEnv` loads all env vars (no VITE_ prefix)~~ | App M3, Security M2 | Small | RESOLVED (#69) |
 | 28 | ~~`innerHTML` usage in main.ts~~ | App M7, Security H3 | Small | RESOLVED (#67) |
-| 29 | Health check timeout asymmetry in CI | CI M1 | Trivial |
+| 29 | ~~Health check timeout asymmetry in CI~~ | CI M1 | Trivial | RESOLVED (#69) |
 | 30 | socat proxy is a fragile background process | Infra M1 | Small |
 | 31 | No monitoring or alerting on EC2 | Infra M4 | Medium |
-| 32 | CLAUDE.md is the primary docs but not discoverable | Docs M1 | Small |
-| 33 | No contribution guide (CONTRIBUTING.md) | Docs M3 | Small |
-| 34 | Server error handling not tested | Testing G2 | Small |
+| 32 | ~~CLAUDE.md is the primary docs but not discoverable~~ | Docs M1 | Small | RESOLVED (#71) |
+| 33 | ~~No contribution guide (CONTRIBUTING.md)~~ | Docs M3 | Small | RESOLVED (#71) |
+| 34 | ~~Server error handling not tested~~ | Testing G2 | Small | RESOLVED (#69) |
 | 35 | No failure-injection e2e tests | Testing G3 | Medium |
 | 36 | ~~NSM library cloned without integrity check~~ | Infra M3, Security M3 | Trivial | RESOLVED (#67) |
 
@@ -104,7 +104,7 @@ These can be done in a single focused session:
 7. ~~Add disk space check to deploy scripts (Infra H3)~~ — RESOLVED (#67)
 8. ~~Validate TEE_MODE with Zod (Server M2)~~ — RESOLVED (#67)
 9. ~~Add Zod schema for `/prove` request body (Server M3)~~ — RESOLVED (#67)
-10. Add `retention-days: 7` to artifact uploads (CI L3) — 1 line per workflow
+10. ~~Add `retention-days: 7` to artifact uploads (CI L3)~~ — RESOLVED (#69)
 
 ---
 
