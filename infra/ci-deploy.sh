@@ -7,7 +7,7 @@
 #
 # Lessons applied from lessons/ssm-deployment.md:
 #   L1: nitro-cli must run as ec2-user (NITRO_CLI_ARTIFACTS in their profile)
-#   L2: socat must be detached from SSM (setsid + disown)
+#   L2: socat proxy managed via systemd (survives reboots + crashes)
 #   L3: Old EIF must be removed as root (may have been created by root)
 #   L6: Enclave CID comes from run-enclave output (may differ from requested)
 
@@ -23,21 +23,29 @@ echo "=== TEE-Rex CI Deploy ==="
 echo "Image: ${IMAGE_URI}"
 echo "Region: ${REGION}"
 
-# ── 0. Disk space pre-check ──────────────────────────────────────
+# ── 0. Tear down existing enclave + proxy + reclaim disk ──────────
+# Must happen before disk check. nitro-cli build-enclave creates overlay2
+# layers that Docker's metadata doesn't track, so `docker system prune`
+# can't remove them. Wipe all of /var/lib/docker so Docker reinitializes
+# cleanly — partial wipes (overlay2 only) corrupt Docker's internal state.
+echo "=== Tearing down existing enclave ==="
+sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
+systemctl stop tee-rex-proxy 2>/dev/null || pkill socat 2>/dev/null || true
+rm -f "${EIF_PATH}"
+rm -rf /tmp/nitro-artifacts 2>/dev/null || true
+systemctl stop docker 2>/dev/null || true
+rm -rf /var/lib/docker/*
+systemctl start docker
+journalctl --vacuum-size=50M 2>/dev/null || true
+
+# ── 1. Disk space check ──────────────────────────────────────────
 AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
 echo "Disk space available: ${AVAIL_MB}MB"
 if [[ "${AVAIL_MB}" -lt 4096 ]]; then
   echo "ERROR: Insufficient disk space (${AVAIL_MB}MB < 4096MB required)"
-  echo "Consider increasing EBS volume or running docker system prune"
+  echo "Consider increasing EBS volume size"
   exit 1
 fi
-
-# ── 1. Tear down existing enclave + proxy ────────────────────────
-echo "=== Tearing down existing enclave ==="
-sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
-pkill socat 2>/dev/null || true
-rm -f "${EIF_PATH}"
-rm -rf /tmp/nitro-artifacts 2>/dev/null || true
 
 # ── 2. Pull Docker image (reuses cached layers from previous deploy)
 echo "=== Pulling image ==="
@@ -54,10 +62,9 @@ sudo -u ec2-user bash -lc \
     --docker-uri '${IMAGE_URI}' \
     --output-file '${EIF_PATH}'"
 
-# ── 4. Clean up old images (after EIF build, image no longer needed) ─
-echo "=== Cleaning up old images ==="
+# ── 4. Clean up build image (after EIF build, image no longer needed) ─
+echo "=== Cleaning up build image ==="
 docker image prune -af
-journalctl --vacuum-size=50M 2>/dev/null || true
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
 # ── 5. Run enclave (as ec2-user) ────────────────────────────────
@@ -78,11 +85,29 @@ if [ -z "${CID}" ] || [ "${CID}" = "null" ]; then
 fi
 echo "Enclave CID: ${CID}"
 
-# ── 6. Start socat proxy (detached from SSM) ────────────────────
+# ── 6. Install + start socat proxy via systemd ───────────────────
 echo "=== Starting proxy (CID=${CID}) ==="
-setsid socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:"${CID}":5000 \
-  > /dev/null 2>&1 &
-disown
+mkdir -p /etc/tee-rex
+echo "ENCLAVE_CID=${CID}" > /etc/tee-rex/proxy.env
+
+cat > /etc/systemd/system/tee-rex-proxy.service <<'UNIT'
+[Unit]
+Description=tee-rex socat proxy (TCP:4000 → vsock enclave)
+After=nitro-enclaves-allocator.service
+
+[Service]
+EnvironmentFile=/etc/tee-rex/proxy.env
+ExecStart=/usr/bin/socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:${ENCLAVE_CID}:5000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable tee-rex-proxy
+systemctl restart tee-rex-proxy
 
 # ── 7. Health check ─────────────────────────────────────────────
 echo "=== Health check ==="
