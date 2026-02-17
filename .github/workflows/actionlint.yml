@@ -1,4 +1,4 @@
-name: Actionlint
+name: "Lint: Shell & Workflows"
 
 on:
   workflow_dispatch:
@@ -11,25 +11,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      relevant: ${{ steps.override.outputs.relevant || steps.filter.outputs.relevant }}
+      workflows: ${{ steps.override.outputs.workflows || steps.filter.outputs.workflows }}
+      shell: ${{ steps.override.outputs.shell || steps.filter.outputs.shell }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            relevant:
+            workflows:
               - '.github/workflows/**'
               - '.github/actions/**'
+            shell:
+              - 'infra/**/*.sh'
       - name: Override for manual dispatch
         if: github.event_name == 'workflow_dispatch'
         id: override
-        run: echo "relevant=true" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "workflows=true" >> "$GITHUB_OUTPUT"
+          echo "shell=true" >> "$GITHUB_OUTPUT"
 
-  lint:
+  actionlint:
     name: Lint workflows
     needs: changes
-    if: needs.changes.outputs.relevant == 'true'
+    if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -42,17 +47,32 @@ jobs:
         run: ${{ steps.get_actionlint.outputs.executable }} -color
         shell: bash
 
+  shellcheck:
+    name: Shellcheck
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        run: shellcheck infra/*.sh
+
   status:
     name: Actionlint Status
     if: always()
-    needs: [changes, lint]
+    needs: [changes, actionlint, shellcheck]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Check results
         run: |
-          if [ "${{ needs.lint.result }}" = "failure" ]; then
+          if [ "${{ needs.actionlint.result }}" = "failure" ]; then
             echo "Actionlint failed"
             exit 1
           fi
-          echo "Actionlint passed (or skipped — no workflow changes)"
+          if [ "${{ needs.shellcheck.result }}" = "failure" ]; then
+            echo "Shellcheck failed"
+            exit 1
+          fi
+          echo "All checks passed (or skipped — no relevant changes)"

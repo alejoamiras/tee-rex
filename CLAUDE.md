@@ -9,9 +9,9 @@ This document outlines the planned improvements for the tee-rex project.
 - **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
 - **App** (`/packages/app`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
-- **Linting/Formatting**: Biome (lint + format in one tool), actionlint (GitHub Actions workflows)
-- **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits). lint-staged runs Biome on `*.{ts,tsx,js,jsx}` and actionlint on `.github/workflows/*.yml`.
-- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; workflow lint: `actionlint.yml`; spartan: `aztec-spartan.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
+- **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows)
+- **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits). lint-staged runs Biome on `*.{ts,tsx,js,jsx}`, shellcheck on `*.sh`, and actionlint on `.github/workflows/*.yml`.
+- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; shell & workflow lint: `actionlint.yml`; spartan: `aztec-spartan.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
 - **Aztec version**: 4.0.0-spartan.20260214
@@ -66,6 +66,7 @@ For every roadmap task, before starting implementation:
 Every step must include a validation strategy. Think about how to verify the step worked:
 
 - **Code changes**: run `bun run lint` and `bun run test`
+- **Shell script changes**: run `bun run lint:shell` (shellcheck)
 - **Workflow changes**: run `bun run lint:actions` (actionlint)
 - **New tests**: run the specific test file (`bun test path/to/file.test.ts`) and verify it passes
 - **Refactors**: run the full test suite to catch regressions
@@ -106,8 +107,11 @@ bun install
 # Run full checks (lint + typecheck + unit tests)
 bun run test
 
-# Run only linting
+# Run only linting (biome + shellcheck)
 bun run lint
+
+# Lint shell scripts only
+bun run lint:shell
 
 # Lint GitHub Actions workflows (requires actionlint installed)
 bun run lint:actions

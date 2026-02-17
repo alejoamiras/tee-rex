@@ -80,7 +80,7 @@ echo "Enclave CID: ${CID}"
 
 # ── 6. Start socat proxy (detached from SSM) ────────────────────
 echo "=== Starting proxy (CID=${CID}) ==="
-setsid socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:${CID}:5000 \
+setsid socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:"${CID}":5000 \
   > /dev/null 2>&1 &
 disown
 
