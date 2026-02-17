@@ -38,9 +38,9 @@ These issues could cause visible failures or represent fundamental gaps.
 
 | # | Finding | Source | Effort | Impact |
 |---|---------|--------|--------|--------|
-| 1 | **`waitForTx()` infinite loop** — no timeout, browser hangs forever if tx stuck | App C1 | Trivial | User-facing hang |
+| 1 | ~~**`waitForTx()` infinite loop**~~ | App C1 | Trivial | RESOLVED (#67) |
 | 2 | **CloudFront origin timeout 60s** — proofs take 1-5 min, users get 504 errors | Infra C1 | Small | Production-breaking |
-| 3 | **SSM tunnel processes leaked on CI failure** — ports blocked, resources wasted | CI C1 | Small | CI reliability |
+| 3 | ~~**SSM tunnel processes leaked on CI failure**~~ | CI C1 | Small | RESOLVED (#67) |
 | 4 | **Attestation has zero happy-path unit tests** — most security-critical code untested | Testing G1 | Medium | Security confidence |
 | 5 | **Root README.md is 23 lines** — first impression for the team reviewing | Docs H1 | Medium | Perception |
 
@@ -50,18 +50,18 @@ These issues could cause visible failures or represent fundamental gaps.
 
 | # | Finding | Source | Effort |
 |---|---------|--------|--------|
-| 6 | `clearIndexedDB()` wipes ALL databases, not just Aztec | App H1 | Trivial |
-| 7 | 50MB JSON body limit on server (DoS vector + TODO in code) | Server H1 | Trivial |
-| 8 | No rate limiting on `/prove` endpoint | Server H2, Security H1 | Small |
-| 9 | `publish-sdk` gated by smoke test, not full validation | CI H1 | Medium |
-| 10 | Path filters don't include workflow file changes | CI H2 | Trivial |
-| 11 | Required secrets not validated before use in deploys | CI H3 | Small |
-| 12 | All containers run as root | Infra H1, Security M1 | Medium |
-| 13 | IAM `s3:DeleteObject` unrestricted on prod bucket | Infra H2, Security M4 | Medium |
-| 14 | Deploy scripts don't check disk space | Infra H3 | Trivial |
-| 15 | No architecture diagram anywhere | Docs H2 | Small |
-| 16 | `extractSimDetail()` uses `any` without validation | App H2 | Small |
-| 17 | Accessibility: no ARIA labels, color-only indicators | App H3 | Medium |
+| 6 | ~~`clearIndexedDB()` wipes ALL databases, not just Aztec~~ | App H1 | Trivial | RESOLVED (#67) |
+| 7 | ~~50MB JSON body limit on server (DoS vector)~~ | Server H1 | Trivial | RESOLVED (#67) |
+| 8 | No rate limiting on `/prove` endpoint | Server H2, Security H1 | Small | |
+| 9 | `publish-sdk` gated by smoke test, not full validation | CI H1 | Medium | |
+| 10 | ~~Path filters don't include workflow file changes~~ | CI H2 | Trivial | RESOLVED (#67) |
+| 11 | ~~Required secrets not validated before use in deploys~~ | CI H3 | Small | RESOLVED (#67) |
+| 12 | ~~All containers run as root~~ | Infra H1, Security M1 | Medium | RESOLVED (#67) |
+| 13 | IAM `s3:DeleteObject` unrestricted on prod bucket | Infra H2, Security M4 | Medium | |
+| 14 | ~~Deploy scripts don't check disk space~~ | Infra H3 | Trivial | RESOLVED (#67) |
+| 15 | No architecture diagram anywhere | Docs H2 | Small | |
+| 16 | `extractSimDetail()` uses `any` without validation | App H2 | Small | |
+| 17 | Accessibility: no ARIA labels, color-only indicators | App H3 | Medium | |
 
 ---
 
@@ -70,8 +70,8 @@ These issues could cause visible failures or represent fundamental gaps.
 | # | Finding | Source | Effort |
 |---|---------|--------|--------|
 | 18 | Server returns generic 500 for all errors (no 400 for validation) | Server M1 | Small |
-| 19 | TEE_MODE env var cast without runtime validation | Server M2 | Trivial |
-| 20 | Base64 input not validated before decoding | Server M3 | Trivial |
+| 19 | ~~TEE_MODE env var cast without runtime validation~~ | Server M2 | Trivial | RESOLVED (#67) |
+| 20 | ~~Base64 input not validated before decoding~~ | Server M3 | Trivial | RESOLVED (#67) |
 | 21 | No request logging or request IDs | Server M4 | Small |
 | 22 | Witness serialization triple-encodes large data | SDK H2 | Medium |
 | 23 | Unsafe type casts in attestation.ts CBOR decoding | SDK M1 | Small |
@@ -79,7 +79,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 25 | Attestation nonce not validated by SDK | SDK M5, Security H2 | Medium |
 | 26 | Mutable global state in app (document or refactor) | Quality M1 | Trivial |
 | 27 | Vite `loadEnv` loads all env vars (no VITE_ prefix) | App M3, Security M2 | Small |
-| 28 | `innerHTML` usage in main.ts | App M7, Security H3 | Small |
+| 28 | ~~`innerHTML` usage in main.ts~~ | App M7, Security H3 | Small | RESOLVED (#67) |
 | 29 | Health check timeout asymmetry in CI | CI M1 | Trivial |
 | 30 | socat proxy is a fragile background process | Infra M1 | Small |
 | 31 | No monitoring or alerting on EC2 | Infra M4 | Medium |
@@ -87,7 +87,7 @@ These issues could cause visible failures or represent fundamental gaps.
 | 33 | No contribution guide (CONTRIBUTING.md) | Docs M3 | Small |
 | 34 | Server error handling not tested | Testing G2 | Small |
 | 35 | No failure-injection e2e tests | Testing G3 | Medium |
-| 36 | NSM library cloned without integrity check | Infra M3, Security M3 | Trivial |
+| 36 | ~~NSM library cloned without integrity check~~ | Infra M3, Security M3 | Trivial | RESOLVED (#67) |
 
 ---
 
@@ -95,15 +95,15 @@ These issues could cause visible failures or represent fundamental gaps.
 
 These can be done in a single focused session:
 
-1. Add timeout to `waitForTx()` (App C1) — 5-line fix
-2. Reduce server JSON limit from 50MB to 10MB (Server H1) — 1-line fix
-3. Filter `clearIndexedDB()` to Aztec prefixes only (App H1) — 2-line fix
-4. Add `trap 'kill $PID' EXIT` to SSM tunnel scripts (CI C1) — 5 lines per file
-5. Validate required secrets at deploy job start (CI H3) — 3 lines per job
-6. Add `.github/workflows/*.yml` to deploy-prod.yml path filters (CI H2) — 2 lines
-7. Add disk space check to deploy scripts (Infra H3) — 3 lines per script
-8. Validate TEE_MODE with Zod (Server M2) — 1 line
-9. Add Zod schema for `/prove` request body (Server M3) — 3 lines
+1. ~~Add timeout to `waitForTx()` (App C1)~~ — RESOLVED (#67)
+2. ~~Reduce server JSON limit from 50MB to 10MB (Server H1)~~ — RESOLVED (#67)
+3. ~~Filter `clearIndexedDB()` to Aztec prefixes only (App H1)~~ — RESOLVED (#67)
+4. ~~Add `trap 'kill $PID' EXIT` to SSM tunnel scripts (CI C1)~~ — RESOLVED (#67)
+5. ~~Validate required secrets at deploy job start (CI H3)~~ — RESOLVED (#67)
+6. ~~Add `.github/workflows/*.yml` to deploy-prod.yml path filters (CI H2)~~ — RESOLVED (#67)
+7. ~~Add disk space check to deploy scripts (Infra H3)~~ — RESOLVED (#67)
+8. ~~Validate TEE_MODE with Zod (Server M2)~~ — RESOLVED (#67)
+9. ~~Add Zod schema for `/prove` request body (Server M3)~~ — RESOLVED (#67)
 10. Add `retention-days: 7` to artifact uploads (CI L3) — 1 line per workflow
 
 ---

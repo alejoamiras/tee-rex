@@ -45,21 +45,23 @@ Security layers:
 - **Fix**: Add `expectedNonce?: string` to `AttestationVerifyOptions`. Document in README that callers should generate a random nonce, pass it when requesting attestation, and verify it matches.
 - **Effort**: Medium (requires server-side changes too)
 
-#### H3. `innerHTML` usage with template literals
+#### H3. `innerHTML` usage with template literals — RESOLVED (#67)
 - **File**: `packages/app/src/main.ts` (step rendering)
 - **Issue**: Step names are inserted into DOM via `innerHTML`. While step names come from code (not user input), this pattern is fragile — if data sources change, XSS becomes possible.
 - **Category**: Web Security
 - **Fix**: Replace all `innerHTML` with `textContent` + explicit element creation.
 - **Effort**: Small
+- **Resolution**: Replaced all innerHTML with `buildDotRow()` helper + `replaceChildren()`. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 ### Medium
 
-#### M1. Containers run as root
+#### M1. Containers run as root — RESOLVED (#67)
 - **Files**: `Dockerfile`, `Dockerfile.base`, `Dockerfile.nitro`
 - **Issue**: All services run as root. Container breakout + EC2 metadata service = potential privilege escalation.
 - **Category**: Defense in Depth
 - **Fix**: Add non-root USER to Dockerfiles (see infra audit for details).
 - **Effort**: Medium
+- **Resolution**: Added non-root `appuser` to prover and Nitro Dockerfiles. Nitro drops privileges via `su` after root-only network setup. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### M2. Vite loads all env vars (not just VITE_)
 - **File**: `packages/app/vite.config.ts:77`
@@ -69,12 +71,13 @@ Security layers:
 - **Fix**: Use `VITE_` prefix convention and change third arg to `"VITE_"`.
 - **Effort**: Small
 
-#### M3. NSM library cloned via git without integrity verification
+#### M3. NSM library cloned via git without integrity verification — RESOLVED (#67)
 - **File**: `Dockerfile.nitro:11-12`
 - **Issue**: `git clone -b v0.4.0` uses a tag (not a commit SHA). Tags can be force-updated on GitHub. No signature verification.
 - **Category**: Supply Chain
 - **Fix**: Pin to commit SHA: `git clone ... && cd ... && git checkout abc123def`.
 - **Effort**: Trivial
+- **Resolution**: Pinned to commit SHA `5798fec36f49e1d199c77947f4e51f86b663750f` (v0.4.0 tag). PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### M4. `s3:DeleteObject` unrestricted in CI IAM policy
 - **File**: `infra/iam/tee-rex-ci-policy.json:95-107`
@@ -90,12 +93,13 @@ Security layers:
 - **Issue**: `app.use(cors())` — any origin can call the API. Acceptable because the server is behind CloudFront/VPC and requests are encrypted.
 - **Category**: Accepted Risk
 
-#### L2. Clock skew in attestation freshness check
+#### L2. Clock skew in attestation freshness check — RESOLVED (#67)
 - **File**: `packages/sdk/src/lib/attestation.ts:112-117`
 - **Issue**: No tolerance for clock drift between client and enclave. ±30s skew could reject valid attestations.
 - **Category**: Edge Case
 - **Fix**: Add tolerance: `docAge > maxAgeMs + 30000`.
 - **Effort**: Trivial
+- **Resolution**: Added `CLOCK_SKEW_TOLERANCE_MS = 30_000` to freshness comparison. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### L3. OpenPGP version pinned exactly (6.3.0) but not audited
 - **File**: `packages/sdk/package.json:43`

@@ -12,7 +12,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 
 ### Critical
 
-#### C1. `waitForTx()` infinite loop — no max timeout
+#### C1. `waitForTx()` infinite loop — no max timeout — RESOLVED (#67)
 - **File**: `src/aztec.ts:307-316`
 - **Code**: `while (true) { ... await new Promise(r => setTimeout(r, 1000)); }`
 - **Issue**: If a transaction stays pending indefinitely (stuck sequencer, network partition), this loops forever. No max iteration count or timeout.
@@ -20,10 +20,11 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Bug
 - **Fix**: Add max timeout (e.g., 10 minutes): `const deadline = Date.now() + 10 * 60 * 1000; if (Date.now() > deadline) throw new Error("Transaction confirmation timed out");`
 - **Effort**: Trivial
+- **Resolution**: Added 10-minute deadline to `waitForTx()` polling loop. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 ### High
 
-#### H1. `clearIndexedDB()` deletes ALL databases, not just Aztec
+#### H1. `clearIndexedDB()` deletes ALL databases, not just Aztec — RESOLVED (#67)
 - **File**: `src/aztec.ts:88-91`
 - **Code**: `const dbs = await indexedDB.databases(); await Promise.all(dbs.filter(db => db.name).map(db => indexedDB.deleteDatabase(db.name!)));`
 - **Issue**: On retry, clears every IndexedDB database on the origin, including non-Aztec data.
@@ -31,6 +32,7 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Category**: Bug
 - **Fix**: Filter to known prefixes: `dbs.filter(db => db.name?.startsWith("pxe-") || db.name?.startsWith("wallet-"))`.
 - **Effort**: Trivial
+- **Resolution**: Scoped to `pxe-`, `wallet-`, `aztec-` prefixed databases only. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### H2. `extractSimDetail()` uses `any` without validation
 - **File**: `src/aztec.ts:297-304`
@@ -99,12 +101,13 @@ The app is a well-structured Vite + vanilla TypeScript frontend with a custom bu
 - **Fix**: Show error type in result card (e.g., "timeout — try again" or "server unreachable — check connection").
 - **Effort**: Small
 
-#### M7. `innerHTML` usage in main.ts
+#### M7. `innerHTML` usage in main.ts — RESOLVED (#67)
 - **File**: `src/main.ts` (step rendering)
 - **Issue**: Uses `innerHTML` with template literals containing step data. While step names come from code (not user input), this is an XSS risk if the data source changes.
 - **Category**: Security
 - **Fix**: Use `textContent` + explicit DOM element creation instead of `innerHTML`.
 - **Effort**: Small
+- **Resolution**: Replaced all `innerHTML` with `buildDotRow()` helper using safe DOM APIs (`textContent`, `createElement`, `append`). PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 ### Low
 

@@ -16,7 +16,7 @@ None.
 
 ### High
 
-#### H1. 50MB JSON body limit is a DoS vector
+#### H1. 50MB JSON body limit is a DoS vector — RESOLVED (#67)
 - **File**: `src/index.ts:30`
 - **Code**: `app.use(express.json({ limit: "50mb" })); // TODO: change to 1mb?`
 - **Issue**: Attackers can send 50MB payloads to consume server memory. The TODO comment acknowledges this concern.
@@ -24,6 +24,7 @@ None.
 - **Category**: Security
 - **Fix**: Measure actual payload sizes (likely 1-5MB after encryption) and reduce limit to 10MB max.
 - **Effort**: Trivial
+- **Resolution**: Reduced to 10MB, removed TODO comment. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### H2. No rate limiting on `/prove` endpoint
 - **File**: `src/index.ts:33-69`
@@ -43,21 +44,23 @@ None.
 - **Fix**: Return 400 for validation/parsing errors (ZodError, base64 decode), 408 for timeouts, 500 for unexpected errors.
 - **Effort**: Small
 
-#### M2. TEE_MODE env var cast without runtime validation
+#### M2. TEE_MODE env var cast without runtime validation — RESOLVED (#67)
 - **File**: `src/index.ts:104`
 - **Code**: `const teeMode = (process.env.TEE_MODE || "standard") as TeeMode;`
 - **Issue**: String from env var is cast to `TeeMode` without validation. If someone sets `TEE_MODE=invalid`, `createAttestationService()` will throw a generic error.
 - **Category**: Robustness
 - **Fix**: Use Zod to validate: `z.enum(["standard", "nitro"]).catch("standard").parse(process.env.TEE_MODE)`.
 - **Effort**: Trivial
+- **Resolution**: Replaced unsafe cast with `z.enum(["standard", "nitro"]).catch("standard").parse()`. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
-#### M3. Base64 input not validated before decoding
+#### M3. Base64 input not validated before decoding — RESOLVED (#67)
 - **File**: `src/index.ts:37`
 - **Code**: `const encryptedData = Base64.toBytes(req.body.data);`
 - **Issue**: `req.body.data` could be any JSON value (number, null, object). No Zod validation on the request body before accessing `.data`. If `.data` is not a valid base64 string, `Base64.toBytes()` throws an untyped error.
 - **Category**: Input Validation
 - **Fix**: Add Zod schema for request body: `z.object({ data: z.string().min(1) }).parse(req.body)` before the Base64 decode.
 - **Effort**: Trivial
+- **Resolution**: Added `z.object({ data: z.string().min(1) }).safeParse()` with 400 error response. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### M4. No request logging or request IDs
 - **File**: `src/index.ts:33-69`

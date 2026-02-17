@@ -83,13 +83,14 @@ None.
 - **Fix**: Add `AttestationErrorCode` enum (INVALID_COSE, CHAIN_FAILED, SIGNATURE_FAILED, etc.).
 - **Effort**: Small
 
-#### L2. Clock skew not tolerated in freshness check
+#### L2. Clock skew not tolerated in freshness check — RESOLVED (#67)
 - **File**: `src/lib/attestation.ts:112-117`
 - **Issue**: Uses `Date.now() - attestationDoc.timestamp` with no tolerance for clock drift between client and enclave.
 - **Impact**: If clocks differ by >30s, valid attestations could be rejected.
 - **Category**: Robustness
 - **Fix**: Add ±30s tolerance or document the assumption.
 - **Effort**: Trivial
+- **Resolution**: Added 30s `CLOCK_SKEW_TOLERANCE_MS` to freshness comparison. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### L3. Logger not configurable by SDK consumers
 - **File**: `src/lib/logger.ts` (4 lines)

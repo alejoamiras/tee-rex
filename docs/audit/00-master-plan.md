@@ -32,6 +32,26 @@ This audit is designed to survive context window resets. Each audit area produce
 | 9 | Code Quality & Consistency | `09-code-quality.md` | DONE | 0C, 0H, 3M, 7L |
 | 10 | Final Summary & Recommendations | `10-summary.md` | DONE | 3C, 12H, 25M, 20L total |
 
+### Resolution Progress
+
+**13 of 60 findings resolved** in PR [#67](https://github.com/alejoamiras/tee-rex/pull/67) (security + CI + infra hardening):
+
+| Resolved Finding | Source | Severity |
+|---|---|---|
+| `waitForTx()` infinite loop | App C1 | Critical |
+| SSM tunnel process leaks | CI C1 | Critical |
+| `clearIndexedDB()` scope | App H1 | High |
+| 50MB JSON body limit | Server H1 | High |
+| Deploy path filters | CI H2 | High |
+| Secret validation in deploys | CI H3 | High |
+| Containers run as root | Infra H1 / Security M1 | High / Medium |
+| Disk space pre-checks | Infra H3 | High |
+| `innerHTML` → safe DOM | App M7 / Security H3 | Medium / High |
+| TEE_MODE Zod validation | Server M2 | Medium |
+| Base64 input validation | Server M3 | Medium |
+| NSM library pinned to SHA | Infra M3 / Security M3 | Medium |
+| Clock skew tolerance | SDK L2 / Security L2 | Low |
+
 ---
 
 ## Audit Areas — What Each Covers

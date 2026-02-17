@@ -22,13 +22,14 @@ The infrastructure is well-designed: OIDC auth (no stored keys), tag-based EC2 s
 
 ### High
 
-#### H1. All containers run as root
+#### H1. All containers run as root — RESOLVED (#67)
 - **Files**: `Dockerfile`, `Dockerfile.base`, `Dockerfile.nitro`
 - **Issue**: No `USER` directive in any Dockerfile. All processes (Express server, Bun runtime, socat) run as root inside the container.
 - **Impact**: If an attacker exploits the Express server, they get root access inside the container. Combined with EC2 metadata service access, this could lead to privilege escalation.
 - **Category**: Security
 - **Fix**: Add `RUN useradd -m -u 1000 app && chown -R app:app /app` to Dockerfile.base, then `USER app` before CMD. Note: Dockerfile.nitro's entrypoint needs root for `ifconfig lo`, so use `gosu` or split into setup (root) + run (non-root) stages.
 - **Effort**: Medium
+- **Resolution**: Added `appuser` via `useradd` + `USER appuser` to prover Dockerfile. For Nitro, added user creation + `chown /app`, entrypoint drops to `appuser` via `su` after network setup (root needed for `ifconfig lo`). PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### H2. IAM policy grants unrestricted `s3:DeleteObject` on prod
 - **File**: `infra/iam/tee-rex-ci-policy.json:95-107`
@@ -38,13 +39,14 @@ The infrastructure is well-designed: OIDC auth (no stored keys), tag-based EC2 s
 - **Fix**: Add condition requiring specific source (e.g., `aws:CalledVia: ["cloudfront.amazonaws.com"]`) or scope to deployment-time only via a separate role.
 - **Effort**: Medium
 
-#### H3. Deploy scripts don't check disk space
+#### H3. Deploy scripts don't check disk space — RESOLVED (#67)
 - **Files**: `infra/ci-deploy.sh`, `infra/ci-deploy-prover.sh`
 - **Issue**: Neither script validates EBS volume has sufficient space before pulling Docker images (~2GB) or building EIF (~1.5GB). If disk is full, operations fail silently and the 10-minute health check timeout runs to completion before reporting failure.
 - **Impact**: Wasted CI time (10+ minutes) and confusing error messages.
 - **Category**: Robustness
 - **Fix**: Add at script start: `AVAIL_MB=$(df / | tail -1 | awk '{print $4}'); if [ "$AVAIL_MB" -lt 3072 ]; then echo "ERROR: <3GB free"; exit 1; fi`
 - **Effort**: Trivial
+- **Resolution**: Added 4GB minimum disk space pre-check (step 0) to both deploy scripts. Fails fast with actionable error message. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 ### Medium
 
@@ -65,13 +67,14 @@ The infrastructure is well-designed: OIDC auth (no stored keys), tag-based EC2 s
 - **Fix**: Add check: `if [ -z "$CID" ] || [ "$CID" = "null" ]; then echo "ERROR: Failed to extract CID"; exit 1; fi`
 - **Effort**: Trivial
 
-#### M3. NSM API version hardcoded without integrity check
+#### M3. NSM API version hardcoded without integrity check — RESOLVED (#67)
 - **File**: `Dockerfile.nitro:11`
 - **Code**: `ENV AWS_NE_NSM_API_VER="v0.4.0"` + `git clone --depth 1 -b ${AWS_NE_NSM_API_VER}`
 - **Issue**: Git clone without commit hash verification or GPG signature check. Susceptible to MITM or tag mutation.
 - **Category**: Supply Chain Security
 - **Fix**: Pin to specific commit SHA instead of tag. Or verify the git tag signature after clone.
 - **Effort**: Small
+- **Resolution**: Pinned to commit SHA `5798fec36f49e1d199c77947f4e51f86b663750f` (v0.4.0). Full clone + checkout instead of shallow tag clone. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 #### M4. No monitoring or alerting on EC2 instances
 - **Issue**: No CloudWatch alarms configured for: CPU/memory utilization, EBS capacity, HTTP error rates, SSM command failures, or container health.

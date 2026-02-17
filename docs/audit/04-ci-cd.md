@@ -12,13 +12,14 @@ The CI/CD system is well-designed with reusable workflows, OIDC-based AWS auth (
 
 ### Critical
 
-#### C1. SSM tunnel processes leaked on job failure
+#### C1. SSM tunnel processes leaked on job failure — RESOLVED (#67)
 - **Files**: `_deploy-tee.yml:180-191`, `_deploy-prover.yml` (similar), `_e2e-sdk.yml:60-93`, `_e2e-app.yml:60-93`, `deploy-prod.yml:211-243`
 - **Issue**: Background SSM tunnel started with `&`, PID captured, but `kill $TUNNEL_PID` only executes on success path. If health check fails or e2e tests fail, the tunnel process persists until the runner is recycled.
 - **Impact**: Port conflicts on subsequent runs, wasted resources, potential runner instability.
 - **Category**: Process Management
 - **Fix**: Use `trap 'kill $TUNNEL_PID 2>/dev/null' EXIT` immediately after starting the tunnel, or add a cleanup step with `if: always()`.
 - **Effort**: Small
+- **Resolution**: Added `trap` cleanup to single-step tunnels (`_deploy-*.yml`), PID capture via `$GITHUB_ENV` + `if: always()` cleanup step for multi-step tunnels (e2e + deploy workflows). All 6 files fixed. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 ### High
 
@@ -30,21 +31,23 @@ The CI/CD system is well-designed with reusable workflows, OIDC-based AWS auth (
 - **Fix**: Already documented in CLAUDE.md backlog. Make `publish-sdk` depend on `validate-prod.conclusion == 'success'` for auto-update merges. Keep `nextnet-check` as fallback for manual triggers.
 - **Effort**: Medium
 
-#### H2. Path filters don't include workflow file changes
+#### H2. Path filters don't include workflow file changes — RESOLVED (#67)
 - **File**: `deploy-prod.yml:36-48`
 - **Issue**: The `servers` filter includes `Dockerfile*`, `infra/**`, `packages/server/**` but NOT `.github/workflows/deploy-prod.yml` or `.github/workflows/_deploy-*.yml`. If a deploy workflow itself changes, no deploys will trigger.
 - **Impact**: Workflow bugs won't be caught by the deploy pipeline until a server/infra file also changes.
 - **Category**: CI Correctness
 - **Fix**: Add `.github/workflows/deploy-prod.yml`, `.github/workflows/_deploy-*.yml`, `.github/workflows/_build-base.yml` to the `servers` filter. Add `.github/workflows/_e2e-app.yml` to the `app` filter.
 - **Effort**: Trivial
+- **Resolution**: Added `_deploy-*.yml`, `_build-*.yml`, `deploy-prod.yml`, `.github/actions/**` to `servers` filter; `deploy-prod.yml` to `app` filter. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
-#### H3. Required secrets not validated before use
+#### H3. Required secrets not validated before use — RESOLVED (#67)
 - **Files**: `_deploy-tee.yml:42`, `_deploy-prover.yml:42`, `_build-base.yml:48`
 - **Issue**: Instance IDs and ECR registry are read from secrets without validation. If a secret is missing, the conditional `inputs.environment == 'prod' && secrets.PROD_TEE_INSTANCE_ID || ...` returns empty string, and AWS API calls fail with cryptic errors.
 - **Impact**: Silent failures with unclear error messages. Debugging requires reading workflow logs carefully.
 - **Category**: Error Handling
 - **Fix**: Add a validation step at the top of deploy jobs: `if [ -z "$INSTANCE_ID" ]; then echo "::error::INSTANCE_ID not set"; exit 1; fi`.
 - **Effort**: Small
+- **Resolution**: Added "Validate secrets" step to `_deploy-tee.yml` and `_deploy-prover.yml` checking INSTANCE_ID, ECR_REGISTRY, AWS_ROLE_ARN, and AWS_REGION. PR [#67](https://github.com/alejoamiras/tee-rex/pull/67).
 
 ### Medium
 
