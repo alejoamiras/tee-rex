@@ -80,6 +80,7 @@ jobs:
             --target "${{ secrets.DEVNET_PROVER_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
           echo "Waiting for prover SSM tunnel..."
           for i in $(seq 1 30); do
@@ -98,6 +99,7 @@ jobs:
             --target "${{ secrets.DEVNET_TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+          echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
           echo "Waiting for TEE SSM tunnel..."
           for i in $(seq 1 30); do
@@ -127,6 +129,12 @@ jobs:
           TEE_URL: http://localhost:4001
         run: bunx playwright test --project=fullstack --workers=1 e2e/demo.fullstack.spec.ts
         working-directory: packages/app
+
+      - name: Cleanup SSM tunnels
+        if: always()
+        run: |
+          kill $PROVER_TUNNEL_PID 2>/dev/null || true
+          kill $TEE_TUNNEL_PID 2>/dev/null || true
 
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:

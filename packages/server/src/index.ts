@@ -27,14 +27,19 @@ export function createApp(deps: AppDependencies): express.Express {
   const app = express();
 
   app.use(cors());
-  app.use(express.json({ limit: "50mb" })); // TODO: change to 1mb?
+  app.use(express.json({ limit: "10mb" }));
   app.use(expressLogger());
 
   app.post("/prove", async (req, res, next) => {
     try {
       req.socket.setTimeout(ms("5 min"));
 
-      const encryptedData = Base64.toBytes(req.body.data);
+      const body = z.object({ data: z.string().min(1) }).safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Invalid request body: expected { data: string }" });
+        return;
+      }
+      const encryptedData = Base64.toBytes(body.data.data);
       const decryptedData: unknown = JSON.parse(
         Bytes.toString(
           await deps.encryption.decrypt({
@@ -101,7 +106,10 @@ export function createApp(deps: AppDependencies): express.Express {
 if (import.meta.main) {
   await setupLogging();
 
-  const teeMode = (process.env.TEE_MODE || "standard") as TeeMode;
+  const teeMode = z
+    .enum(["standard", "nitro"])
+    .catch("standard")
+    .parse(process.env.TEE_MODE) as TeeMode;
 
   const app = createApp({
     prover: new ProverService(),

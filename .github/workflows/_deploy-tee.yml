@@ -48,6 +48,19 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
+      # ── Validate required secrets ────────────────────────────────
+      - name: Validate secrets
+        run: |
+          missing=()
+          [[ -z "$INSTANCE_ID" ]] && missing+=("INSTANCE_ID (from *_TEE_INSTANCE_ID)")
+          [[ -z "$ECR_REGISTRY" ]] && missing+=("ECR_REGISTRY")
+          [[ -z "${{ secrets.AWS_ROLE_ARN }}" ]] && missing+=("AWS_ROLE_ARN")
+          [[ -z "${{ secrets.AWS_REGION }}" ]] && missing+=("AWS_REGION")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
       # ── AWS Credentials via OIDC ─────────────────────────────────
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -182,13 +195,13 @@ jobs:
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
           TUNNEL_PID=$!
+          trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
 
           for i in $(seq 1 30); do
             if curl -sf http://localhost:4001/attestation > /dev/null 2>&1; then
               echo "Enclave healthy (attempt $i)"
               curl -s http://localhost:4001/attestation | jq '{mode, hasDoc: (.attestationDocument != null)}'
               echo "deployed=true" >> "$GITHUB_OUTPUT"
-              kill $TUNNEL_PID 2>/dev/null || true
               exit 0
             fi
             sleep 2

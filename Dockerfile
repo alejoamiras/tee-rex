@@ -13,6 +13,10 @@ RUN ln -sf /app/node_modules /app/packages/sdk/node_modules && \
 EXPOSE 80
 ENV PORT=80
 
+# Run as non-root user
+RUN adduser --disabled-password --gecos "" appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Run the server
 WORKDIR /app/packages/server
 
