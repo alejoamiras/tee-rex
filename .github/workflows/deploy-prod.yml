@@ -263,5 +263,5 @@ jobs:
       - name: Cleanup SSM tunnels
         if: always()
         run: |
-          kill $PROVER_TUNNEL_PID 2>/dev/null || true
-          kill $TEE_TUNNEL_PID 2>/dev/null || true
+          kill "$PROVER_TUNNEL_PID" 2>/dev/null || true
+          kill "$TEE_TUNNEL_PID" 2>/dev/null || true

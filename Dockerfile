@@ -14,7 +14,7 @@ EXPOSE 80
 ENV PORT=80
 
 # Run as non-root user
-RUN adduser --disabled-password --gecos "" appuser && chown -R appuser:appuser /app
+RUN useradd --create-home --shell /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Run the server

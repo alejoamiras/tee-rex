@@ -39,7 +39,7 @@ FROM oven/bun:1.3-debian
 RUN apt-get update && apt-get install -y socat curl iproute2 net-tools && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user (entrypoint drops privileges after network setup)
-RUN adduser --disabled-password --gecos "" appuser
+RUN useradd --create-home --shell /bin/bash appuser
 
 # Copy libnsm.so built from aws-nitro-enclaves-nsm-api
 COPY --from=nsm /aws-nitro-enclaves-nsm-api/target/release/libnsm.so /usr/lib/libnsm.so
