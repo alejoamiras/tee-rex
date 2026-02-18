@@ -72,7 +72,7 @@ async function buildTestAttestation(
     publicKey?: string;
     nonce?: string;
     pcrs?: Record<number, string>;
-    timestamp?: number;
+    timestamp?: number | bigint;
   } = {},
 ) {
   const { encode: encodeCbor } = await import("cbor-x");
@@ -126,12 +126,7 @@ async function buildTestAttestation(
   const protectedHeaders = encodeCbor(new Map());
 
   // Build Sig_structure = ["Signature1", protected_headers, external_aad, payload]
-  const sigStructure = encodeCbor([
-    "Signature1",
-    protectedHeaders,
-    new Uint8Array(0),
-    payloadBytes,
-  ]);
+  const sigStructure = encodeCbor(["Signature1", protectedHeaders, Buffer.alloc(0), payloadBytes]);
 
   // Sign with leaf private key (ECDSA P-384 SHA384, ieee-p1363 format)
   const leafPrivateKey = crypto.createPrivateKey(leaf.keyPem);
@@ -186,6 +181,18 @@ describe("verifyNitroAttestation", () => {
       expect(result.document.moduleId).toBe("test-module-id");
       expect(result.document.digest).toBe("SHA384");
       expect(result.document.pcrs.get(0)).toBeInstanceOf(Uint8Array);
+    });
+
+    test("verifies attestation with BigInt timestamp (real Nitro encoding)", async () => {
+      // Real Nitro enclaves encode timestamp as CBOR uint64, which cbor-x decodes as BigInt
+      const { base64, rootCaPem, embeddedPublicKey } = await buildTestAttestation({
+        timestamp: BigInt(Date.now()),
+      });
+      const result = await verifyNitroAttestation(base64, { rootCaPem });
+
+      expect(result.publicKey).toBe(embeddedPublicKey);
+      expect(typeof result.document.timestamp).toBe("number");
+      expect(result.document.timestamp).toBeCloseTo(Date.now(), -3);
     });
 
     test("verifies with matching PCR values", async () => {
@@ -289,5 +296,30 @@ describe("verifyNitroAttestation", () => {
         expect((err as AttestationError).code).toBe(AttestationErrorCode.CHAIN_FAILED);
       }
     });
+  });
+});
+
+/**
+ * Integration test against a real Nitro TEE endpoint.
+ * Skips when TEE_URL is not set (e.g., local dev without TEE access).
+ */
+describe.skipIf(!process.env.TEE_URL)("Real Nitro attestation (integration)", () => {
+  test("verifies attestation from production TEE", async () => {
+    const res = await fetch(`${process.env.TEE_URL}/attestation`);
+    expect(res.ok).toBe(true);
+    const body = (await res.json()) as {
+      mode: string;
+      attestationDocument: string;
+      publicKey: string;
+    };
+    expect(body.mode).toBe("nitro");
+    expect(body.attestationDocument).toBeDefined();
+
+    const { publicKey, document } = await verifyNitroAttestation(body.attestationDocument);
+    expect(publicKey).toContain("-----BEGIN PGP PUBLIC KEY BLOCK-----");
+    expect(document.moduleId).toBeDefined();
+    expect(document.digest).toBe("SHA384");
+    expect(document.pcrs.get(0)).toBeInstanceOf(Uint8Array);
+    expect(document.timestamp).toBeGreaterThan(0);
   });
 });

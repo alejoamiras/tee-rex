@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mapSchema, schemas } from "@aztec/stdlib/schemas";
+import { PrivateExecutionStepSchema } from "@aztec/stdlib/kernel";
 import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
 import cors from "cors";
@@ -79,20 +79,7 @@ export function createApp(deps: AppDependencies): express.Express {
       );
 
       const data = z
-        .object({
-          executionSteps: z.array(
-            z.object({
-              functionName: z.string(),
-              witness: mapSchema(z.number(), z.string()),
-              bytecode: schemas.Buffer,
-              vk: schemas.Buffer,
-              timings: z.object({
-                witgen: z.number(),
-                gateCount: z.number().optional(),
-              }),
-            }),
-          ),
-        })
+        .object({ executionSteps: z.array(PrivateExecutionStepSchema) })
         .parse(decryptedData);
       const proof = await deps.prover.createChonkProof(data.executionSteps);
       logger.info("Prove request completed", { requestId: req.id });
