@@ -1,3 +1,5 @@
+import * as x509 from "@peculiar/x509";
+import { decode as decodeCbor, encode as encodeCbor } from "cbor-x";
 import type { ValueOf } from "ts-essentials";
 import { logger } from "./logger.js";
 
@@ -60,19 +62,14 @@ export interface AttestationVerifyOptions {
  * 5. Optionally check PCR values and document freshness
  * 6. Return the embedded public key
  *
- * Note: This function dynamically imports `node:crypto` and `cbor-x` so that
- * the SDK can be loaded in browser environments (where standard mode is used)
- * without failing on the top-level import.
+ * Uses @peculiar/x509 + Web Crypto API for cross-platform compatibility
+ * (works in Node.js, Bun, and browsers).
  */
 export async function verifyNitroAttestation(
   attestationDocumentBase64: string,
   options: AttestationVerifyOptions = {},
 ): Promise<{ publicKey: string; document: NitroAttestationDocument }> {
   const { maxAgeMs = 5 * 60 * 1000 } = options;
-
-  // Dynamic imports — only needed for Nitro verification (not in browser/standard mode)
-  const [{ createVerify, X509Certificate }, { decode: decodeCbor, encode: encodeCbor }] =
-    await Promise.all([import("node:crypto"), import("cbor-x")]);
 
   // 1. Decode the COSE_Sign1 envelope
   const raw = Buffer.from(attestationDocumentBase64, "base64");
@@ -94,12 +91,15 @@ export async function verifyNitroAttestation(
   const attestationDoc = parseAttestationDocument(doc);
 
   // 3. Build and verify certificate chain
-  const leafCert = new X509Certificate(attestationDoc.certificate);
-  const rootCa = new X509Certificate(options.rootCaPem ?? AWS_NITRO_ROOT_CA_PEM);
+  // Buffer.from() ensures ArrayBuffer backing (not SharedArrayBuffer) for @peculiar/x509 compat
+  const leafCert = new x509.X509Certificate(Buffer.from(attestationDoc.certificate));
+  const rootCa = new x509.X509Certificate(options.rootCaPem ?? AWS_NITRO_ROOT_CA_PEM);
 
   // Build chain: cabundle contains certs from root to intermediate(s)
-  const caBundleCerts = attestationDoc.cabundle.map((der) => new X509Certificate(der));
-  verifyCertificateChain(leafCert, caBundleCerts, rootCa);
+  const caBundleCerts = attestationDoc.cabundle.map(
+    (der) => new x509.X509Certificate(Buffer.from(der)),
+  );
+  await verifyCertificateChain(leafCert, caBundleCerts, rootCa);
 
   // 4. Verify COSE_Sign1 signature
   //    Sig_structure = ["Signature1", protected_headers, external_aad, payload]
@@ -107,12 +107,15 @@ export async function verifyNitroAttestation(
   // COSE requires plain bstr, so use Buffer.alloc(0) for the empty external_aad.
   const sigStructure = encodeCbor(["Signature1", protectedHeaders, Buffer.alloc(0), payload]);
 
-  const leafPublicKey = leafCert.publicKey;
-  const verifier = createVerify("SHA384");
-  verifier.update(sigStructure);
-  const signatureValid = verifier.verify(
-    { key: leafPublicKey, dsaEncoding: "ieee-p1363" },
-    signature,
+  const leafPublicKey = await leafCert.publicKey.export(
+    { name: "ECDSA", namedCurve: "P-384" } as EcKeyImportParams,
+    ["verify"],
+  );
+  const signatureValid = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-384" },
+    leafPublicKey,
+    Buffer.from(signature),
+    Buffer.from(sigStructure),
   );
 
   if (!signatureValid) {
@@ -252,13 +255,14 @@ function parseAttestationDocument(doc: Record<string, unknown>): NitroAttestatio
   };
 }
 
-function verifyCertificateChain(
-  leaf: import("node:crypto").X509Certificate,
-  intermediates: import("node:crypto").X509Certificate[],
-  root: import("node:crypto").X509Certificate,
-): void {
+async function verifyCertificateChain(
+  leaf: x509.X509Certificate,
+  intermediates: x509.X509Certificate[],
+  root: x509.X509Certificate,
+): Promise<void> {
   // Verify root is self-signed
-  if (!root.verify(root.publicKey)) {
+  const rootSelfSigned = await root.verify({ signatureOnly: true });
+  if (!rootSelfSigned) {
     throw new AttestationError("Root CA is not self-signed", AttestationErrorCode.CHAIN_FAILED);
   }
 
@@ -269,7 +273,8 @@ function verifyCertificateChain(
     const cert = chain[i]!;
     const issuer = chain[i - 1]!;
 
-    if (!cert.verify(issuer.publicKey)) {
+    const valid = await cert.verify({ publicKey: issuer, signatureOnly: true });
+    if (!valid) {
       throw new AttestationError(
         `Certificate chain verification failed at index ${i}`,
         AttestationErrorCode.CHAIN_FAILED,
@@ -278,7 +283,7 @@ function verifyCertificateChain(
 
     // Check validity period
     const now = new Date();
-    if (now < new Date(cert.validFrom) || now > new Date(cert.validTo)) {
+    if (now < cert.notBefore || now > cert.notAfter) {
       throw new AttestationError(
         `Certificate at index ${i} is not within its validity period`,
         AttestationErrorCode.CHAIN_FAILED,

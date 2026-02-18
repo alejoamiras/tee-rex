@@ -4,6 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local-network:local": "PROVER_URL=http://localhost:4000 vite",
+    "dev:local-network:prod": "PROVER_URL=https://d3d1wk4leq65j7.cloudfront.net/prover TEE_URL=https://d3d1wk4leq65j7.cloudfront.net/tee vite",
+    "dev:nextnet:local": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=http://localhost:4000 vite",
+    "dev:nextnet:prod": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=https://d3d1wk4leq65j7.cloudfront.net/prover TEE_URL=https://d3d1wk4leq65j7.cloudfront.net/tee vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "bun test",
