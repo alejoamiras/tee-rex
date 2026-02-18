@@ -126,6 +126,12 @@ const lazyAccountContracts = {
     const { createStubAccount } = await import("@aztec/accounts/stub/lazy");
     return createStubAccount(address);
   },
+  async getMulticallContract() {
+    const { getCanonicalMultiCallEntrypoint } = await import(
+      "@aztec/protocol-contracts/multi-call-entrypoint/lazy"
+    );
+    return getCanonicalMultiCallEntrypoint();
+  },
 };
 
 async function doInitializeWallet(log: LogFn): Promise<boolean> {
