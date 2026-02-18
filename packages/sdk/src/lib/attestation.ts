@@ -12,8 +12,8 @@ VQQDDBJhd3Mubml0cm8tZW5jbGF2ZXMwHhcNMTkxMDI4MTMyODA1WhcNNDkxMDI4
 MTQyODA1WjBJMQswCQYDVQQGEwJVUzEPMA0GA1UECgwGQW1hem9uMQwwCgYDVQQL
 DANBV1MxGzAZBgNVBAMMEmF3cy5uaXRyby1lbmNsYXZlczB2MBAGByqGSM49AgEG
 BSuBBAAiA2IABPwCVOumCMHzaHDimtqQvkY4MpJzbolL//Zy2YlES1BR5TSksfbb
-48C8WBoyt7F2Bw7eEtaaP+ohG2bnUs990d0JX28nQPJNS+1kDz1IKLDf9MnJHKMG
-MQgR+HQB3hqgRqNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUkCW1DdkF
+48C8WBoyt7F2Bw7eEtaaP+ohG2bnUs990d0JX28TcPQXCEPZ3BABIeTPYwEoCWZE
+h8l5YoQwTcU/9KNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUkCW1DdkF
 R+eWw5b6cp3PmanfS5YwDgYDVR0PAQH/BAQDAgGGMAoGCCqGSM49BAMDA2kAMGYC
 MQCjfy+Rocm9Xue4YnwWmNJVA44fA0P5W2OpYow9OYCVRaEevL8uO1XYru5xtMPW
 rfMCMQCi85sWBbJwKKXdS6BptQFuZbT73o/gBh1qUxl/nNr12UO8Yfwr6wPLb+6N
@@ -103,7 +103,9 @@ export async function verifyNitroAttestation(
 
   // 4. Verify COSE_Sign1 signature
   //    Sig_structure = ["Signature1", protected_headers, external_aad, payload]
-  const sigStructure = encodeCbor(["Signature1", protectedHeaders, new Uint8Array(0), payload]);
+  // cbor-x encodes Uint8Array with CBOR tag 64 but Buffer as plain bstr.
+  // COSE requires plain bstr, so use Buffer.alloc(0) for the empty external_aad.
+  const sigStructure = encodeCbor(["Signature1", protectedHeaders, Buffer.alloc(0), payload]);
 
   const leafPublicKey = leafCert.publicKey;
   const verifier = createVerify("SHA384");
@@ -192,14 +194,13 @@ function parseAttestationDocument(doc: Record<string, unknown>): NitroAttestatio
   if (typeof doc.module_id !== "string") {
     throw new AttestationError("Missing or invalid module_id");
   }
-  if (typeof doc.timestamp !== "number") {
+  // cbor-x decodes 8-byte CBOR uint64 as BigInt — Nitro's Rust NSM library always
+  // encodes the timestamp as uint64 regardless of value, so we must accept both.
+  if (typeof doc.timestamp !== "number" && typeof doc.timestamp !== "bigint") {
     throw new AttestationError("Missing or invalid timestamp");
   }
   if (typeof doc.digest !== "string") {
     throw new AttestationError("Missing or invalid digest");
-  }
-  if (!(doc.pcrs instanceof Map)) {
-    throw new AttestationError("Missing or invalid pcrs");
   }
   if (!(doc.certificate instanceof Uint8Array)) {
     throw new AttestationError("Missing or invalid certificate");
@@ -208,12 +209,26 @@ function parseAttestationDocument(doc: Record<string, unknown>): NitroAttestatio
     throw new AttestationError("Missing or invalid cabundle");
   }
 
-  // Validate pcrs Map entries (CBOR maps decode as Map<number, Uint8Array>)
-  const pcrs = doc.pcrs as Map<unknown, unknown>;
-  for (const [key, value] of pcrs) {
-    if (typeof key !== "number" || !(value instanceof Uint8Array)) {
-      throw new AttestationError("Invalid pcrs entry: expected Map<number, Uint8Array>");
+  // Normalize pcrs: cbor-x decodes CBOR maps as plain objects (with string keys)
+  // by default, but as Map when using certain configurations. Accept both.
+  let pcrs: Map<number, Uint8Array>;
+  if (doc.pcrs instanceof Map) {
+    pcrs = doc.pcrs as Map<number, Uint8Array>;
+    for (const [key, value] of pcrs) {
+      if (typeof key !== "number" || !(value instanceof Uint8Array)) {
+        throw new AttestationError("Invalid pcrs entry: expected Map<number, Uint8Array>");
+      }
     }
+  } else if (doc.pcrs && typeof doc.pcrs === "object") {
+    pcrs = new Map<number, Uint8Array>();
+    for (const [key, value] of Object.entries(doc.pcrs as Record<string, unknown>)) {
+      if (!(value instanceof Uint8Array)) {
+        throw new AttestationError("Invalid pcrs entry: expected Map<number, Uint8Array>");
+      }
+      pcrs.set(Number(key), value);
+    }
+  } else {
+    throw new AttestationError("Missing or invalid pcrs");
   }
 
   // Validate cabundle entries
@@ -226,9 +241,9 @@ function parseAttestationDocument(doc: Record<string, unknown>): NitroAttestatio
 
   return {
     moduleId: doc.module_id as string,
-    timestamp: doc.timestamp as number,
+    timestamp: Number(doc.timestamp),
     digest: doc.digest as string,
-    pcrs: pcrs as Map<number, Uint8Array>,
+    pcrs,
     certificate: doc.certificate as Uint8Array,
     cabundle: cabundle as Uint8Array[],
     publicKey: doc.public_key instanceof Uint8Array ? doc.public_key : undefined,
