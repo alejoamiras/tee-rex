@@ -25,6 +25,7 @@
     "@aztec/noir-acvm_js": "4.0.0-spartan.20260218",
     "@aztec/noir-contracts.js": "4.0.0-spartan.20260218",
     "@aztec/noir-noirc_abi": "4.0.0-spartan.20260218",
+    "@aztec/protocol-contracts": "4.0.0-spartan.20260218",
     "@aztec/pxe": "4.0.0-spartan.20260218",
     "@aztec/simulator": "4.0.0-spartan.20260218",
     "@aztec/stdlib": "4.0.0-spartan.20260218",
