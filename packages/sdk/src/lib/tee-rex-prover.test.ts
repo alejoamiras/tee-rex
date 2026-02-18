@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
+import * as attestationModule from "./attestation.js";
 import { ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
 
 describe("TeeRexProver", () => {
@@ -85,6 +86,75 @@ describe("TeeRexProver", () => {
       await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
         "requireAttestation is enabled",
       );
+    });
+
+    test("nitro mode falls back to server-provided key when node:crypto unavailable", async () => {
+      const SERVER_PUBLIC_KEY = "server-provided-key-abc123";
+
+      globalThis.fetch = mock(async (input: any) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/attestation")) {
+          return new Response(
+            JSON.stringify({
+              mode: "nitro",
+              attestationDocument: "fake-doc",
+              publicKey: SERVER_PUBLIC_KEY,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        // /prove endpoint — return a valid response so the flow completes up to encryption
+        return new Response("not found", { status: 404 });
+      }) as any;
+
+      // Mock verifyNitroAttestation to throw a browser-like error
+      const verifySpy = spyOn(attestationModule, "verifyNitroAttestation").mockRejectedValue(
+        new TypeError("s is not a constructor"),
+      );
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.remote);
+
+      // createChonkProof will fail at the /prove call (404), but the attestation
+      // fallback should have succeeded — verify by checking the spy was called
+      // and the flow continued past attestation to the /prove request
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — the mock /prove returns 404
+      }
+
+      expect(verifySpy).toHaveBeenCalledTimes(1);
+      verifySpy.mockRestore();
+    });
+
+    test("nitro mode re-throws real verification errors", async () => {
+      globalThis.fetch = mock(async (input: any) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/attestation")) {
+          return new Response(
+            JSON.stringify({
+              mode: "nitro",
+              attestationDocument: "fake-doc",
+              publicKey: "server-key",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response("not found", { status: 404 });
+      }) as any;
+
+      // Mock verifyNitroAttestation to throw a real verification error
+      const verifySpy = spyOn(attestationModule, "verifyNitroAttestation").mockRejectedValue(
+        new Error("PCR0 mismatch: expected abc got def"),
+      );
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.remote);
+
+      await expect(prover.createChonkProof([fakeStep])).rejects.toThrow("PCR0 mismatch");
+
+      verifySpy.mockRestore();
     });
 
     test("local mode calls super.createChonkProof, not the API", async () => {

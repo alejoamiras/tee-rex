@@ -37,9 +37,9 @@ export function createApp(deps: AppDependencies): express.Express {
   const app = express();
 
   app.use(cors());
-  app.use(express.json({ limit: "10mb" }));
 
-  // Assign a unique request ID to each request, returned in X-Request-Id header
+  // Assign a unique request ID to each request, returned in X-Request-Id header.
+  // Runs before body parsing so that parsing errors include the request ID.
   app.use((req, res, next) => {
     const id = (req.headers["x-request-id"] as string) || randomUUID();
     req.id = id;
@@ -48,6 +48,9 @@ export function createApp(deps: AppDependencies): express.Express {
   });
 
   app.use(expressLogger());
+  // Proving payloads are large (encrypted witness + bytecode + VK, base64-encoded).
+  // 50mb accommodates the largest expected proving requests.
+  app.use(express.json({ limit: "50mb" }));
 
   const proveLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
@@ -69,14 +72,24 @@ export function createApp(deps: AppDependencies): express.Express {
           .json({ error: "Invalid request body: expected { data: string }", requestId: req.id });
         return;
       }
-      const encryptedData = Base64.toBytes(body.data.data);
-      const decryptedData: unknown = JSON.parse(
-        Bytes.toString(
-          await deps.encryption.decrypt({
-            data: encryptedData,
-          }),
-        ),
-      );
+      let decryptedData: unknown;
+      try {
+        const encryptedData = Base64.toBytes(body.data.data);
+        decryptedData = JSON.parse(
+          Bytes.toString(
+            await deps.encryption.decrypt({
+              data: encryptedData,
+            }),
+          ),
+        );
+      } catch (err) {
+        logger.warn("Failed to decrypt/parse prove payload", {
+          requestId: req.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        res.status(400).json({ error: "Failed to decrypt request payload", requestId: req.id });
+        return;
+      }
 
       const data = z
         .object({ executionSteps: z.array(PrivateExecutionStepSchema) })
@@ -120,6 +133,10 @@ export function createApp(deps: AppDependencies): express.Express {
       }
       if (err instanceof SyntaxError && "body" in err) {
         res.status(400).json({ error: "Malformed request body", requestId });
+        return;
+      }
+      if (err instanceof Error && "status" in err && (err as any).status === 413) {
+        res.status(413).json({ error: "Request payload too large", requestId });
         return;
       }
       logger.error("Unhandled error", {
