@@ -40,6 +40,7 @@ echo "=== Starting container ==="
 docker run -d \
   --name "${CONTAINER_NAME}" \
   -p 80:80 \
+  -e NODE_ENV=production \
   --restart unless-stopped \
   "${IMAGE_URI}"
 

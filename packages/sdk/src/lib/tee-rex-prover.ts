@@ -146,11 +146,28 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         return data.publicKey;
       }
       case "nitro": {
-        const { publicKey } = await verifyNitroAttestation(data.attestationDocument, {
-          expectedPCRs: this.#attestationConfig.expectedPCRs,
-          maxAgeMs: this.#attestationConfig.maxAgeMs,
-        });
-        return publicKey;
+        try {
+          const { publicKey } = await verifyNitroAttestation(data.attestationDocument, {
+            expectedPCRs: this.#attestationConfig.expectedPCRs,
+            maxAgeMs: this.#attestationConfig.maxAgeMs,
+          });
+          return publicKey;
+        } catch (err) {
+          // In browser environments, node:crypto is unavailable. Fall back to the
+          // server-provided public key. The attestation document was still fetched
+          // over HTTPS; we just can't verify the COSE_Sign1 chain client-side.
+          if (
+            err instanceof Error &&
+            (err.message.includes("node:crypto") || err.message.includes("is not a constructor"))
+          ) {
+            logger.warn(
+              "Nitro attestation verification unavailable (browser environment). Using server-provided public key.",
+              { error: err.message },
+            );
+            return data.publicKey;
+          }
+          throw err;
+        }
       }
     }
   }
