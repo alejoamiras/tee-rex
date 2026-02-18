@@ -31,11 +31,11 @@
     "prepublishOnly": "bun run test:lint && bun run build"
   },
   "dependencies": {
-    "@aztec/bb-prover": "4.0.0-spartan.20260217",
-    "@aztec/foundation": "4.0.0-spartan.20260217",
-    "@aztec/noir-acvm_js": "4.0.0-spartan.20260217",
-    "@aztec/noir-noirc_abi": "4.0.0-spartan.20260217",
-    "@aztec/stdlib": "4.0.0-spartan.20260217",
+    "@aztec/bb-prover": "4.0.0-spartan.20260218",
+    "@aztec/foundation": "4.0.0-spartan.20260218",
+    "@aztec/noir-acvm_js": "4.0.0-spartan.20260218",
+    "@aztec/noir-noirc_abi": "4.0.0-spartan.20260218",
+    "@aztec/stdlib": "4.0.0-spartan.20260218",
     "@logtape/logtape": "^2.0",
     "cbor-x": "^1.6.0",
     "ky": "^1.14.3",
@@ -47,12 +47,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@aztec/accounts": "4.0.0-spartan.20260217",
-    "@aztec/aztec.js": "4.0.0-spartan.20260217",
-    "@aztec/noir-contracts.js": "4.0.0-spartan.20260217",
-    "@aztec/pxe": "4.0.0-spartan.20260217",
-    "@aztec/simulator": "4.0.0-spartan.20260217",
-    "@aztec/wallets": "4.0.0-spartan.20260217",
+    "@aztec/accounts": "4.0.0-spartan.20260218",
+    "@aztec/aztec.js": "4.0.0-spartan.20260218",
+    "@aztec/noir-contracts.js": "4.0.0-spartan.20260218",
+    "@aztec/pxe": "4.0.0-spartan.20260218",
+    "@aztec/simulator": "4.0.0-spartan.20260218",
+    "@aztec/wallets": "4.0.0-spartan.20260218",
     "@types/ms": "^2.1.0"
   }
 }
