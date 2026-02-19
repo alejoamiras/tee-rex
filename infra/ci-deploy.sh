@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 # ci-deploy.sh — Deploy tee-rex enclave from a fresh Docker image.
-# Intended to be executed via AWS SSM on the CI EC2 instance.
+# Intended to be executed via AWS SSM on the CI/prod EC2 instance.
 #
 # Usage: ci-deploy.sh <ecr-image-uri>
 # Example: ci-deploy.sh <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:nightly
 #
-# Lessons applied from lessons/ssm-deployment.md:
-#   L1: nitro-cli must run as ec2-user (NITRO_CLI_ARTIFACTS in their profile)
-#   L2: socat proxy managed via systemd (survives reboots + crashes)
-#   L3: Old EIF must be removed as root (may have been created by root)
-#   L6: Enclave CID comes from run-enclave output (may differ from requested)
+# The enclave survives reboots via two systemd services:
+#   tee-rex-enclave.service — runs the enclave from a persisted EIF
+#   tee-rex-proxy.service   — socat proxy (TCP:4000 → vsock enclave)
+# The EIF is stored in /opt/tee-rex/ (not /tmp) so it persists across reboots.
 
 set -euo pipefail
 
 IMAGE_URI="${1:?Usage: ci-deploy.sh <ecr-image-uri>}"
 REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
-EIF_PATH="/tmp/tee-rex.eif"
+EIF_DIR="/opt/tee-rex"
+EIF_PATH="${EIF_DIR}/tee-rex.eif"
 CPU_COUNT=2
-MEMORY_MB=6144
+MEMORY_MB=8192
+ENCLAVE_CID=16
 
 echo "=== TEE-Rex CI Deploy ==="
 echo "Image: ${IMAGE_URI}"
@@ -29,8 +30,9 @@ echo "Region: ${REGION}"
 # can't remove them. Wipe all of /var/lib/docker so Docker reinitializes
 # cleanly — partial wipes (overlay2 only) corrupt Docker's internal state.
 echo "=== Tearing down existing enclave ==="
-sudo -u ec2-user nitro-cli terminate-enclave --all 2>/dev/null || true
-systemctl stop tee-rex-proxy 2>/dev/null || pkill socat 2>/dev/null || true
+systemctl stop tee-rex-proxy 2>/dev/null || true
+systemctl stop tee-rex-enclave 2>/dev/null || true
+nitro-cli terminate-enclave --all 2>/dev/null || true
 rm -f "${EIF_PATH}"
 rm -rf /tmp/nitro-artifacts 2>/dev/null || true
 systemctl stop docker 2>/dev/null || true
@@ -53,50 +55,59 @@ aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
 docker pull "${IMAGE_URI}"
 
-# ── 3. Build EIF (as ec2-user — needs NITRO_CLI_ARTIFACTS) ──────
+# ── 3. Build EIF ──────────────────────────────────────────────────
 # Must happen before prune: nitro-cli reads the Docker image directly,
 # so the image must still be on disk.
+# Store EIF in /opt/tee-rex/ so it survives reboots (unlike /tmp).
 echo "=== Building EIF ==="
-sudo -u ec2-user bash -lc \
-  "NITRO_CLI_ARTIFACTS=/tmp/nitro-artifacts nitro-cli build-enclave \
-    --docker-uri '${IMAGE_URI}' \
-    --output-file '${EIF_PATH}'"
+mkdir -p "${EIF_DIR}"
+NITRO_CLI_ARTIFACTS=/tmp/nitro-artifacts nitro-cli build-enclave \
+  --docker-uri "${IMAGE_URI}" \
+  --output-file "${EIF_PATH}"
 
 # ── 4. Clean up build image (after EIF build, image no longer needed) ─
 echo "=== Cleaning up build image ==="
 docker image prune -af
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
-# ── 5. Run enclave (as ec2-user) ────────────────────────────────
-echo "=== Running enclave ==="
-ENCLAVE_OUT=$(sudo -u ec2-user bash -lc \
-  "nitro-cli run-enclave \
-    --eif-path '${EIF_PATH}' \
-    --cpu-count ${CPU_COUNT} \
-    --memory ${MEMORY_MB} \
-    --enclave-cid 16")
-echo "${ENCLAVE_OUT}"
-
-CID=$(echo "${ENCLAVE_OUT}" | jq -r '.EnclaveCID // 16')
-if [ -z "${CID}" ] || [ "${CID}" = "null" ]; then
-  echo "ERROR: Failed to extract enclave CID from nitro-cli output"
-  echo "nitro-cli output: ${ENCLAVE_OUT}"
-  exit 1
-fi
-echo "Enclave CID: ${CID}"
-
-# ── 6. Install + start socat proxy via systemd ───────────────────
-echo "=== Starting proxy (CID=${CID}) ==="
+# ── 5. Install systemd services + config ──────────────────────────
+# Two services make the enclave survive reboots:
+#   tee-rex-enclave — runs the enclave from the persisted EIF
+#   tee-rex-proxy   — socat proxy (TCP:4000 → vsock enclave)
+echo "=== Installing systemd services ==="
 mkdir -p /etc/tee-rex
-echo "ENCLAVE_CID=${CID}" > /etc/tee-rex/proxy.env
+cat > /etc/tee-rex/enclave.env <<EOF
+CPU_COUNT=${CPU_COUNT}
+MEMORY_MB=${MEMORY_MB}
+ENCLAVE_CID=${ENCLAVE_CID}
+EOF
+
+cat > /etc/systemd/system/tee-rex-enclave.service <<'UNIT'
+[Unit]
+Description=tee-rex Nitro Enclave
+After=nitro-enclaves-allocator.service
+Requires=nitro-enclaves-allocator.service
+ConditionPathExists=/opt/tee-rex/tee-rex.eif
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/tee-rex/enclave.env
+ExecStart=/usr/bin/nitro-cli run-enclave --eif-path /opt/tee-rex/tee-rex.eif --cpu-count ${CPU_COUNT} --memory ${MEMORY_MB} --enclave-cid ${ENCLAVE_CID}
+ExecStop=/usr/bin/nitro-cli terminate-enclave --all
+
+[Install]
+WantedBy=multi-user.target
+UNIT
 
 cat > /etc/systemd/system/tee-rex-proxy.service <<'UNIT'
 [Unit]
 Description=tee-rex socat proxy (TCP:4000 → vsock enclave)
-After=nitro-enclaves-allocator.service
+After=tee-rex-enclave.service
+Requires=tee-rex-enclave.service
 
 [Service]
-EnvironmentFile=/etc/tee-rex/proxy.env
+EnvironmentFile=/etc/tee-rex/enclave.env
 ExecStart=/usr/bin/socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:${ENCLAVE_CID}:5000
 Restart=always
 RestartSec=3
@@ -106,7 +117,12 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable tee-rex-proxy
+systemctl enable tee-rex-enclave tee-rex-proxy
+
+# ── 6. Start enclave + proxy ─────────────────────────────────────
+echo "=== Starting enclave ==="
+systemctl start tee-rex-enclave
+echo "=== Starting proxy ==="
 systemctl restart tee-rex-proxy
 
 # ── 7. Health check ─────────────────────────────────────────────

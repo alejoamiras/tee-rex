@@ -48,20 +48,18 @@ export class NitroAttestationService implements AttestationService {
 }
 
 /**
- * Call the Nitro Security Module (NSM) via /dev/nsm ioctl to generate
- * an attestation document with the given public key embedded.
- *
- * The NSM device expects CBOR-encoded requests and returns CBOR-encoded responses.
- * The attestation document is a COSE_Sign1 structure containing PCR values,
- * certificates, and the embedded public key.
+ * Cached NSM library handle. Opened once via dlopen and reused for all
+ * attestation requests. Without caching, each dlopen() leaks a file
+ * descriptor (the handle is never closed), eventually crashing the
+ * enclave process when it hits the FD limit (~8-9 minutes of traffic).
  */
-async function getNitroAttestationDocument(publicKey: Uint8Array): Promise<Uint8Array> {
-  // Dynamic import — only available inside a Nitro Enclave
-  const { dlopen, FFIType, ptr } = await import("bun:ffi");
+// biome-ignore lint/suspicious/noExplicitAny: bun:ffi types unavailable via dynamic import
+let nsmLib: any;
 
-  const NSM_MAX_ATTESTATION_DOC_SIZE = 16 * 1024; // 16 KB
-
-  const lib = dlopen("libnsm.so", {
+async function getNsmLib() {
+  if (nsmLib) return nsmLib;
+  const { dlopen, FFIType } = await import("bun:ffi");
+  nsmLib = dlopen("libnsm.so", {
     nsm_lib_init: {
       args: [],
       returns: FFIType.i32,
@@ -85,6 +83,22 @@ async function getNitroAttestationDocument(publicKey: Uint8Array): Promise<Uint8
       returns: FFIType.void,
     },
   });
+  return nsmLib;
+}
+
+/**
+ * Call the Nitro Security Module (NSM) via /dev/nsm ioctl to generate
+ * an attestation document with the given public key embedded.
+ *
+ * The NSM device expects CBOR-encoded requests and returns CBOR-encoded responses.
+ * The attestation document is a COSE_Sign1 structure containing PCR values,
+ * certificates, and the embedded public key.
+ */
+async function getNitroAttestationDocument(publicKey: Uint8Array): Promise<Uint8Array> {
+  const { ptr } = await import("bun:ffi");
+  const lib = await getNsmLib();
+
+  const NSM_MAX_ATTESTATION_DOC_SIZE = 16 * 1024; // 16 KB
 
   const fd = lib.symbols.nsm_lib_init();
   if (fd < 0) {

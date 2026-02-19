@@ -58,6 +58,7 @@ ENV TEE_MODE=nitro
 # Entrypoint: start the Express server, then bridge vsock → TCP
 COPY <<'ENTRYPOINT' /entrypoint.sh
 #!/bin/bash
+# Send startup messages to serial console (readable via `nitro-cli console` in debug mode).
 exec > /dev/console 2>&1
 set -e
 
@@ -74,8 +75,15 @@ ifconfig lo 127.0.0.1 2>/dev/null || {
 # WORKDIR not preserved by enclave init
 cd /app/packages/server
 
-# Drop privileges: run server and socat as non-root appuser
-su appuser -s /bin/bash -c "bun run src/index.ts" &
+# The server and socat write to /dev/null instead of /dev/console.
+# In non-debug mode, nobody reads from the serial port so the kernel's
+# tty buffer (~4KB) fills from log output and write() blocks, deadlocking
+# the Bun event loop. In debug mode, `nitro-cli console` drains the buffer
+# so blocking doesn't occur — but we redirect to /dev/null unconditionally
+# for safety. Debug mode still captures the startup messages above.
+
+# Drop privileges: run server as non-root appuser
+su appuser -s /bin/bash -c "bun run src/index.ts" > /dev/null 2>&1 &
 SERVER_PID=$!
 
 # Wait for server to be ready
@@ -88,11 +96,17 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Bridge vsock port 5000 to TCP port 4000
-su appuser -s /bin/bash -c "socat VSOCK-LISTEN:5000,fork,reuseaddr TCP:localhost:${PORT}" &
+# Bridge vsock port 5000 to TCP port 4000.
+# Runs as root because /dev/vsock requires root access inside the enclave.
+# socat only proxies bytes — no privilege escalation risk.
+socat VSOCK-LISTEN:5000,fork,reuseaddr TCP:localhost:${PORT} > /dev/null 2>&1 &
 SOCAT_PID=$!
 
 echo "Enclave ready: TEE_MODE=${TEE_MODE}, vsock:5000 -> tcp:${PORT}"
+
+# Stop writing to console — all startup messages are done.
+# This prevents the entrypoint's wait from blocking on console writes.
+exec > /dev/null 2>&1
 
 wait $SERVER_PID $SOCAT_PID
 ENTRYPOINT

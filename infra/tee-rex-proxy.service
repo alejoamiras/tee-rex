@@ -1,9 +1,10 @@
 [Unit]
 Description=tee-rex socat proxy (TCP:4000 → vsock enclave)
-After=nitro-enclaves-allocator.service
+After=tee-rex-enclave.service
+Requires=tee-rex-enclave.service
 
 [Service]
-EnvironmentFile=/etc/tee-rex/proxy.env
+EnvironmentFile=/etc/tee-rex/enclave.env
 ExecStart=/usr/bin/socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:${ENCLAVE_CID}:5000
 Restart=always
 RestartSec=3
