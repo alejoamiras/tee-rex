@@ -38,6 +38,13 @@ export function createApp(deps: AppDependencies): express.Express {
 
   app.use(cors());
 
+  // The server always runs behind a reverse proxy (CloudFront + socat).
+  // Without this, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+  // when it sees the X-Forwarded-For header that CloudFront adds.
+  // Use 1 (not true) to trust only the first proxy hop — `true` is too
+  // permissive and triggers ERR_ERL_PERMISSIVE_TRUST_PROXY.
+  app.set("trust proxy", 1);
+
   // Assign a unique request ID to each request, returned in X-Request-Id header.
   // Runs before body parsing so that parsing errors include the request ID.
   app.use((req, res, next) => {

@@ -1,0 +1,15 @@
+[Unit]
+Description=tee-rex Nitro Enclave
+After=nitro-enclaves-allocator.service
+Requires=nitro-enclaves-allocator.service
+ConditionPathExists=/opt/tee-rex/tee-rex.eif
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/tee-rex/enclave.env
+ExecStart=/usr/bin/nitro-cli run-enclave --eif-path /opt/tee-rex/tee-rex.eif --cpu-count ${CPU_COUNT} --memory ${MEMORY_MB} --enclave-cid ${ENCLAVE_CID}
+ExecStop=/usr/bin/nitro-cli terminate-enclave --all
+
+[Install]
+WantedBy=multi-user.target
