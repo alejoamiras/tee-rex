@@ -151,6 +151,7 @@ export default defineConfig(({ mode, command }) => {
         AZTEC_NODE_URL: env.AZTEC_NODE_URL,
         PROVER_URL: env.PROVER_URL,
         TEE_URL: env.TEE_URL,
+        E2E_RETRY_STALE_HEADER: env.E2E_RETRY_STALE_HEADER,
       }),
     },
   };

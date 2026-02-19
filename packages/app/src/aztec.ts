@@ -329,32 +329,32 @@ function extractSimDetail(simResult: { stats: { timings: SimTimings } }): SimSte
 const BLOCK_HEADER_NOT_FOUND = "Block header not found";
 const MAX_SEND_ATTEMPTS = 3;
 
+/** Retry stale block headers only in E2E tests — not safe in production
+ *  because re-simulating may pick up different contract state. */
+const RETRY_STALE_HEADER = !!process.env.E2E_RETRY_STALE_HEADER;
+
 /**
- * Send a tx with retry on "Block header not found" — re-simulates to refresh
- * the block header when proving takes long enough for it to go stale.
+ * Send a tx, optionally retrying on "Block header not found" when enabled
+ * via E2E_RETRY_STALE_HEADER. Re-simulates to refresh the block header when
+ * proving takes long enough for it to go stale on live networks.
  */
 async function sendWithRetry(
   method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<TxHash> },
   sendOpts: Record<string, unknown>,
   log: LogFn,
 ): Promise<TxHash> {
-  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+  const maxAttempts = RETRY_STALE_HEADER ? MAX_SEND_ATTEMPTS : 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       if (attempt > 1) {
-        log(
-          `Retrying (attempt ${attempt}/${MAX_SEND_ATTEMPTS}) — refreshing block header...`,
-          "warn",
-        );
+        log(`Retrying (attempt ${attempt}/${maxAttempts}) — refreshing block header...`, "warn");
         await method.simulate(sendOpts);
       }
       return await method.send({ ...sendOpts, wait: NO_WAIT });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (attempt < MAX_SEND_ATTEMPTS && msg.includes(BLOCK_HEADER_NOT_FOUND)) {
-        log(
-          `Block header went stale during proving (attempt ${attempt}/${MAX_SEND_ATTEMPTS})`,
-          "warn",
-        );
+      if (attempt < maxAttempts && msg.includes(BLOCK_HEADER_NOT_FOUND)) {
+        log(`Block header went stale during proving (attempt ${attempt}/${maxAttempts})`, "warn");
         continue;
       }
       throw err;
