@@ -128,6 +128,74 @@ describe("GET /encryption-public-key", () => {
   });
 });
 
+describe("Reverse proxy headers", () => {
+  test("rate-limited endpoint handles X-Forwarded-For without crashing", async () => {
+    // Without trust proxy configured, express-rate-limit v8 throws
+    // ERR_ERL_UNEXPECTED_X_FORWARDED_FOR when it sees this header.
+    // CloudFront always adds it, so every proxied request would crash.
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "1.2.3.4, 5.6.7.8",
+        },
+        body: JSON.stringify({ data: "test" }),
+      });
+      // Should get 400 (bad decryption), not 500 from rate limiter crash
+      expect(res.status).toBe(400);
+    } finally {
+      close();
+    }
+  });
+});
+
+describe("POST /prove — payload limits", () => {
+  test("accepts large payloads within the 50mb limit", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      // 15MB payload — should reach the decrypt step (400), not be rejected as too large (413)
+      const largeData = "x".repeat(15 * 1024 * 1024);
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: largeData }),
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Failed to decrypt");
+    } finally {
+      close();
+    }
+  });
+
+  test("returns 413 with requestId for payloads exceeding 50mb", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const hugeData = "x".repeat(51 * 1024 * 1024);
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: hugeData }),
+      });
+      expect(res.status).toBe(413);
+      const body = (await res.json()) as { error: string; requestId: string };
+      expect(body.error).toBe("Request payload too large");
+      expect(body.requestId).toBeDefined();
+      expect(res.headers.get("x-request-id")).toBe(body.requestId);
+    } finally {
+      close();
+    }
+  });
+});
+
 describe("POST /prove — error handling", () => {
   test("returns 400 for missing body", async () => {
     const { app } = createTestApp();
@@ -160,6 +228,24 @@ describe("POST /prove — error handling", () => {
       expect(res.status).toBe(400);
       const body = (await res.json()) as { error: string };
       expect(body.error).toBe("Malformed request body");
+    } finally {
+      close();
+    }
+  });
+
+  test("includes requestId in malformed JSON error response", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const body = (await res.json()) as { error: string; requestId: string };
+      expect(body.requestId).toBeDefined();
+      expect(res.headers.get("x-request-id")).toBe(body.requestId);
     } finally {
       close();
     }
