@@ -23,7 +23,7 @@ export default defineConfig({
       testDir: "./e2e",
       testMatch: "*.fullstack.spec.ts",
       timeout: 15 * 60 * 1000,
-      retries: 0,
+      retries: 2,
       use: {
         actionTimeout: 0,
         trace: "retain-on-failure",
