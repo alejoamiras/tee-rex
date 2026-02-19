@@ -17,7 +17,7 @@ REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
 EIF_DIR="/opt/tee-rex"
 EIF_PATH="${EIF_DIR}/tee-rex.eif"
 CPU_COUNT=2
-MEMORY_MB=8192
+MEMORY_MB=12288
 ENCLAVE_CID=16
 
 echo "=== TEE-Rex CI Deploy ==="
@@ -81,6 +81,12 @@ CPU_COUNT=${CPU_COUNT}
 MEMORY_MB=${MEMORY_MB}
 ENCLAVE_CID=${ENCLAVE_CID}
 EOF
+
+# Update allocator hugepage reservation to match enclave memory
+sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
+systemctl restart nitro-enclaves-allocator.service
+sleep 3
 
 cat > /etc/systemd/system/tee-rex-enclave.service <<'UNIT'
 [Unit]
