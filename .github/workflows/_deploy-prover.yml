@@ -198,7 +198,7 @@ jobs:
           trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
 
           for i in $(seq 1 90); do
-            if curl -sf http://localhost:4002/attestation > /dev/null 2>&1; then
+            if curl -sf --max-time 5 http://localhost:4002/attestation > /dev/null 2>&1; then
               echo "Prover healthy (attempt $i)"
               curl -s http://localhost:4002/attestation | jq '{mode}'
               echo "deployed=true" >> "$GITHUB_OUTPUT"
