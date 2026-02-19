@@ -9,7 +9,10 @@ export default defineConfig({
     command: "bun run dev",
     port: 5173,
     reuseExistingServer: true,
-    env: { PROVER_URL: process.env.PROVER_URL || "http://localhost:4000" },
+    env: {
+      PROVER_URL: process.env.PROVER_URL || "http://localhost:4000",
+      E2E_RETRY_STALE_HEADER: "true",
+    },
   },
   projects: [
     {
