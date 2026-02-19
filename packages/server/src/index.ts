@@ -65,6 +65,7 @@ export function createApp(deps: AppDependencies): express.Express {
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: { error: "Too many prove requests, try again later" },
+    skip: (req) => req.ip === "127.0.0.1" || req.ip === "::1",
   });
 
   app.post("/prove", proveLimiter, async (req, res, next) => {

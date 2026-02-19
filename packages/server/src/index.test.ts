@@ -153,6 +153,28 @@ describe("Reverse proxy headers", () => {
   });
 });
 
+describe("Rate limit localhost exemption", () => {
+  test("localhost requests bypass the rate limit", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      // Send 12 requests (exceeds the 10/hour limit) — all should get 400
+      // (bad payload), not 429 (rate limited), because localhost is exempt.
+      for (let i = 0; i < 12; i++) {
+        const res = await fetch(`${url}/prove`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: "not-encrypted" }),
+        });
+        expect(res.status).toBe(400);
+      }
+    } finally {
+      close();
+    }
+  });
+});
+
 describe("POST /prove — payload limits", () => {
   test("accepts large payloads within the 50mb limit", async () => {
     const { app } = createTestApp();

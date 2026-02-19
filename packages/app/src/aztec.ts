@@ -326,6 +326,43 @@ function extractSimDetail(simResult: { stats: { timings: SimTimings } }): SimSte
   };
 }
 
+const BLOCK_HEADER_NOT_FOUND = "Block header not found";
+const MAX_SEND_ATTEMPTS = 3;
+
+/**
+ * Send a tx with retry on "Block header not found" — re-simulates to refresh
+ * the block header when proving takes long enough for it to go stale.
+ */
+async function sendWithRetry(
+  method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<TxHash> },
+  sendOpts: Record<string, unknown>,
+  log: LogFn,
+): Promise<TxHash> {
+  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 1) {
+        log(
+          `Retrying (attempt ${attempt}/${MAX_SEND_ATTEMPTS}) — refreshing block header...`,
+          "warn",
+        );
+        await method.simulate(sendOpts);
+      }
+      return await method.send({ ...sendOpts, wait: NO_WAIT });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < MAX_SEND_ATTEMPTS && msg.includes(BLOCK_HEADER_NOT_FOUND)) {
+        log(
+          `Block header went stale during proving (attempt ${attempt}/${MAX_SEND_ATTEMPTS})`,
+          "warn",
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 /** Poll until a transaction is no longer pending. Throws on dropped or timed-out txs. */
 async function waitForTx(txHash: TxHash): Promise<void> {
   const deadline = Date.now() + 10 * 60 * 1000; // 10 minutes
@@ -407,7 +444,7 @@ export async function deployTestAccount(
     log(`Deploying [${mode} proving]...`);
     stepStart = Date.now();
 
-    const txHash = await deployMethod.send({ ...sendOpts, wait: NO_WAIT });
+    const txHash = await sendWithRetry(deployMethod, sendOpts, log);
     const proveSendMs = Date.now() - stepStart;
 
     onStep(`confirming [${mode}]`);
@@ -475,7 +512,7 @@ export async function runTokenFlow(
       const bobSim = await bobDeploy.simulate({ ...bobSendOpts, includeMetadata: true });
 
       const bobSendStart = Date.now();
-      const bobTxHash = await bobDeploy.send({ ...bobSendOpts, wait: NO_WAIT });
+      const bobTxHash = await sendWithRetry(bobDeploy, bobSendOpts, log);
       const bobProveSendMs = Date.now() - bobSendStart;
 
       onStep(`confirming bob [${mode}]`);
@@ -506,7 +543,7 @@ export async function runTokenFlow(
     const tokenSim = await tokenDeploy.simulate({ from: alice, fee, includeMetadata: true });
 
     const tokenSendStart = Date.now();
-    const tokenTxHash = await tokenDeploy.send({ from: alice, fee, wait: NO_WAIT });
+    const tokenTxHash = await sendWithRetry(tokenDeploy, { from: alice, fee }, log);
     const tokenProveSendMs = Date.now() - tokenSendStart;
 
     onStep(`confirming token deploy [${mode}]`);
@@ -538,7 +575,7 @@ export async function runTokenFlow(
     const mintSim = await mintCall.simulate({ from: alice, fee, includeMetadata: true });
 
     const mintSendStart = Date.now();
-    const mintTxHash = await mintCall.send({ from: alice, fee, wait: NO_WAIT });
+    const mintTxHash = await sendWithRetry(mintCall, { from: alice, fee }, log);
     const mintProveSendMs = Date.now() - mintSendStart;
 
     onStep(`confirming mint [${mode}]`);
@@ -565,7 +602,7 @@ export async function runTokenFlow(
     const transferSim = await transferCall.simulate({ from: alice, fee, includeMetadata: true });
 
     const transferSendStart = Date.now();
-    const transferTxHash = await transferCall.send({ from: alice, fee, wait: NO_WAIT });
+    const transferTxHash = await sendWithRetry(transferCall, { from: alice, fee }, log);
     const transferProveSendMs = Date.now() - transferSendStart;
 
     onStep(`confirming transfer [${mode}]`);
