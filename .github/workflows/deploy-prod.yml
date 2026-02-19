@@ -161,8 +161,8 @@ jobs:
         run: bun run test:e2e:nextnet
 
   # ── Publish SDK to npm (spartan auto-update merges only) ─────────
-  # Uses OIDC trusted publishing — no NPM_TOKEN needed.
-  # Configure at: https://www.npmjs.com/package/@alejoamiras/tee-rex/access
+  # Uses NPM_TOKEN (automation token) — OIDC trusted publishing only supports
+  # one workflow file per package, which doesn't work with deploy-prod + deploy-devnet.
   publish-sdk:
     name: Publish SDK
     needs: nextnet-check
