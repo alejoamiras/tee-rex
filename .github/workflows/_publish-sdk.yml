@@ -75,10 +75,8 @@ jobs:
         working-directory: packages/sdk
         run: node -e "const p=require('./package.json');p.version='${{ steps.aztec-version.outputs.version }}';require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC trusted publishing)
         working-directory: packages/sdk
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag ${{ inputs.dist_tag }} --workspaces=false
 
       - name: Create git tag and GitHub release
