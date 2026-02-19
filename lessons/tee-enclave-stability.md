@@ -1,10 +1,10 @@
 # TEE Enclave Stability — Lessons Learned
 
-## STATUS: IN PROGRESS (2026-02-19)
+## STATUS: RESOLVED (2026-02-19)
 
 ## Context
 
-Production TEE enclave on m5.xlarge (16GB, 4 vCPUs, 2 allocated to enclave) was crashing after ~9 minutes idle and immediately on `/prove` requests. This session diagnosed and partially fixed multiple root causes.
+Production TEE enclave on m5.xlarge (16GB, 4 vCPUs, 2 allocated to enclave) was crashing after ~9 minutes idle and immediately on `/prove` requests. This session diagnosed and fixed all root causes across 14 attempts.
 
 ---
 
@@ -57,7 +57,7 @@ async function getNsmLib() {
 
 ---
 
-## Root Cause 3: /prove crashes — TWO application-level errors (DIAGNOSED, FIX IN PROGRESS)
+## Root Cause 3: /prove crashes — TWO application-level errors (FIXED, DEPLOYED)
 
 **Symptom**: Server dies when processing a `/prove` request. Enclave remains RUNNING but the Bun process inside is dead (curl to /attestation fails, socat proxy still listening).
 
@@ -263,6 +263,70 @@ The TypeScript layer (`@aztec/bb.js`) initializes Grumpkin CRS with 2^16 + 1 poi
 
 ---
 
+## Lesson 12: nitro-cli console --enclave-name vs --enclave-id
+
+`nitro-cli console` accepts either `--enclave-name` or `--enclave-id`. The enclave name is auto-generated from the EIF filename (e.g., `tee-rex-debug.eif` → enclave named `tee-rex-debug`, not `tee-rex`).
+
+**Failure**: `nitro-cli console --enclave-name tee-rex` silently fails (E58 naming error) when the enclave is actually named `tee-rex-debug`. The console capture file is populated with the error message, not the enclave output. This looks like the enclave produced no output, wasting an entire debugging cycle.
+
+**Fix**: Always use `--enclave-id` from `nitro-cli describe-enclaves`, never guess the name:
+```bash
+ENCLAVE_ID=$(nitro-cli describe-enclaves | jq -r '.[0].EnclaveID')
+nitro-cli console --enclave-id $ENCLAVE_ID
+```
+
+---
+
+## Lesson 13: Don't assume OOM — check dmesg first
+
+When a process dies inside a Nitro Enclave, the natural assumption is OOM (the enclave has limited memory). **Always verify with `dmesg` on the host before pursuing the OOM hypothesis.**
+
+In this session, we spent multiple attempts increasing memory (6GB → 8GB → 12GB) based on the OOM assumption. Checking `dmesg | grep -i "oom\|killed"` showed NO OOM kills. The actual cause was application-level errors (X-Forwarded-For validation + no internet for CRS download).
+
+**Diagnostic order for enclave process death:**
+1. `dmesg | grep -i "oom\|killed"` on the host — rules out kernel OOM killer
+2. Restart in debug mode, capture console output — reveals application errors
+3. Use `--enclave-id` (not `--enclave-name`) for console capture
+4. Only then consider memory if dmesg shows actual OOM kills
+
+---
+
+## Lesson 14: Nitro Enclaves have NO network — implications beyond HTTP
+
+Nitro Enclaves communicate exclusively via vsock. There is no TCP/IP, no DNS, no internet. This affects any code path that makes network requests at runtime:
+
+- **CRS download** (Barretenberg): fails with "Could not establish connection"
+- **npm/package downloads**: impossible at runtime
+- **Telemetry/logging services**: won't reach external endpoints
+- **NTP/time sync**: enclave uses host time via hypervisor, not NTP
+- **DNS resolution**: `localhost` works (after `ifconfig lo 127.0.0.1`), but nothing else resolves
+
+**Design principle**: Everything the enclave needs at runtime must be baked into the Docker image at build time, or passed through vsock.
+
+---
+
+## Lesson 15: Manual deploy vs systemd — don't mix
+
+When deploying manually (via SSM + `nitro-cli run-enclave`), the systemd services don't know the enclave is running. Attempting `systemctl start tee-rex-proxy` fails because its dependency `tee-rex-enclave.service` reports as inactive.
+
+**Options:**
+1. **Full systemd deploy**: Use `systemctl start tee-rex-enclave` (which calls nitro-cli internally), then `systemctl start tee-rex-proxy`
+2. **Full manual deploy**: Run nitro-cli manually AND start socat manually (`nohup socat ... & disown`)
+
+Never mix: don't start the enclave manually then try to start the proxy via systemd. The dependency chain breaks.
+
+---
+
+## Lesson 16: SSM command output truncation and escaping
+
+AWS SSM `RunShellScript` has several gotchas:
+- **Output limit**: ~24KB. Larger outputs are silently truncated. Filter/tail logs before capturing.
+- **JSON escaping in --parameters**: Shell special characters (`$!`, `\"`, backticks) need careful escaping. Using a JSON file with `file://` prefix is more reliable than inline JSON.
+- **grep patterns**: `grep -v "^\["` to filter kernel boot lines from enclave console — the `\[` needs double escaping in JSON strings.
+- **Pipeline exit codes**: `curl -sf | head -c 40 || echo DEAD` — `head` always exits 0 even with empty input, so the `||` never triggers. Write curl output to a file and check the exit code separately.
+
+---
+
 ## Attempt Log
 
 | # | Approach | Result |
@@ -280,15 +344,23 @@ The TypeScript layer (`@aztec/bb.js`) initializes Grumpkin CRS with 2^16 + 1 poi
 | 11 | Fall back to 8192MB with new EIF | Enclave runs, /attestation stable, /prove still crashes |
 | 12 | Deploy debug EIF (server output to /dev/console) | Console capture fails — wrong enclave name |
 | 13 | Fix console capture with --enclave-id, trigger /prove | Found both root causes: X-Forwarded-For crash + CRS download failure |
-| 14 | Fix: `trust proxy` = 1, pre-cache CRS in Dockerfile.nitro | Tests pass locally, deploy pending |
+| 14 | Fix: `trust proxy` = 1, pre-cache CRS in Dockerfile.nitro | Tests pass locally |
+| 15 | Build + push fixed image to ECR, deploy to production | /prove works end-to-end! |
 
 ---
 
-## Current State (2026-02-19)
+## Current State (2026-02-19) — ALL ISSUES RESOLVED
 
-- **Fixed and deployed**: Console deadlock (Dockerfile.nitro), NSM dlopen leak (attestation-service.ts), boot persistence (systemd services), allocator ordering (ci-deploy.sh)
-- **Fixed, pending deploy**: trust proxy (index.ts), CRS pre-cache (Dockerfile.nitro)
-- **Next step**: Build and deploy new EIF with both fixes, verify /prove works end-to-end
+All root causes identified and fixed:
+
+| Issue | Fix | File |
+|---|---|---|
+| Console buffer deadlock | Redirect server/socat to `/dev/null` | `Dockerfile.nitro` |
+| NSM dlopen FD leak | Cache library handle globally | `attestation-service.ts` |
+| X-Forwarded-For crash | `app.set("trust proxy", 1)` | `index.ts` |
+| CRS download fails (no internet) | Pre-cache CRS during Docker build | `Dockerfile.nitro` |
+| Allocator ordering | Reduce before build, increase after | `ci-deploy.sh` |
+| Boot persistence | systemd services for enclave + proxy | `tee-rex-enclave.service`, `tee-rex-proxy.service` |
 
 ---
 
