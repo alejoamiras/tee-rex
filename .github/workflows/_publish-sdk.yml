@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      id-token: write # needed for --provenance (Sigstore attestation)
       contents: write
     steps:
       - uses: actions/checkout@v4
