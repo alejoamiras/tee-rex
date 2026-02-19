@@ -17,7 +17,7 @@ REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
 EIF_DIR="/opt/tee-rex"
 EIF_PATH="${EIF_DIR}/tee-rex.eif"
 CPU_COUNT=2
-MEMORY_MB=12288
+MEMORY_MB=8192
 ENCLAVE_CID=16
 
 echo "=== TEE-Rex CI Deploy ==="
@@ -39,6 +39,13 @@ systemctl stop docker 2>/dev/null || true
 rm -rf /var/lib/docker/*
 systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
+
+# Free hugepages for the build phase — nitro-cli build-enclave + Docker need
+# host RAM. A previous deploy may have left the allocator claiming most of it.
+# We reclaim it here and re-reserve after the EIF is built (step 5).
+sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
+systemctl restart nitro-enclaves-allocator.service
+sleep 2
 
 # ── 1. Disk space check ──────────────────────────────────────────
 AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
