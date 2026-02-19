@@ -175,7 +175,77 @@ docker push $IMAGE_URI
 
 ---
 
-## Lesson 9: Debugging enclaves — debug vs production mode
+## Lesson 9: Barretenberg CRS file naming and resolution (CRITICAL)
+
+The Barretenberg `bb` native binary requires CRS (Common Reference String / Structured Reference String) data to generate proofs. Understanding the exact file names, URLs, and resolution order is critical — getting any of these wrong means silent failures or cryptic errors.
+
+### CRS path resolution order
+
+1. `CRS_PATH` environment variable (checked first)
+2. `$HOME/.bb-crs/` directory (default fallback)
+3. HTTP download from CDN (last resort — fails in offline environments)
+
+### File names — URL vs local names DIFFER
+
+| CDN URL | Local file name | Size |
+|---------|----------------|------|
+| `https://crs.aztec-cdn.foundation/g1.dat` | `bn254_g1.dat` | Up to 6.4 GB (full), use Range header for partial |
+| `https://crs.aztec-cdn.foundation/g2.dat` | `bn254_g2.dat` | 128 bytes |
+| `https://crs.aztec-cdn.foundation/grumpkin_g1.dat` | `grumpkin_g1.flat.dat` | ~16 MB |
+
+**CRITICAL**: The file names on the CDN (`g1.dat`, `g2.dat`, `grumpkin_g1.dat`) do NOT match the local file names (`bn254_g1.dat`, `bn254_g2.dat`, `grumpkin_g1.flat.dat`). If you download with the wrong name, bb won't find them and will try to re-download. This is the most common mistake.
+
+### CDN hosts (with fallback)
+
+- **Primary**: `https://crs.aztec-cdn.foundation` (Cloudflare R2)
+- **Fallback**: `https://crs.aztec-labs.com` (AWS S3)
+
+### Partial downloads for bn254_g1.dat
+
+The full `g1.dat` is 6.4 GB (100M points × 64 bytes/point). You almost never need the full file. The bb binary checks if the local file has enough bytes for the required circuit size: `file_size >= num_points * 64`.
+
+For Aztec private kernel / ClientIVC proofs, 2^23 points (512 MB) covers all known circuits. Use HTTP Range header:
+```bash
+curl -fSL -H "Range: bytes=0-536870911" https://crs.aztec-cdn.foundation/g1.dat -o /crs/bn254_g1.dat
+```
+
+If the CRS is too small for a circuit, bb will error with a message indicating how many points it needs. Increase the range and re-download.
+
+### Grumpkin CRS
+
+The TypeScript layer (`@aztec/bb.js`) initializes Grumpkin CRS with 2^16 + 1 points (~4 MB). The full file on CDN is 16 MB (2^18 points). Download the full file to be safe.
+
+### Where this matters
+
+- **Nitro Enclaves**: NO internet access. Must pre-cache during Docker build.
+- **Regular Docker/EC2**: Has internet, downloads on first use. Pre-caching saves ~30s on first proof.
+- **CI**: Usually has internet. Pre-caching in base image speeds up CI proofs.
+
+### Reference: bb.js TypeScript CRS code
+
+- `@aztec/bb.js/src/crs/node/index.ts` — `Crs` and `GrumpkinCrs` classes handle filesystem cache + download
+- `@aztec/bb.js/src/crs/net_crs.ts` — `NetCrs` and `NetGrumpkinCrs` classes handle HTTP download with Range headers
+- Native bb binary: uses same `CRS_PATH` / `$HOME/.bb-crs` resolution, same file names
+
+---
+
+## Lesson 10: express-rate-limit trust proxy validation (v8+)
+
+`express-rate-limit` v8 added strict validation of Express's `trust proxy` setting. Three possible states:
+
+| `trust proxy` value | Result |
+|---|---|
+| `false` (default) + `X-Forwarded-For` present | Throws `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` |
+| `true` | Throws `ERR_ERL_PERMISSIVE_TRUST_PROXY` (too open, anyone can spoof IPs) |
+| `1` (or specific number/subnet) | Works correctly — trusts N proxy hops |
+
+**For servers behind CloudFront**: Use `app.set("trust proxy", 1)` — one hop (CloudFront). This applies to BOTH the TEE enclave server AND the regular prover server (both behind CloudFront origins).
+
+**Note**: This validation is new in express-rate-limit v8. If you downgrade to v7, neither error occurs (but IP detection is still wrong without trust proxy).
+
+---
+
+## Lesson 11: Debugging enclaves — debug vs production mode
 
 **Debug mode** (`nitro-cli run-enclave --debug-mode`):
 - `nitro-cli console` attaches to serial port (drains tty buffer)
