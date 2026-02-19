@@ -57,20 +57,46 @@ async function getNsmLib() {
 
 ---
 
-## Root Cause 3: /prove OOM inside enclave (CONFIRMED, NOT YET FIXED)
+## Root Cause 3: /prove crashes — TWO application-level errors (DIAGNOSED, FIX IN PROGRESS)
 
-**Symptom**: Server dies immediately when processing a `/prove` request. Enclave remains RUNNING but the Bun process inside is dead (curl to /attestation fails, socat proxy still listening).
+**Symptom**: Server dies when processing a `/prove` request. Enclave remains RUNNING but the Bun process inside is dead (curl to /attestation fails, socat proxy still listening).
 
-**Evidence**:
-- Console deadlock fix is deployed (new EIF built from fixed Dockerfile.nitro)
-- Enclave runs stably for 15+ minutes with /attestation polling
-- First /prove request kills the server every time
-- No OOM visible from host (`dmesg`) — OOM happens inside the enclave, invisible from outside
-- The prover EC2 (t3.xlarge, 16GB) handles the same proofs fine because Docker doesn't have enclave memory isolation overhead
+**Initial wrong hypothesis**: OOM inside enclave (8192MB insufficient for Barretenberg). WRONG — `dmesg` shows NO OOM and NO killed processes on the host. The kernel OOM killer was never triggered.
 
-**Analysis**: Barretenberg's `bb` native binary needs significant memory for proof generation. The 8192MB enclave has overhead from: Linux kernel (~200-500MB), Bun runtime (~200MB), Express + loaded Aztec modules (~500MB+), leaving ~7GB for `bb`. This appears insufficient.
+**Actual root causes** (found via debug mode enclave with console logging):
 
-**Status**: Needs either a larger instance (m5.2xlarge, 32GB) or memory optimization investigation.
+### 3a: express-rate-limit throws on X-Forwarded-For (FIXED)
+
+**Error**: `ValidationError: ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` — express-rate-limit v8 validates that Express's `trust proxy` setting is configured when `X-Forwarded-For` header is present. CloudFront always sends this header. The error is thrown from the rate limiter middleware before the `/prove` handler's try/catch, crashing the process.
+
+**Fix**: `app.set("trust proxy", 1)` in Express setup. Must be `1` (not `true`) — `true` triggers `ERR_ERL_PERMISSIVE_TRUST_PROXY` because it trusts all proxy hops.
+
+### 3b: Barretenberg CRS download fails — no internet in Nitro Enclave (FIXED)
+
+**Error**: `BBApiException: HTTP request failed for http://crs.aztec-labs.com/g1.dat: Could not establish connection` — the native `bb` binary tries to download the CRS (Common Reference String) from the internet. Nitro Enclaves have NO network access — only vsock for communication.
+
+**CRS resolution order in bb**:
+1. Check `CRS_PATH` env var
+2. Fall back to `$HOME/.bb-crs/`
+3. Download from `crs.aztec-cdn.foundation` (primary) or `crs.aztec-labs.com` (fallback)
+
+**Files needed**:
+- `bn254_g1.dat`: partial download (2^23 points × 64 bytes = 512 MB covers any Aztec circuit)
+- `bn254_g2.dat`: 128 bytes (full)
+- `grumpkin_g1.flat.dat`: ~16 MB (full)
+
+**Fix**: Pre-cache CRS during Docker build in `Dockerfile.nitro`:
+```dockerfile
+ENV CRS_PATH=/crs
+RUN mkdir -p /crs && \
+    curl -fSL -H "Range: bytes=0-536870911" https://crs.aztec-cdn.foundation/g1.dat -o /crs/bn254_g1.dat && \
+    curl -fSL https://crs.aztec-cdn.foundation/g2.dat -o /crs/bn254_g2.dat && \
+    curl -fSL https://crs.aztec-cdn.foundation/grumpkin_g1.dat -o /crs/grumpkin_g1.flat.dat
+```
+
+**Key insight**: The non-TEE prover EC2 works fine because it has internet — bb downloads CRS on first use. The TEE enclave is the only environment where CRS pre-caching is needed.
+
+**How we diagnosed**: Built a debug EIF with server output redirected to `/dev/console` instead of `/dev/null`. Deployed in debug mode, attached `nitro-cli console` to capture output, then triggered a `/prove` request. The console log showed both errors clearly. NOTE: The initial console capture failed because `nitro-cli console --enclave-name tee-rex` used the wrong name (enclave was auto-named `tee-rex-debug` from the EIF filename). Fix: use `--enclave-id` from `nitro-cli describe-enclaves`.
 
 ---
 
@@ -182,15 +208,17 @@ docker push $IMAGE_URI
 | 9 | Deploy new EIF, allocator 12288MB before build | Host OOM during build (allocator starves host) |
 | 10 | Reboot + reduce allocator + build + try 12288MB after | Allocator fails (hugepage fragmentation) |
 | 11 | Fall back to 8192MB with new EIF | Enclave runs, /attestation stable, /prove still crashes |
+| 12 | Deploy debug EIF (server output to /dev/console) | Console capture fails — wrong enclave name |
+| 13 | Fix console capture with --enclave-id, trigger /prove | Found both root causes: X-Forwarded-For crash + CRS download failure |
+| 14 | Fix: `trust proxy` = 1, pre-cache CRS in Dockerfile.nitro | Tests pass locally, deploy pending |
 
 ---
 
 ## Current State (2026-02-19)
 
-- **Fixed and deployed**: Console deadlock (Dockerfile.nitro), NSM dlopen leak (attestation-service.ts), boot persistence (systemd services)
-- **Not fixed**: /prove OOM — 8192MB enclave insufficient for Barretenberg proof generation
-- **ci-deploy.sh needs update**: Allocator ordering fix (reduce before build, increase after)
-- **Next step**: Either upgrade to m5.2xlarge (32GB, ~$0.384/hr) or investigate Barretenberg memory reduction
+- **Fixed and deployed**: Console deadlock (Dockerfile.nitro), NSM dlopen leak (attestation-service.ts), boot persistence (systemd services), allocator ordering (ci-deploy.sh)
+- **Fixed, pending deploy**: trust proxy (index.ts), CRS pre-cache (Dockerfile.nitro)
+- **Next step**: Build and deploy new EIF with both fixes, verify /prove works end-to-end
 
 ---
 
