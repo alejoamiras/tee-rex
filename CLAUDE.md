@@ -197,6 +197,7 @@ bun run build
 - **Request IDs**: Every server request gets a unique `X-Request-Id` (auto-generated UUID or echoed from client). Returned in response header + error JSON `requestId` field. Logged with `requestId` on prove start/completion and unhandled errors. Middleware runs before `expressLogger()` so all log lines include the ID. Frontend/SDK don't need to send IDs — the server handles it transparently.
 - **cbor-x encoding pitfalls** (PR #81): cbor-x has three encoding behaviors that differ from naive expectations: (1) `Uint8Array` → CBOR tagged bstr (tag 64, `0xd840` prefix), but `Buffer` → plain CBOR bstr — COSE_Sign1 Sig_structure requires plain bstr, so always use `Buffer.alloc(0)` not `new Uint8Array(0)` for empty external_aad; (2) 8-byte CBOR uint64 → JavaScript `BigInt`, not `number` — Nitro's Rust NSM library always encodes timestamps as uint64; (3) CBOR maps → plain JS objects with string keys by default, not `Map` instances. Unit tests using JS-generated CBOR won't catch these because JS `number`/`Map`/`Uint8Array` encode differently than Rust/C equivalents.
 - **Server uses `PrivateExecutionStepSchema` from `@aztec/stdlib/kernel`** instead of a hand-rolled Zod schema for `/prove` validation. This keeps the schema automatically in sync across Aztec version updates and avoids format mismatches.
+- **Custom domain (`tee-rex.dev`)**: Cloudflare DNS + ACM wildcard cert + CloudFront alternate domain names. `nextnet.tee-rex.dev` (prod) and `devnet.tee-rex.dev` (devnet). Subdomain CNAMEs use DNS-only mode (`proxied: false`) — Cloudflare proxy rewrites `Host` header, breaking CloudFront. Root domain redirects via Cloudflare Redirect Rule (requires `proxied: true` A record). `VITE_ENV_NAME` env var controls frontend badge/switcher. Runbook: `infra/cloudfront/custom-domain-setup.md`.
 - **`sendWithRetry` + `E2E_RETRY_STALE_HEADER`**: On live networks, proving takes 50-90s, during which the block header can go stale ("Block header not found"). `sendWithRetry()` in `aztec.ts` re-simulates to refresh the header and retries up to 3 times. **Gated behind `E2E_RETRY_STALE_HEADER` env var** — only active during Playwright e2e tests (set in `playwright.config.ts` webServer env, forwarded via `vite.config.ts` define block). In production, sends fail immediately — re-simulating silently is unsafe because contract state or user inputs could change between attempts.
 - **Rate limit localhost exemption**: `/prove` rate limit (10 req/hour/IP) exempts `127.0.0.1` and `::1` via `skip` callback. SSM tunnels and local dev arrive as localhost; public traffic via CloudFront has `X-Forwarded-For`. Safe because only SSM-credentialed users can reach localhost on EC2.
 - **validate-prod scoped to deploy-only tests**: `validate-prod` in `deploy-prod.yml` runs `-g "deploys account"` (3 deploy tests, 1 prove call each) instead of the full 12-test suite. The comprehensive suite runs in `infra.yml` on PRs. `continue-on-error` removed — validate-prod is now a hard gate.
@@ -413,6 +414,24 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
+## Phase 24.5: Custom Domain (`tee-rex.dev`) — DONE (PR #98)
+
+**Goal**: Set up `nextnet.tee-rex.dev` and `devnet.tee-rex.dev` as custom domains, add environment indicator + switcher in the frontend.
+
+| Part | Summary |
+|---|---|
+| **Infra** | ACM wildcard cert (`*.tee-rex.dev`) in us-east-1. CloudFront alternate domain names on both distributions. Cloudflare CNAME records (DNS-only / gray cloud). Root domain `tee-rex.dev` 301-redirects to `nextnet.tee-rex.dev` via Cloudflare Redirect Rule (dummy A record `192.0.2.1` proxied). GitHub secrets updated: `PROD_CLOUDFRONT_URL` → `https://nextnet.tee-rex.dev`, `DEVNET_CLOUDFRONT_URL` → `https://devnet.tee-rex.dev`. Runbook: `infra/cloudfront/custom-domain-setup.md`. |
+| **Frontend** | `VITE_ENV_NAME` env var (`"nextnet"` or `"devnet"`) baked at build time. Environment badge in header (emerald for nextnet, amber for devnet) with cross-environment switcher link. Hidden in local dev (no env var). `ENV_NAME`, `OTHER_ENV_URL`, `OTHER_ENV_NAME` exports in `aztec.ts`. |
+| **CI** | `VITE_ENV_NAME: nextnet` in `deploy-prod.yml`, `VITE_ENV_NAME: devnet` in `deploy-devnet.yml`. |
+
+**Key decisions:**
+- Subdomain CNAMEs MUST use `proxied: false` (gray cloud). Cloudflare orange-cloud proxy rewrites `Host` header → CloudFront rejects.
+- Root redirect uses `proxied: true` because Cloudflare Redirect Rules only work on proxied traffic.
+- `.dev` TLD is HSTS-preloaded — browsers enforce HTTPS-only, no HTTP downgrade attacks possible.
+- Old CloudFront URLs (`*.cloudfront.net`) still work — backward compatible.
+
+---
+
 ## Phase 25: TEE Stability, Devnet Release & Nightlies Migration
 
 **Goal**: Fix recurring TEE enclave deploy failures, publish a devnet patch release, and migrate from spartan (deprecated) to nightlies dist-tag.
@@ -423,9 +442,10 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - Fix the deploy script (`infra/ci-deploy.sh`) to handle allocator restart more robustly (stop allocator before Docker wipe, restart after).
 - Validate: re-run deploy-prod or trigger `test-tee` on a PR.
 
-**25B — Update READMEs and documentation:**
-- Ensure attribution is consistent everywhere: "made with ♥️ by alejo · inspired by nemi.fi"
-- Update any stale references in README.md, packages/sdk/README.md, packages/app/index.html
+**25B — Update READMEs and documentation:** DONE (PR #99)
+- CI badges (SDK, App, Server, Deploy Production) and live site links added to root README
+- SDK workflow badge added to `packages/sdk/README.md`
+- App footer: linked "alejo" to GitHub repo
 
 **25C — Devnet patch release (`-patch.1`):**
 - Publish a devnet SDK release with `-patch.1` suffix via `workflow_dispatch` on `_publish-sdk.yml` from the `devnet` branch

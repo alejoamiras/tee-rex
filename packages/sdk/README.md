@@ -3,6 +3,7 @@
 Delegate [Aztec](https://aztec.network) transaction proving to a Trusted Execution Environment.
 
 [![npm](https://img.shields.io/npm/v/@alejoamiras/tee-rex)](https://www.npmjs.com/package/@alejoamiras/tee-rex)
+[![SDK](https://github.com/alejoamiras/tee-rex/actions/workflows/sdk.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/sdk.yml)
 
 ## Installation
 
