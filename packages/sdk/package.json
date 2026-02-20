@@ -31,11 +31,11 @@
     "prepublishOnly": "bun run test:lint && bun run build"
   },
   "dependencies": {
-    "@aztec/bb-prover": "5.0.0-nightly.20260220",
-    "@aztec/foundation": "5.0.0-nightly.20260220",
-    "@aztec/noir-acvm_js": "5.0.0-nightly.20260220",
-    "@aztec/noir-noirc_abi": "5.0.0-nightly.20260220",
-    "@aztec/stdlib": "5.0.0-nightly.20260220",
+    "@aztec/bb-prover": "4.0.0-devnet.2-patch.1",
+    "@aztec/foundation": "4.0.0-devnet.2-patch.1",
+    "@aztec/noir-acvm_js": "4.0.0-devnet.2-patch.1",
+    "@aztec/noir-noirc_abi": "4.0.0-devnet.2-patch.1",
+    "@aztec/stdlib": "4.0.0-devnet.2-patch.1",
     "@logtape/logtape": "^2.0",
     "@peculiar/x509": "^1.12.0",
     "cbor-x": "^1.6.0",
@@ -48,12 +48,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@aztec/accounts": "5.0.0-nightly.20260220",
-    "@aztec/aztec.js": "5.0.0-nightly.20260220",
-    "@aztec/noir-contracts.js": "5.0.0-nightly.20260220",
-    "@aztec/pxe": "5.0.0-nightly.20260220",
-    "@aztec/simulator": "5.0.0-nightly.20260220",
-    "@aztec/wallets": "5.0.0-nightly.20260220",
+    "@aztec/accounts": "4.0.0-devnet.2-patch.1",
+    "@aztec/aztec.js": "4.0.0-devnet.2-patch.1",
+    "@aztec/noir-contracts.js": "4.0.0-devnet.2-patch.1",
+    "@aztec/pxe": "4.0.0-devnet.2-patch.1",
+    "@aztec/simulator": "4.0.0-devnet.2-patch.1",
+    "@aztec/wallets": "4.0.0-devnet.2-patch.1",
     "@types/ms": "^2.1.0"
   }
 }
