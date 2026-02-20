@@ -16,6 +16,7 @@ IMAGE_URI="${1:?Usage: ci-deploy.sh <ecr-image-uri>}"
 REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
 EIF_DIR="/opt/tee-rex"
 EIF_PATH="${EIF_DIR}/tee-rex.eif"
+BUILD_ARTIFACTS="${EIF_DIR}/build-artifacts"
 CPU_COUNT=2
 MEMORY_MB=8192
 ENCLAVE_CID=16
@@ -33,18 +34,25 @@ echo "=== Tearing down existing enclave ==="
 systemctl stop tee-rex-proxy 2>/dev/null || true
 systemctl stop tee-rex-enclave 2>/dev/null || true
 nitro-cli terminate-enclave --all 2>/dev/null || true
+# Kill any stale socat processes that might survive service stop
+pkill -f "socat.*TCP-LISTEN:4000" 2>/dev/null || true
 rm -f "${EIF_PATH}"
-rm -rf /tmp/nitro-artifacts 2>/dev/null || true
+rm -rf "${BUILD_ARTIFACTS}" 2>/dev/null || true
+# Linuxkit leaves large temp files in /tmp (which is tmpfs on Amazon Linux 2023,
+# ~7.7GB backed by RAM). Clean them to prevent "no space left on device" on tmpfs.
+find /tmp -maxdepth 1 -type f -size +10M -delete 2>/dev/null || true
 systemctl stop docker 2>/dev/null || true
 rm -rf /var/lib/docker/*
 systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
 
-# Free hugepages for the build phase — nitro-cli build-enclave + Docker need
-# host RAM. A previous deploy may have left the allocator claiming most of it.
-# We reclaim it here and re-reserve after the EIF is built (step 5).
+# Reduce hugepages for the build phase — Linuxkit (used by nitro-cli build-enclave)
+# needs ~3.5GB RSS and Docker pull uses buffer cache. With 8GB hugepages reserved,
+# only ~5.2GB remains for host operations, causing OOM kills on Linuxkit.
+# We reduce to 512MB here, build the EIF, then re-allocate after cleanup.
+echo "=== Reducing hugepages for build phase ==="
 sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
-systemctl restart nitro-enclaves-allocator.service
+systemctl restart nitro-enclaves-allocator.service || true
 sleep 2
 
 # ── 1. Disk space check ──────────────────────────────────────────
@@ -66,16 +74,56 @@ docker pull "${IMAGE_URI}"
 # Must happen before prune: nitro-cli reads the Docker image directly,
 # so the image must still be on disk.
 # Store EIF in /opt/tee-rex/ so it survives reboots (unlike /tmp).
+# Use disk-backed artifacts dir — /tmp is tmpfs on Amazon Linux 2023 (~7.7GB RAM).
+# Linuxkit's initrd + Docker temp files can exceed tmpfs capacity.
 echo "=== Building EIF ==="
-mkdir -p "${EIF_DIR}"
-NITRO_CLI_ARTIFACTS=/tmp/nitro-artifacts nitro-cli build-enclave \
+mkdir -p "${EIF_DIR}" "${BUILD_ARTIFACTS}"
+NITRO_CLI_ARTIFACTS="${BUILD_ARTIFACTS}" nitro-cli build-enclave \
   --docker-uri "${IMAGE_URI}" \
   --output-file "${EIF_PATH}"
 
-# ── 4. Clean up build image (after EIF build, image no longer needed) ─
-echo "=== Cleaning up build image ==="
+# ── 4. Clean up + reserve hugepages ──────────────────────────────
+# Docker prune + drop_caches + compact_memory BEFORE allocator restart.
+# This is critical: Linuxkit fragments host memory during EIF build. Without
+# cleanup, the allocator can't find contiguous 2MB pages for hugepages.
+echo "=== Cleaning up before hugepage allocation ==="
 docker image prune -af
+rm -rf "${BUILD_ARTIFACTS}" 2>/dev/null || true
+sync && echo 3 > /proc/sys/vm/drop_caches
+echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+sleep 2
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
+
+echo "=== Reserving hugepages (${MEMORY_MB}MB) ==="
+sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
+
+ALLOC_OK=false
+for attempt in 1 2; do
+  if systemctl restart nitro-enclaves-allocator.service; then
+    sleep 3
+    HUGE_TOTAL=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
+    HUGE_FREE=$(grep HugePages_Free /proc/meminfo | awk '{print $2}')
+    echo "Hugepages: total=${HUGE_TOTAL} free=${HUGE_FREE} (attempt ${attempt})"
+    if [[ "${HUGE_TOTAL}" -gt 0 ]]; then
+      ALLOC_OK=true
+      break
+    fi
+    echo "WARNING: Allocator restarted but no hugepages reserved, retrying..."
+  else
+    echo "WARNING: Allocator restart failed (attempt ${attempt})"
+  fi
+  sync && echo 3 > /proc/sys/vm/drop_caches
+  echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+  sleep 5
+done
+
+if [[ "${ALLOC_OK}" != "true" ]]; then
+  echo "ERROR: Failed to reserve hugepages after 2 attempts"
+  grep Huge /proc/meminfo
+  free -m
+  exit 1
+fi
 
 # ── 5. Install systemd services + config ──────────────────────────
 # Two services make the enclave survive reboots:
@@ -88,12 +136,6 @@ CPU_COUNT=${CPU_COUNT}
 MEMORY_MB=${MEMORY_MB}
 ENCLAVE_CID=${ENCLAVE_CID}
 EOF
-
-# Update allocator hugepage reservation to match enclave memory
-sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
-sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
-systemctl restart nitro-enclaves-allocator.service
-sleep 3
 
 cat > /etc/systemd/system/tee-rex-enclave.service <<'UNIT'
 [Unit]
@@ -152,4 +194,16 @@ for i in $(seq 1 120); do
 done
 
 echo "ERROR: Health check failed after 10 minutes"
+echo "=== Diagnostics ==="
+echo "--- Enclave status ---"
+nitro-cli describe-enclaves 2>/dev/null || echo "nitro-cli not available"
+echo "--- Service status ---"
+systemctl status tee-rex-enclave --no-pager -l 2>/dev/null || true
+systemctl status tee-rex-proxy --no-pager -l 2>/dev/null || true
+echo "--- Hugepages ---"
+grep Huge /proc/meminfo
+echo "--- Memory ---"
+free -m
+echo "--- Disk ---"
+df -h /
 exit 1
