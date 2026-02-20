@@ -14,7 +14,7 @@ This document outlines the planned improvements for the tee-rex project.
 - **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; shell & workflow lint: `actionlint.yml`; nightlies: `aztec-nightlies.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Aztec version**: 4.0.0-spartan.20260214 (migrating to nightly dist-tag via Phase 25D)
+- **Aztec version**: 5.0.0-nightly.20260220
 
 ---
 
@@ -436,11 +436,9 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 **Goal**: Fix recurring TEE enclave deploy failures, publish a devnet patch release, and migrate from spartan (deprecated) to nightlies dist-tag. Version format: `X.Y.Z-spartan.YYYYMMDD` → `X.Y.Z-nightly.YYYYMMDD`.
 
-**25A — Fix TEE `nitro-enclaves-allocator` failure:**
-- Recurring issue: `nitro-enclaves-allocator.service` fails during TEE deploy (run #22225586998). The EIF builds successfully but the allocator service crashes when restarting.
-- Root cause: likely hugepages memory allocation failure after Docker wipe — the allocator can't reclaim memory already mapped by the kernel.
-- Fix the deploy script (`infra/ci-deploy.sh`) to handle allocator restart more robustly (stop allocator before Docker wipe, restart after).
-- Validate: re-run deploy-prod or trigger `test-tee` on a PR.
+**25A — Fix TEE `nitro-enclaves-allocator` failure:** DONE (PR #100)
+- Root cause: hugepages memory allocation failure after Docker wipe — allocator couldn't reclaim memory already mapped by the kernel.
+- Fix: stop allocator before Docker wipe, restart after. Proper cleanup ordering in `infra/ci-deploy.sh`.
 
 **25B — Update READMEs and documentation:** DONE (PR #99)
 - CI badges (SDK, App, Server, Deploy Production) and live site links added to root README
@@ -449,15 +447,19 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 **25C — Devnet patch release (`-patch.1`):**
 - Publish a devnet SDK release with `-patch.1` suffix via `workflow_dispatch` on `_publish-sdk.yml` from the `devnet` branch
-- Requires devnet infrastructure to be healthy first (depends on 25A fix)
 
-**25D — Migrate from spartan to nightlies:** DONE
+**25D — Migrate from spartan to nightlies:** DONE (PR #101)
 - Renamed `aztec-spartan.yml` → `aztec-nightlies.yml`, `check-aztec-spartan.ts` → `check-aztec-nightlies.ts`
 - Updated `VERSION_PATTERN` to accept `nightly` only (rejects spartan); `AZTEC_VERSION_PATTERN` still accepts both for cross-format upgrades
 - `deploy-prod.yml` `publish-sdk` now uses `dist_tag: nightlies`; `_publish-sdk.yml` default changed to `nightlies`
-- IAM trust policy: `chore/aztec-spartan-*` → `chore/aztec-nightlies-*` (**must apply to AWS post-merge**)
+- IAM trust policy: `chore/aztec-spartan-*` → `chore/aztec-nightlies-*` (applied to AWS)
 - All docs updated: `CLAUDE.md`, `docs/ci-pipeline.md`, `packages/sdk/README.md`, `infra/iam/README.md`
 - `AZTEC_NODE_URL` unchanged (`https://nextnet.aztec-labs.com`)
+
+**25E — Infra Status branch protection gate:** DONE (PR #103)
+- `infra.yml` now triggers on all PRs (not just `test-infra` label). When label absent, all jobs skip and Infra Status auto-passes. When present, runs full deploy + e2e and blocks merge on failure.
+- Added **Infra Status** as 4th required check in branch protection (alongside SDK/App/Server Status).
+- Prevents auto-merge from racing ahead of infrastructure tests (which caused PR #102 e2e failures).
 
 ---
 
