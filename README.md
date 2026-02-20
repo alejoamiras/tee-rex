@@ -90,4 +90,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 
 ## Contributors
 
-Made with love by [Nemi](https://nemi.fi).
+Made with ♥️ by alejo · inspired by [nemi.fi](https://github.com/nemi-fi/tee-rex/)

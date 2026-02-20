@@ -173,7 +173,7 @@ bun run build
 | **16** | `PROVER_URL` abstraction (like `AZTEC_NODE_URL`) — configurable everywhere, Vite proxy, CI inputs |
 | **18A** | Optional remote/TEE modes via env vars. `PROVER_CONFIGURED` / `TEE_CONFIGURED` feature flags (from `PROVER_URL` / `TEE_URL` at build time). Buttons start disabled in HTML, JS enables when configured. `/prover` and `/tee` Vite proxies conditional. Service panel labels: "not configured" / "available" / "unavailable" / "attested". Fullstack e2e skip guards for remote/TEE. `deploy-prod.yml` passes `TEE_URL` to app build. |
 | **18B** | Granular benchmark UI — `NO_WAIT` + `waitForTx()` polling for prove+send/confirm sub-timings |
-| **18C** | Attribution update — footer changed to "inspired by nemi.fi" |
+| **18C** | Attribution update — "made with ♥ by alejo · inspired by nemi.fi" across all READMEs and app footer |
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 
 **Key architectural decisions (from completed phases):**
@@ -274,7 +274,7 @@ aztec-spartan.yml detects new version
 - UI renders "prove + send" and "confirm" sub-rows alongside existing simulation details in step breakdown
 
 **18C — Attribution update:** DONE
-- Changed footer from `tee-rex · nemi.fi` to `tee-rex · inspired by nemi.fi`
+- Changed footer to `made with ♥ by alejo · inspired by nemi.fi` (with link to github.com/nemi-fi/tee-rex/)
 
 ---
 
@@ -366,7 +366,7 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 
 ---
 
-## Phase 23: Devnet Support
+## Phase 23: Devnet Support — DONE
 
 **Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`spartan`). Long-lived `devnet` branch, `workflow_dispatch`-triggered deploy, own infrastructure. No auto-update — Aztec devnet versions are managed manually (cherry-pick from main or direct commits to `devnet` branch).
 
@@ -394,11 +394,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **23A** | IAM templates updated: `refs/heads/devnet` in trust policy, `devnet` in Environment tags / S3 / CloudFront. `_deploy-tee.yml` / `_deploy-prover.yml` extended with devnet instance ID resolution. AWS provisioning (EC2, S3, CF, secrets) done via CLI after merge. |
 | **23B** | `deploy-devnet.yml`: `workflow_dispatch`-only pipeline. Jobs: `ensure-base` → `deploy-tee` + `deploy-prover` → `validate-devnet` (blocking SSM tunnels + SDK e2e + app fullstack e2e) → `deploy-app` + `publish-sdk`. Extracted `_publish-sdk.yml` reusable workflow (parameterized `dist_tag` + `latest`) — `deploy-prod.yml` refactored to call it with `spartan`/`true`, devnet calls with `devnet`/`false`. Git tag `|| true` handles same-version edge case. |
 
-**Remaining:**
-
-**23C — Create `devnet` branch:**
-- Branch from `main`, update Aztec deps to devnet version, update `AZTEC_NODE_URL` references
-- First `workflow_dispatch` run validates the full pipeline
+| **23C** | Created `devnet` branch from `main` with devnet Aztec version and `AZTEC_NODE_URL` references. `devnet-backup` branch also exists. |
 
 ---
 
@@ -414,6 +410,33 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **24D** | `_publish-sdk.yml` gets `workflow_dispatch` — manual SDK publishing from Actions tab without re-running deploy-prod. |
 | **24E** | Gate `publish-sdk` on `validate-prod` — `needs: [validate-prod, nextnet-check]` with `always()` + result checks. Blocks on validate-prod failure, falls back to nextnet-check when skipped. |
 | **24F** | npm publish fix — switched from OIDC to `NPM_TOKEN` automation token (OIDC only supports one workflow per package). Package-level 2FA set to "Authorization only" to allow automation tokens. |
+
+---
+
+## Phase 25: TEE Stability, Devnet Release & Nightlies Migration
+
+**Goal**: Fix recurring TEE enclave deploy failures, publish a devnet patch release, and migrate from spartan (deprecated) to nightlies dist-tag.
+
+**25A — Fix TEE `nitro-enclaves-allocator` failure:**
+- Recurring issue: `nitro-enclaves-allocator.service` fails during TEE deploy (run #22225586998). The EIF builds successfully but the allocator service crashes when restarting.
+- Root cause: likely hugepages memory allocation failure after Docker wipe — the allocator can't reclaim memory already mapped by the kernel.
+- Fix the deploy script (`infra/ci-deploy.sh`) to handle allocator restart more robustly (stop allocator before Docker wipe, restart after).
+- Validate: re-run deploy-prod or trigger `test-tee` on a PR.
+
+**25B — Update READMEs and documentation:**
+- Ensure attribution is consistent everywhere: "made with ♥️ by alejo · inspired by nemi.fi"
+- Update any stale references in README.md, packages/sdk/README.md, packages/app/index.html
+
+**25C — Devnet patch release (`-patch.1`):**
+- Publish a devnet SDK release with `-patch.1` suffix via `workflow_dispatch` on `_publish-sdk.yml` from the `devnet` branch
+- Requires devnet infrastructure to be healthy first (depends on 25A fix)
+
+**25D — Migrate from spartan to nightlies:**
+- Aztec has deprecated the `spartan` dist-tag in favor of `nightlies`
+- Update `aztec-spartan.yml` auto-updater to check `nightlies` instead of `spartan`
+- Update `deploy-prod.yml` `publish-sdk` to use `nightlies` dist-tag
+- Update `AZTEC_NODE_URL` references if the nextnet endpoint changes
+- Update all documentation references from "spartan" to "nightlies"
 
 ---
 

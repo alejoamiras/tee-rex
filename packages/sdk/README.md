@@ -152,4 +152,4 @@ In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createC
 
 ## Contributors
 
-Made with love by [Alejo Amiras](https://github.com/alejoamiras)
+Made with ♥️ by alejo · inspired by [nemi.fi](https://github.com/nemi-fi/tee-rex/)
