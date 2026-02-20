@@ -11,10 +11,10 @@ This document outlines the planned improvements for the tee-rex project.
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
 - **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits). lint-staged runs Biome on `*.{ts,tsx,js,jsx}`, shellcheck on `*.sh`, and actionlint on `.github/workflows/*.yml`.
-- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; shell & workflow lint: `actionlint.yml`; spartan: `aztec-spartan.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
+- **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; shell & workflow lint: `actionlint.yml`; nightlies: `aztec-nightlies.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Aztec version**: 4.0.0-spartan.20260214
+- **Aztec version**: 4.0.0-spartan.20260214 (migrating to nightly dist-tag via Phase 25D)
 
 ---
 
@@ -164,7 +164,7 @@ bun run build
 | **8** | Repo rename `nemi-fi` → `alejoamiras` (15+ files) |
 | **9** | CI granular parallel jobs (Lint, Typecheck, Unit, E2E per package) |
 | **10** | E2E CI with Aztec local network (Foundry + Aztec CLI, cached by version) |
-| **12** | Aztec auto-update CI — spartan version detection → PR → full test suite (incl. TEE) → auto-merge. Gate job pattern, reusable workflows, composite actions. `PAT_TOKEN` for PR-triggered workflows. Branch protection: 3 gate jobs. |
+| **12** | Aztec auto-update CI — nightlies version detection → PR → full test suite (incl. TEE) → auto-merge. Gate job pattern, reusable workflows, composite actions. `PAT_TOKEN` for PR-triggered workflows. Branch protection: 3 gate jobs. (Originally spartan, migrated to nightlies in Phase 25D.) |
 | **12B** | Multi-network support (`AZTEC_NODE_URL` configurable across app/CI/e2e) |
 | **12B'** | Nightly → Spartan dist-tag migration |
 | **12C** | Nextnet/live network support — sponsored FPC, auto-detect chain ID, `proverEnabled: true` |
@@ -206,14 +206,14 @@ bun run build
 
 ## Phase 17: Auto-Deploy Pipeline
 
-**Goal**: After the aztec-spartan auto-update PR passes all tests (including deployed prover + TEE), auto-merge and deploy everything to production. Nightly auto-updates keep the live system current with zero manual intervention.
+**Goal**: After the aztec-nightlies auto-update PR passes all tests (including deployed prover + TEE), auto-merge and deploy everything to production. Nightly auto-updates keep the live system current with zero manual intervention.
 
 **Decision**: No custom domain. Use **CloudFront** as the single entry point — serves the static app from S3 and proxies to EC2 backends. One `https://d1234abcd.cloudfront.net` URL, same-origin, no CORS, no mixed content, no domain needed.
 
 **Architecture:**
 
 ```
-aztec-spartan.yml detects new version
+aztec-nightlies.yml detects new version
          │
          ▼
     Creates PR with label: test-infra
@@ -244,11 +244,11 @@ aztec-spartan.yml detects new version
 |---|---|
 | **17A** | Fixed non-TEE `Dockerfile` (missing `packages/app/package.json` COPY, added healthcheck + curl) |
 | **17B** | `remote.yml` + `_deploy-prover.yml` — CI prover deploy on `test-remote` label. `infra/ci-deploy-prover.sh`. CI EC2: `t3.xlarge` |
-| **17C** | Spartan workflow adds `test-infra` label to auto PRs (combined TEE + Remote deploy + e2e via `infra.yml`). Individual `tee.yml` / `remote.yml` kept for isolated debugging via `test-tee` / `test-remote` labels. |
+| **17C** | Nightlies workflow adds `test-infra` label to auto PRs (combined TEE + Remote deploy + e2e via `infra.yml`). Individual `tee.yml` / `remote.yml` kept for isolated debugging via `test-tee` / `test-remote` labels. |
 | **17D** | `deploy-prod.yml` (push to main → deploy TEE + prover to prod). `_deploy-tee.yml` / `_deploy-prover.yml` parameterized with `environment` + `image_tag` inputs. IAM: `Environment: ["ci", "prod"]`. Prod EC2: TEE `m5.xlarge` + prover `t3.xlarge` with Elastic IPs. Secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID` |
 | **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
 | **17F** | Nextnet connectivity smoke test (`nextnet.test.ts`) + `nextnet-check` job in `deploy-prod.yml` as pre-publish gate. `validate-prod` job runs app fullstack e2e against nextnet after all deploys complete (SSM tunnels to prod TEE + prover). |
-| **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on spartan auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag spartan` + `--provenance`, creates git tag + GitHub release. Gated by `validate-prod` (full e2e) with `nextnet-check` fallback when validate-prod is skipped. Uses `NPM_TOKEN` automation token (OIDC only supports one workflow per package — doesn't work with deploy-prod + deploy-devnet). `_publish-sdk.yml` also supports `workflow_dispatch` for manual retries. |
+| **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on nightlies auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag nightlies` + `--provenance`, creates git tag + GitHub release. Gated by `validate-prod` (full e2e) with `nextnet-check` fallback when validate-prod is skipped. Uses `NPM_TOKEN` automation token (OIDC only supports one workflow per package — doesn't work with deploy-prod + deploy-devnet). `_publish-sdk.yml` also supports `workflow_dispatch` for manual retries. |
 
 ---
 
@@ -369,12 +369,12 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 
 ## Phase 23: Devnet Support — DONE
 
-**Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`spartan`). Long-lived `devnet` branch, `workflow_dispatch`-triggered deploy, own infrastructure. No auto-update — Aztec devnet versions are managed manually (cherry-pick from main or direct commits to `devnet` branch).
+**Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`nightlies`). Long-lived `devnet` branch, `workflow_dispatch`-triggered deploy, own infrastructure. No auto-update — Aztec devnet versions are managed manually (cherry-pick from main or direct commits to `devnet` branch).
 
 **Architecture:**
 
 ```
-main branch (spartan/nextnet) → deploy-prod.yml (on push)     → prod EC2s + S3 + CF
+main branch (nightlies/nextnet) → deploy-prod.yml (on push)     → prod EC2s + S3 + CF
 devnet branch (devnet Aztec)  → deploy-devnet.yml (manual)    → devnet EC2s + S3 + CF
 
 deploy-devnet.yml flow:
@@ -393,7 +393,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | Part | Summary |
 |---|---|
 | **23A** | IAM templates updated: `refs/heads/devnet` in trust policy, `devnet` in Environment tags / S3 / CloudFront. `_deploy-tee.yml` / `_deploy-prover.yml` extended with devnet instance ID resolution. AWS provisioning (EC2, S3, CF, secrets) done via CLI after merge. |
-| **23B** | `deploy-devnet.yml`: `workflow_dispatch`-only pipeline. Jobs: `ensure-base` → `deploy-tee` + `deploy-prover` → `validate-devnet` (blocking SSM tunnels + SDK e2e + app fullstack e2e) → `deploy-app` + `publish-sdk`. Extracted `_publish-sdk.yml` reusable workflow (parameterized `dist_tag` + `latest`) — `deploy-prod.yml` refactored to call it with `spartan`/`true`, devnet calls with `devnet`/`false`. Git tag `|| true` handles same-version edge case. |
+| **23B** | `deploy-devnet.yml`: `workflow_dispatch`-only pipeline. Jobs: `ensure-base` → `deploy-tee` + `deploy-prover` → `validate-devnet` (blocking SSM tunnels + SDK e2e + app fullstack e2e) → `deploy-app` + `publish-sdk`. Extracted `_publish-sdk.yml` reusable workflow (parameterized `dist_tag` + `latest`) — `deploy-prod.yml` refactored to call it with `nightlies`/`true`, devnet calls with `devnet`/`false`. Git tag `|| true` handles same-version edge case. |
 
 | **23C** | Created `devnet` branch from `main` with devnet Aztec version and `AZTEC_NODE_URL` references. `devnet-backup` branch also exists. |
 
@@ -434,7 +434,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ## Phase 25: TEE Stability, Devnet Release & Nightlies Migration
 
-**Goal**: Fix recurring TEE enclave deploy failures, publish a devnet patch release, and migrate from spartan (deprecated) to nightlies dist-tag.
+**Goal**: Fix recurring TEE enclave deploy failures, publish a devnet patch release, and migrate from spartan (deprecated) to nightlies dist-tag. Version format: `X.Y.Z-spartan.YYYYMMDD` → `X.Y.Z-nightly.YYYYMMDD`.
 
 **25A — Fix TEE `nitro-enclaves-allocator` failure:**
 - Recurring issue: `nitro-enclaves-allocator.service` fails during TEE deploy (run #22225586998). The EIF builds successfully but the allocator service crashes when restarting.
@@ -451,12 +451,13 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - Publish a devnet SDK release with `-patch.1` suffix via `workflow_dispatch` on `_publish-sdk.yml` from the `devnet` branch
 - Requires devnet infrastructure to be healthy first (depends on 25A fix)
 
-**25D — Migrate from spartan to nightlies:**
-- Aztec has deprecated the `spartan` dist-tag in favor of `nightlies`
-- Update `aztec-spartan.yml` auto-updater to check `nightlies` instead of `spartan`
-- Update `deploy-prod.yml` `publish-sdk` to use `nightlies` dist-tag
-- Update `AZTEC_NODE_URL` references if the nextnet endpoint changes
-- Update all documentation references from "spartan" to "nightlies"
+**25D — Migrate from spartan to nightlies:** DONE
+- Renamed `aztec-spartan.yml` → `aztec-nightlies.yml`, `check-aztec-spartan.ts` → `check-aztec-nightlies.ts`
+- Updated `VERSION_PATTERN` to accept `nightly` only (rejects spartan); `AZTEC_VERSION_PATTERN` still accepts both for cross-format upgrades
+- `deploy-prod.yml` `publish-sdk` now uses `dist_tag: nightlies`; `_publish-sdk.yml` default changed to `nightlies`
+- IAM trust policy: `chore/aztec-spartan-*` → `chore/aztec-nightlies-*` (**must apply to AWS post-merge**)
+- All docs updated: `CLAUDE.md`, `docs/ci-pipeline.md`, `packages/sdk/README.md`, `infra/iam/README.md`
+- `AZTEC_NODE_URL` unchanged (`https://nextnet.aztec-labs.com`)
 
 ---
 
@@ -466,7 +467,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
 - Phase 15 TEE generalization research (TeeProvider interface) — tackle after core features stabilize
 - ~~**Gate `publish-sdk` on `validate-prod` instead of `nextnet-check`**~~ ✅ Done (#96) — `publish-sdk` now depends on `[validate-prod, nextnet-check]` with `always()` + result checks. Blocks on validate-prod failure, falls back to nextnet-check when validate-prod is skipped. `_publish-sdk.yml` extracted as reusable workflow with `workflow_dispatch` for manual retries. `continue-on-error` removed from validate-prod — it's now a hard gate.
-- ~~**IAM trust policy audit**~~ ✅ Done — tightened `tee-rex-ci-trust-policy.json` from `refs/heads/*` to `refs/heads/main` + `refs/heads/chore/aztec-spartan-*` + `pull_request`. **Note**: apply the updated policy to AWS with `aws iam update-assume-role-policy --role-name tee-rex-ci-github --policy-document file://infra/iam/tee-rex-ci-trust-policy.json`
+- ~~**IAM trust policy audit**~~ ✅ Done — tightened `tee-rex-ci-trust-policy.json` from `refs/heads/*` to `refs/heads/main` + `refs/heads/chore/aztec-nightlies-*` + `pull_request`. **Note**: apply the updated policy to AWS with `aws iam update-assume-role-policy --role-name tee-rex-ci-github --policy-document file://infra/iam/tee-rex-ci-trust-policy.json`
 - ~~**IAM S3 DeleteObject scoping**~~ ✅ Done (#73) — split `S3AppDeploy` into two IAM statements: `S3AppDeploy` (PutObject, ListBucket, GetBucketLocation) and `S3AppCleanup` (DeleteObject on object-level ARNs only). Policy applied to AWS.
 - ~~**SDK witness triple-encoding**~~ ✅ Done (#73) — replaced `JSON.parse(jsonStringify(step.witness))` with `Array.from(step.witness.entries())` in `tee-rex-prover.ts`, eliminating a redundant serialization roundtrip for witness data.
 - ~~**Socat proxy fragile background process (audit #30)**~~ ✅ Done (#74) — replaced `setsid socat ... & disown` with systemd service (`tee-rex-proxy.service`). Auto-restarts on crash, starts on boot. Also fixed recurring disk space failures: reordered teardown before disk check, nuclear Docker wipe to handle nitro-cli orphaned overlay2 layers.

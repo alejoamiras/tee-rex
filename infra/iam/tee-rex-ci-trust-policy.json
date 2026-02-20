@@ -15,7 +15,7 @@
           "token.actions.githubusercontent.com:sub": [
             "repo:alejoamiras/tee-rex:ref:refs/heads/main",
             "repo:alejoamiras/tee-rex:ref:refs/heads/devnet",
-            "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-spartan-*",
+            "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-nightlies-*",
             "repo:alejoamiras/tee-rex:pull_request"
           ]
         }

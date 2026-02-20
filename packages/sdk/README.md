@@ -147,7 +147,7 @@ In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createC
 
 ## Requirements
 
-- Aztec `4.0.0-spartan` or compatible version
+- Aztec `5.0.0-nightly` or compatible version
 - A running TEE-Rex server for remote proving
 - A running Aztec node for PXE connectivity
 

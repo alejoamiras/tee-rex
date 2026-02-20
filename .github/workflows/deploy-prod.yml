@@ -161,7 +161,7 @@ jobs:
       - name: Run nextnet smoke tests
         run: bun run test:e2e:nextnet
 
-  # ── Publish SDK to npm (spartan auto-update merges only) ─────────
+  # ── Publish SDK to npm (nightlies auto-update merges only) ─────────
   # Uses NPM_TOKEN (automation token) — OIDC trusted publishing only supports
   # one workflow file per package, which doesn't work with deploy-prod + deploy-devnet.
   # Gated on validate-prod (full e2e against deployed servers) rather than just
@@ -178,7 +178,7 @@ jobs:
     uses: ./.github/workflows/_publish-sdk.yml
     secrets: inherit
     with:
-      dist_tag: spartan
+      dist_tag: nightlies
       latest: true
 
   # ── Post-deploy validation against nextnet ───────────────────────

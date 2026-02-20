@@ -8,7 +8,7 @@ How the tee-rex CI/CD system works. Last updated: 2026-02-20.
 
 ```
 16 workflow files total:
-  9 main workflows   (sdk, app, server, tee, remote, infra, aztec-spartan, deploy-prod, deploy-devnet)
+  9 main workflows   (sdk, app, server, tee, remote, infra, aztec-nightlies, deploy-prod, deploy-devnet)
   5 reusable         (_build-base, _deploy-tee, _deploy-prover, _publish-sdk, _e2e-sdk, _e2e-app)
   2 composite actions (setup-aztec, start-services)
 ```
@@ -73,7 +73,7 @@ Three workflows test server deployments on CI EC2 instances, triggered by PR lab
 
 ### Combined: `infra.yml` (label: `test-infra`)
 
-Used by the aztec-spartan auto-updater. Deploys both TEE + prover, runs full e2e.
+Used by the aztec-nightlies auto-updater. Deploys both TEE + prover, runs full e2e.
 
 ```mermaid
 graph TD
@@ -161,11 +161,11 @@ graph TD
 
 ## 4. Aztec Auto-Update
 
-Daily cron checks for new Aztec spartan versions, creates a PR, and auto-merges when CI passes.
+Daily cron checks for new Aztec nightly versions, creates a PR, and auto-merges when CI passes.
 
 ```mermaid
 graph LR
-    cron["Daily 08:00 UTC\n(aztec-spartan.yml)"] --> check["Check npm for\nnew spartan version"]
+    cron["Daily 08:00 UTC\n(aztec-nightlies.yml)"] --> check["Check npm for\nnew nightly version"]
     check -->|new version| update["Update @aztec/*\nin all package.json"]
     update --> pr["Create PR\n+ label: test-infra"]
     pr --> ci["All CI runs:\nsdk + app + server\n+ infra (deploy + e2e)"]

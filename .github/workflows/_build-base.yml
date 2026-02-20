@@ -4,7 +4,7 @@ on:
   workflow_call:
     outputs:
       base_tag:
-        description: "ECR image tag for the base image (e.g. base-4.0.0-spartan.20260215)"
+        description: "ECR image tag for the base image (e.g. base-5.0.0-nightly.20260220)"
         value: ${{ jobs.build.outputs.base_tag }}
 
 jobs:

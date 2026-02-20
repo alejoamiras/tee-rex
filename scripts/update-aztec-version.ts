@@ -2,10 +2,10 @@
  * Update all @aztec/* version references across the repo.
  *
  * Usage: bun scripts/update-aztec-version.ts <version>
- * Example: bun scripts/update-aztec-version.ts 4.0.0-spartan.20260210
+ * Example: bun scripts/update-aztec-version.ts 5.0.0-nightly.20260220
  */
 
-const VERSION_PATTERN = /^\d+\.\d+\.\d+-spartan\.\d{8}$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+-nightly\.\d{8}$/;
 const AZTEC_VERSION_PATTERN = /^\d+\.\d+\.\d+-(nightly|spartan)\.\d{8}$/;
 
 const PACKAGE_JSON_FILES = [
@@ -71,12 +71,12 @@ async function main() {
 
   if (!newVersion) {
     console.error("Usage: bun scripts/update-aztec-version.ts <version>");
-    console.error("Example: bun scripts/update-aztec-version.ts 4.0.0-spartan.20260210");
+    console.error("Example: bun scripts/update-aztec-version.ts 5.0.0-nightly.20260220");
     process.exit(1);
   }
 
   if (!validateVersion(newVersion)) {
-    console.error(`Invalid version format: "${newVersion}". Expected: X.Y.Z-spartan.YYYYMMDD`);
+    console.error(`Invalid version format: "${newVersion}". Expected: X.Y.Z-nightly.YYYYMMDD`);
     process.exit(1);
   }
 
