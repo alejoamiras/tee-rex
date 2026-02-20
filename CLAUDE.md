@@ -141,7 +141,7 @@ bun run build
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24)
 
 | Phase | Summary |
 |---|---|
@@ -174,7 +174,7 @@ bun run build
 - SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
 - SDK e2e tests are network-agnostic: always use Sponsored FPC + `from: AztecAddress.ZERO` (no `registerInitialLocalNetworkAccountsInWallet`)
 - CI test workflows (`sdk.yml`, `app.yml`, `server.yml`) only trigger on PRs + manual dispatch — no push-to-main triggers (deploy-prod.yml handles post-merge)
-- **SDK publish pipeline**: `npm version` doesn't work in Bun workspaces (`workspace:*` protocol error) — use `node -e` to set version. `npm publish --provenance` requires `repository.url` in package.json matching the GitHub repo. YAML `if:` expressions with colons must be double-quoted. `workflow_dispatch` can trigger publish-sdk for retries.
+- **SDK publish pipeline**: `npm version` doesn't work in Bun workspaces (`workspace:*` protocol error) — use `node -e` to set version. `npm publish --provenance` requires `repository.url` in package.json matching the GitHub repo. YAML `if:` expressions with colons must be double-quoted. `workflow_dispatch` can trigger `_publish-sdk.yml` directly for retries. Uses `NPM_TOKEN` automation token — OIDC trusted publishing only supports one workflow per package (see `lessons/npm-trusted-publishing.md`). npm package-level 2FA must be set to "Authorization only" (not "Authorization and publishing") for automation tokens to work.
 - **EC2 deploy**: Use `instance-status-ok` (2/2 checks) instead of `instance-running` for SSM readiness. SSM agent needs the OS fully booted + IAM instance profile with `AmazonSSMManagedInstanceCore`.
 - App e2e: Playwright with `mocked` + `fullstack` projects. Mocked tests set `PROVER_URL` via playwright.config env so `PROVER_CONFIGURED=true`. Fullstack tests skip remote/TEE describes when their env vars are not set.
 - Env-var-driven feature flags: `PROVER_CONFIGURED = !!process.env.PROVER_URL`, `TEE_CONFIGURED = !!process.env.TEE_URL`. Buttons start `disabled` in HTML; JS enables them when configured + reachable/attested. Service row labels default to "not configured" in HTML.
@@ -187,6 +187,9 @@ bun run build
 - **Request IDs**: Every server request gets a unique `X-Request-Id` (auto-generated UUID or echoed from client). Returned in response header + error JSON `requestId` field. Logged with `requestId` on prove start/completion and unhandled errors. Middleware runs before `expressLogger()` so all log lines include the ID. Frontend/SDK don't need to send IDs — the server handles it transparently.
 - **cbor-x encoding pitfalls** (PR #81): cbor-x has three encoding behaviors that differ from naive expectations: (1) `Uint8Array` → CBOR tagged bstr (tag 64, `0xd840` prefix), but `Buffer` → plain CBOR bstr — COSE_Sign1 Sig_structure requires plain bstr, so always use `Buffer.alloc(0)` not `new Uint8Array(0)` for empty external_aad; (2) 8-byte CBOR uint64 → JavaScript `BigInt`, not `number` — Nitro's Rust NSM library always encodes timestamps as uint64; (3) CBOR maps → plain JS objects with string keys by default, not `Map` instances. Unit tests using JS-generated CBOR won't catch these because JS `number`/`Map`/`Uint8Array` encode differently than Rust/C equivalents.
 - **Server uses `PrivateExecutionStepSchema` from `@aztec/stdlib/kernel`** instead of a hand-rolled Zod schema for `/prove` validation. This keeps the schema automatically in sync across Aztec version updates and avoids format mismatches.
+- **`sendWithRetry` + `E2E_RETRY_STALE_HEADER`**: On live networks, proving takes 50-90s, during which the block header can go stale ("Block header not found"). `sendWithRetry()` in `aztec.ts` re-simulates to refresh the header and retries up to 3 times. **Gated behind `E2E_RETRY_STALE_HEADER` env var** — only active during Playwright e2e tests (set in `playwright.config.ts` webServer env, forwarded via `vite.config.ts` define block). In production, sends fail immediately — re-simulating silently is unsafe because contract state or user inputs could change between attempts.
+- **Rate limit localhost exemption**: `/prove` rate limit (10 req/hour/IP) exempts `127.0.0.1` and `::1` via `skip` callback. SSM tunnels and local dev arrive as localhost; public traffic via CloudFront has `X-Forwarded-For`. Safe because only SSM-credentialed users can reach localhost on EC2.
+- **validate-prod scoped to deploy-only tests**: `validate-prod` in `deploy-prod.yml` runs `-g "deploys account"` (3 deploy tests, 1 prove call each) instead of the full 12-test suite. The comprehensive suite runs in `infra.yml` on PRs. `continue-on-error` removed — validate-prod is now a hard gate.
 
 ---
 
@@ -234,7 +237,7 @@ aztec-spartan.yml detects new version
 | **17D** | `deploy-prod.yml` (push to main → deploy TEE + prover to prod). `_deploy-tee.yml` / `_deploy-prover.yml` parameterized with `environment` + `image_tag` inputs. IAM: `Environment: ["ci", "prod"]`. Prod EC2: TEE `m5.xlarge` + prover `t3.xlarge` with Elastic IPs. Secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID` |
 | **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
 | **17F** | Nextnet connectivity smoke test (`nextnet.test.ts`) + `nextnet-check` job in `deploy-prod.yml` as pre-publish gate. `validate-prod` job runs app fullstack e2e against nextnet after all deploys complete (SSM tunnels to prod TEE + prover). |
-| **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on spartan auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag spartan` + `--provenance`, creates git tag + GitHub release. Gated by `nextnet-check`. Uses OIDC trusted publishing (no `NPM_TOKEN`). Configure at: `https://www.npmjs.com/package/@alejoamiras/tee-rex/access`. |
+| **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on spartan auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag spartan` + `--provenance`, creates git tag + GitHub release. Gated by `validate-prod` (full e2e) with `nextnet-check` fallback when validate-prod is skipped. Uses `NPM_TOKEN` automation token (OIDC only supports one workflow per package — doesn't work with deploy-prod + deploy-devnet). `_publish-sdk.yml` also supports `workflow_dispatch` for manual retries. |
 
 ---
 
@@ -389,12 +392,27 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
+## Phase 24: Stabilize Fullstack E2E & CI Hardening — DONE (PRs #89, #91, #93, #94, #96)
+
+**Goal**: Make `validate-prod` pass reliably (0/50+ runs previously) and harden the deploy pipeline.
+
+| Part | Summary |
+|---|---|
+| **24A** | `sendWithRetry()` in `aztec.ts` — retries "Block header not found" up to 3 times by re-simulating to refresh stale block headers. Gated behind `E2E_RETRY_STALE_HEADER` env var so production sends fail immediately (re-simulating silently is unsafe). Playwright config sets the flag via webServer env; Vite config forwards it. |
+| **24B** | Localhost rate limit exemption — `/prove` rate limiter skips `127.0.0.1`/`::1` (SSM tunnels, local dev). Public traffic still rate-limited via CloudFront's `X-Forwarded-For`. |
+| **24C** | Scoped validate-prod — narrowed from full 12-test suite to deploy-only (`-g "deploys account"`), removed `continue-on-error: true`, reduced timeout 60→30 min. Comprehensive tests run in `infra.yml` on PRs. |
+| **24D** | `_publish-sdk.yml` gets `workflow_dispatch` — manual SDK publishing from Actions tab without re-running deploy-prod. |
+| **24E** | Gate `publish-sdk` on `validate-prod` — `needs: [validate-prod, nextnet-check]` with `always()` + result checks. Blocks on validate-prod failure, falls back to nextnet-check when skipped. |
+| **24F** | npm publish fix — switched from OIDC to `NPM_TOKEN` automation token (OIDC only supports one workflow per package). Package-level 2FA set to "Authorization only" to allow automation tokens. |
+
+---
+
 ## Backlog
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C, further work in Phase 17F
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
 - Phase 15 TEE generalization research (TeeProvider interface) — tackle after core features stabilize
-- **Gate `publish-sdk` on `validate-prod` instead of `nextnet-check`** — Currently `nextnet-check` (3 lightweight API calls, ~1 min) gates SDK publishing as a cheap pre-flight. The real validation is `validate-prod` (full Playwright e2e against prod servers + nextnet, ~30-60 min) but it has `continue-on-error` and is too slow/fragile to be a hard gate today. The proper fix: (1) extract `publish-sdk` into a reusable `_publish-sdk.yml` so it can be called from `deploy-prod.yml` after validation AND triggered standalone via `workflow_dispatch` for retries without re-running deploys, (2) make `publish-sdk` depend on `validate-prod` instead of `nextnet-check` for auto-update merges, (3) handle `continue-on-error` carefully — either remove it and accept that nextnet outages block publishes, or check `validate-prod`'s actual conclusion/outcome instead of its result. Tradeoff: more correct but slower, and nextnet outages would block auto-update SDK publishes until the network recovers.
+- ~~**Gate `publish-sdk` on `validate-prod` instead of `nextnet-check`**~~ ✅ Done (#96) — `publish-sdk` now depends on `[validate-prod, nextnet-check]` with `always()` + result checks. Blocks on validate-prod failure, falls back to nextnet-check when validate-prod is skipped. `_publish-sdk.yml` extracted as reusable workflow with `workflow_dispatch` for manual retries. `continue-on-error` removed from validate-prod — it's now a hard gate.
 - ~~**IAM trust policy audit**~~ ✅ Done — tightened `tee-rex-ci-trust-policy.json` from `refs/heads/*` to `refs/heads/main` + `refs/heads/chore/aztec-spartan-*` + `pull_request`. **Note**: apply the updated policy to AWS with `aws iam update-assume-role-policy --role-name tee-rex-ci-github --policy-document file://infra/iam/tee-rex-ci-trust-policy.json`
 - ~~**IAM S3 DeleteObject scoping**~~ ✅ Done (#73) — split `S3AppDeploy` into two IAM statements: `S3AppDeploy` (PutObject, ListBucket, GetBucketLocation) and `S3AppCleanup` (DeleteObject on object-level ARNs only). Policy applied to AWS.
 - ~~**SDK witness triple-encoding**~~ ✅ Done (#73) — replaced `JSON.parse(jsonStringify(step.witness))` with `Array.from(step.witness.entries())` in `tee-rex-prover.ts`, eliminating a redundant serialization roundtrip for witness data.

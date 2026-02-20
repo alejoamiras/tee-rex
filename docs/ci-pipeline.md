@@ -1,15 +1,15 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-02-16.
+How the tee-rex CI/CD system works. Last updated: 2026-02-20.
 
 ---
 
 ## Overview
 
 ```
-15 workflow files total:
-  8 main workflows   (sdk, app, server, tee, remote, infra, aztec-spartan, deploy-prod)
-  5 reusable         (_build-base, _deploy-tee, _deploy-prover, _e2e-sdk, _e2e-app)
+16 workflow files total:
+  9 main workflows   (sdk, app, server, tee, remote, infra, aztec-spartan, deploy-prod, deploy-devnet)
+  5 reusable         (_build-base, _deploy-tee, _deploy-prover, _publish-sdk, _e2e-sdk, _e2e-app)
   2 composite actions (setup-aztec, start-services)
 ```
 
@@ -119,11 +119,11 @@ graph TD
     base --> tee["deploy-tee\n(Prod EC2 enclave)"]
     base --> prover["deploy-prover\n(Prod EC2 container)"]
 
-    tee & prover & app --> validate["validate-prod\n(Playwright vs nextnet)\n[continue-on-error]"]
+    tee & prover & app --> validate["validate-prod\n(deploy-only Playwright\nvs nextnet)"]
 
-    nextnet -->|aztec auto-update only| publish["publish-sdk\n(npm + git tag + release)"]
+    validate & nextnet -->|aztec auto-update only| publish["publish-sdk\n(npm + git tag + release)"]
 
-    style validate fill:#ffa,stroke:#333
+    style validate fill:#afa,stroke:#333
     style nextnet fill:#ffa,stroke:#333
 ```
 
@@ -146,16 +146,16 @@ graph TD
 | `deploy-prover` | Build prover image, push to ECR, start EC2, deploy container via SSM | ~25 min |
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
-| `publish-sdk` | Set version from Aztec dep, `npm publish --provenance`, git tag + GitHub release | ~2 min |
-| `validate-prod` | SSM tunnels to prod servers, Playwright fullstack e2e vs nextnet | ~30-60 min |
+| `publish-sdk` | Set version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
+| `validate-prod` | SSM tunnels to prod servers, deploy-only Playwright e2e (`-g "deploys account"`) vs nextnet | ~7 min |
 
 ### Conditional behavior
 
 - **Workflow-only changes**: All deploy jobs skip, only `nextnet-check` runs
 - **App-only changes**: Only `deploy-app` runs, server deploys skip
 - **Server/SDK changes**: Only server deploys run (app also deploys if SDK changed, since it's in both filters)
-- **`publish-sdk`**: Only runs when commit message starts with `chore: update @aztec/` (auto-update merges) or on manual dispatch
-- **`validate-prod`**: `continue-on-error: true` because nextnet is external; deploy success is independent of validation
+- **`publish-sdk`**: Only runs when commit message starts with `chore: update @aztec/` (auto-update merges) or on manual dispatch. Gated by `validate-prod` (must pass or be skipped) AND `nextnet-check` (must pass). Can also be triggered standalone via `workflow_dispatch` on `_publish-sdk.yml` for manual retries.
+- **`validate-prod`**: Hard gate (no `continue-on-error`). Runs deploy-only tests (`-g "deploys account"`) for faster, more reliable validation. App uses `sendWithRetry` (via `E2E_RETRY_STALE_HEADER`) to handle stale block headers during proving.
 
 ---
 
@@ -184,6 +184,7 @@ The `test-infra` label triggers `infra.yml` which does a full TEE + prover deplo
 | `_build-base.yml` | Idempotent base image build (Bun + system deps + `bun install`). Checks ECR first, builds only if missing. | None. Outputs: `base_tag` |
 | `_deploy-tee.yml` | Build Nitro Docker image, push to ECR, start EC2, deploy enclave via SSM | `environment`, `image_tag`, `base_tag` |
 | `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM | `environment`, `image_tag`, `base_tag` |
+| `_publish-sdk.yml` | Set SDK version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
 | `_e2e-app.yml` | Run app Playwright fullstack e2e with optional SSM tunnels | `tee_url`, `prover_url`, `aztec_node_url` |
 
@@ -234,11 +235,11 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 |----------|-----------|
 | `dorny/paths-filter` for change detection | Declarative, works for both `push` and `pull_request`, replaces copy-pasted shell scripts |
 | Gate job pattern | Branch protection requires specific job names; gate jobs always run and aggregate results |
-| `continue-on-error` on `validate-prod` | Nextnet is external; deploy success is independent of post-deploy validation |
+| `validate-prod` is a hard gate (no `continue-on-error`) | Scoped to deploy-only tests with `sendWithRetry` for reliability. Blocks `publish-sdk` on failure. |
 | `workflow_dispatch` overrides all filters | Manual runs should always deploy/test everything |
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
-| OIDC trusted publishing | No stored npm tokens or AWS keys; credentials are short-lived and scoped |
+| `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows both `deploy-prod.yml` and `deploy-devnet.yml` to publish. AWS still uses OIDC (no stored keys). |
 | Separate CI and prod EC2 instances | CI deploys don't affect production; different instance types (CI: `t3.xlarge`, Prod: `m5.xlarge` TEE + `t3.xlarge` prover) |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
