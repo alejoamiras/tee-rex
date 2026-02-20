@@ -445,8 +445,10 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - SDK workflow badge added to `packages/sdk/README.md`
 - App footer: linked "alejo" to GitHub repo
 
-**25C — Devnet patch release (`-patch.1`):**
-- Publish a devnet SDK release with `-patch.1` suffix via `workflow_dispatch` on `_publish-sdk.yml` from the `devnet` branch
+**25C — Devnet patch release (`-patch.1`):** DONE
+- Reset `devnet` branch to `main`, updated Aztec deps to `4.0.0-devnet.2-patch.1`, deployed via `deploy-devnet.yml`
+- Published SDK `@alejoamiras/tee-rex@4.0.0-devnet.2-patch.1` with `--tag devnet`
+- Previous devnet branch backed up at `devnet-backup`
 
 **25D — Migrate from spartan to nightlies:** DONE (PR #101)
 - Renamed `aztec-spartan.yml` → `aztec-nightlies.yml`, `check-aztec-spartan.ts` → `check-aztec-nightlies.ts`
