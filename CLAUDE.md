@@ -89,13 +89,13 @@ Before pushing to CI, run the **full local validation suite** to catch issues ea
 
 ### 7. Documentation
 
-After any structural change (new workflows, new env vars, new architectural patterns, changed CI behavior, new phases completed), **update the relevant docs before committing**:
+After any structural change (new workflows, new env vars, new architectural patterns, changed CI behavior, new phases completed), **update the relevant docs in the same PR that makes the change** — not in a follow-up commit:
 
-- **`CLAUDE.md`** — project roadmap, architectural decisions, completed phases, backlog. This is the source of truth for how the project works and what's been done.
+- **`CLAUDE.md`** — project roadmap, architectural decisions, completed phases, backlog. This is the source of truth for how the project works and what's been done. **When completing a roadmap phase, mark it as DONE and add a summary in the same PR that implements it.**
 - **`docs/ci-pipeline.md`** — CI/CD pipeline reference (workflow diagrams, job details, change detection, design decisions). Update when workflows change.
 - **`lessons/`** — per-phase lessons learned, debugging logs, approach tracking. Create/update when working on infra, deployment, or debugging tasks.
 
-Ask yourself: "If someone reads the docs tomorrow, will they understand the current system?" If not, update them.
+Ask yourself: "If someone reads the docs tomorrow, will they understand the current system?" If not, update them. Documentation updates should never require a separate PR.
 
 ### 8. Branch, commit & CI
 
@@ -445,8 +445,10 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - SDK workflow badge added to `packages/sdk/README.md`
 - App footer: linked "alejo" to GitHub repo
 
-**25C — Devnet patch release (`-patch.1`):**
-- Publish a devnet SDK release with `-patch.1` suffix via `workflow_dispatch` on `_publish-sdk.yml` from the `devnet` branch
+**25C — Devnet patch release (`-patch.1`):** DONE
+- Reset `devnet` branch to `main`, updated Aztec deps to `4.0.0-devnet.2-patch.1`, deployed via `deploy-devnet.yml`
+- Published SDK `@alejoamiras/tee-rex@4.0.0-devnet.2-patch.1` with `--tag devnet`
+- Previous devnet branch backed up at `devnet-backup`
 
 **25D — Migrate from spartan to nightlies:** DONE (PR #101)
 - Renamed `aztec-spartan.yml` → `aztec-nightlies.yml`, `check-aztec-spartan.ts` → `check-aztec-nightlies.ts`
