@@ -2,7 +2,7 @@ name: Infrastructure (TEE + Remote)
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 concurrency:
@@ -18,14 +18,28 @@ jobs:
   check:
     name: Check trigger
     runs-on: ubuntu-latest
-    if: github.event.label.name == 'test-infra' || github.event_name == 'workflow_dispatch'
+    outputs:
+      triggered: ${{ steps.gate.outputs.triggered }}
     steps:
-      - run: echo "Infrastructure workflow triggered"
+      - name: Check for test-infra label
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "triggered=true" >> "$GITHUB_OUTPUT"
+            echo "Infrastructure workflow triggered via workflow_dispatch"
+          elif [ "${{ contains(github.event.pull_request.labels.*.name, 'test-infra') }}" = "true" ]; then
+            echo "triggered=true" >> "$GITHUB_OUTPUT"
+            echo "Infrastructure workflow triggered via test-infra label"
+          else
+            echo "triggered=false" >> "$GITHUB_OUTPUT"
+            echo "No test-infra label — skipping infrastructure tests"
+          fi
 
   # ── Build base image (idempotent — skips if already in ECR) ─────
   ensure-base:
     name: Build Base Image
     needs: check
+    if: needs.check.outputs.triggered == 'true'
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
@@ -33,6 +47,7 @@ jobs:
   deploy-tee:
     name: Deploy TEE
     needs: [check, ensure-base]
+    if: needs.check.outputs.triggered == 'true'
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
@@ -41,6 +56,7 @@ jobs:
   deploy-prover:
     name: Deploy Prover
     needs: [check, ensure-base]
+    if: needs.check.outputs.triggered == 'true'
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
     with:
@@ -77,8 +93,8 @@ jobs:
   # ── Teardown: Always stop both EC2 instances ────────────────────
   teardown:
     name: Teardown
-    needs: [deploy-tee, deploy-prover, e2e-sdk, e2e-app]
-    if: always()
+    needs: [check, deploy-tee, deploy-prover, e2e-sdk, e2e-app]
+    if: always() && needs.check.outputs.triggered == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -101,3 +117,33 @@ jobs:
             aws ec2 stop-instances --instance-ids "${{ secrets.PROVER_INSTANCE_ID }}" || true
             echo "Prover EC2 instance stop requested"
           fi
+
+  # ── Gate job for branch protection ─────────────────────────────
+  infra-status:
+    name: Infra Status
+    needs: [check, ensure-base, deploy-tee, deploy-prover, e2e-sdk, e2e-app, teardown]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check infra results
+        run: |
+          if [ "${{ needs.check.outputs.triggered }}" != "true" ]; then
+            echo "Infrastructure tests not triggered (no test-infra label) — passing gate"
+            exit 0
+          fi
+
+          # Infra was triggered — check that critical jobs succeeded
+          if [ "${{ needs.e2e-sdk.result }}" = "failure" ] || [ "${{ needs.e2e-app.result }}" = "failure" ]; then
+            echo "E2E tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.deploy-tee.result }}" = "failure" ] || [ "${{ needs.deploy-prover.result }}" = "failure" ]; then
+            echo "Deploy jobs failed"
+            exit 1
+          fi
+          if [ "${{ needs.e2e-sdk.result }}" = "cancelled" ] || [ "${{ needs.e2e-app.result }}" = "cancelled" ]; then
+            echo "E2E tests were cancelled"
+            exit 1
+          fi
+
+          echo "All infrastructure tests passed"

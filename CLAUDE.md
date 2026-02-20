@@ -164,7 +164,7 @@ bun run build
 | **8** | Repo rename `nemi-fi` → `alejoamiras` (15+ files) |
 | **9** | CI granular parallel jobs (Lint, Typecheck, Unit, E2E per package) |
 | **10** | E2E CI with Aztec local network (Foundry + Aztec CLI, cached by version) |
-| **12** | Aztec auto-update CI — nightlies version detection → PR → full test suite (incl. TEE) → auto-merge. Gate job pattern, reusable workflows, composite actions. `PAT_TOKEN` for PR-triggered workflows. Branch protection: 3 gate jobs. (Originally spartan, migrated to nightlies in Phase 25D.) |
+| **12** | Aztec auto-update CI — nightlies version detection → PR → full test suite (incl. TEE) → auto-merge. Gate job pattern, reusable workflows, composite actions. `PAT_TOKEN` for PR-triggered workflows. Branch protection: 4 gate jobs (SDK, App, Server, Infra Status). (Originally spartan, migrated to nightlies in Phase 25D.) |
 | **12B** | Multi-network support (`AZTEC_NODE_URL` configurable across app/CI/e2e) |
 | **12B'** | Nightly → Spartan dist-tag migration |
 | **12C** | Nextnet/live network support — sponsored FPC, auto-detect chain ID, `proverEnabled: true` |
@@ -177,7 +177,7 @@ bun run build
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 
 **Key architectural decisions (from completed phases):**
-- CI gate job pattern: workflows always trigger on PRs, `changes` job uses `dorny/paths-filter@v3` for declarative path-based change detection, gate jobs (`SDK/App/Server Status`) always run. `workflow_dispatch` overrides filters to `true`. Full CI reference: `docs/ci-pipeline.md`. Ruleset: `infra/rulesets/main-branch-protection.json`
+- CI gate job pattern: workflows always trigger on PRs, `changes` job uses `dorny/paths-filter@v3` for declarative path-based change detection, gate jobs (`SDK/App/Server/Infra Status`) always run. `infra.yml` triggers on all PRs but only deploys when `test-infra` label is present — Infra Status auto-passes otherwise. `workflow_dispatch` overrides filters to `true`. Full CI reference: `docs/ci-pipeline.md`. Ruleset: `infra/rulesets/main-branch-protection.json`
 - AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. S3 permissions split: `S3AppDeploy` (put/list) and `S3AppCleanup` (delete, object-level ARNs only). Setup: `infra/iam/README.md`
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80

@@ -28,7 +28,8 @@
         "required_status_checks": [
           { "context": "SDK Status", "integration_id": 15368 },
           { "context": "App Status", "integration_id": 15368 },
-          { "context": "Server Status", "integration_id": 15368 }
+          { "context": "Server Status", "integration_id": 15368 },
+          { "context": "Infra Status", "integration_id": 15368 }
         ]
       }
     }
