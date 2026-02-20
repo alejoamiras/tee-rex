@@ -327,6 +327,35 @@ AWS SSM `RunShellScript` has several gotchas:
 
 ---
 
+## Lesson 17: Hugepage re-allocation requires aggressive cleanup (CRITICAL)
+
+**Problem**: The deploy script (`ci-deploy.sh`) reduced the allocator from 8192MB → 512MB at the start of each deploy, built the EIF, then tried to re-increase to 8192MB. This failed intermittently because the allocator restart happened without cleaning up first — Linuxkit and Docker left host memory fragmented, preventing contiguous 2MB hugepage allocation.
+
+**Disproven hypothesis**: "Keep hugepages at 8192MB permanently and skip the reduce/increase cycle." Tested via SSM on prod instance — Linuxkit (used by `nitro-cli build-enclave`) needs ~3.5GB RSS and Docker pull uses buffer cache. With 8GB hugepages reserved, only ~5.2GB remains for host operations. Result: **OOM killer terminates Linuxkit** (`dmesg` confirmed: `linuxkit invoked oom-killer`, `Killed process ... (linuxkit) total-vm:7053816kB, anon-rss:3594464kB`).
+
+**Root cause of intermittent failure**: The old script did `docker image prune -af` AFTER the allocator restart. But the allocator needs clean, defragmented memory. The correct order is: prune Docker → `drop_caches` → `compact_memory` → THEN restart allocator.
+
+**Fix (tested on prod via SSM — full sequence verified):**
+1. Teardown: stop services, terminate enclave, kill stale socat, wipe Docker
+2. Reduce allocator to 512MB (free host RAM for build)
+3. Pull image + build EIF (plenty of host RAM)
+4. **Docker prune + `drop_caches` + `compact_memory`** (critical: clean up BEFORE allocation)
+5. Re-increase allocator to 8192MB with retry logic (2 attempts) + verification
+6. Start enclave
+
+**SSM test results (2026-02-20):**
+- Allocator at 8192MB during build: OOM kills Linuxkit (FAILED)
+- Reduce → build → allocate WITHOUT cleanup: allocator only gets 3499/4096 pages (FAILED)
+- Reduce → build → prune + drop_caches + compact → allocate: ALLOCATOR-SUCCESS, 8388608 kB Hugetlb (PASSED)
+
+**Why the old approach failed intermittently**: Hugepage allocation depends on contiguous physical memory. After `drop_caches + compact_memory`, the kernel can defragment enough for 4096 × 2MB pages. Without cleanup, Docker layers and Linuxkit artifacts scatter allocations across physical pages, and the allocator rolls back ("Memory configuration failed, rolling back memory reservations").
+
+**Additional findings:**
+- Stale `socat` processes can survive `systemctl stop tee-rex-proxy` — added `pkill -f "socat.*TCP-LISTEN:4000"` to teardown to prevent false-positive health checks.
+- `/tmp` is a **tmpfs** on Amazon Linux 2023 (~7.7GB, RAM-backed). Linuxkit leaves large temp files there. Using `/tmp` for `NITRO_CLI_ARTIFACTS` causes "no space left on device" on repeated deploys. Fix: use disk-backed `${EIF_DIR}/build-artifacts` instead.
+
+---
+
 ## Attempt Log
 
 | # | Approach | Result |
