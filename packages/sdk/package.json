@@ -1,34 +1,25 @@
 {
   "name": "@alejoamiras/tee-rex",
   "version": "0.0.0",
-  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/alejoamiras/tee-rex",
     "directory": "packages/sdk"
   },
+  "type": "module",
   "exports": "./src/index.ts",
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "default": "./dist/index.js",
-        "types": "./dist/index.d.ts"
-      }
-    },
-    "access": "public"
-  },
   "files": [
     "src",
     "dist"
   ],
   "scripts": {
-    "dev": "tsc -w",
     "build": "rm -rf dist && tsc",
-    "test:unit": "bun test src/",
+    "dev": "tsc -w",
+    "prepublishOnly": "bun run test:lint && bun run build",
     "test:e2e": "bun test --preload ./e2e/e2e-setup.ts e2e/",
     "test:e2e:nextnet": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com bun test --preload ./e2e/e2e-setup.ts e2e/nextnet.test.ts",
     "test:lint": "tsc --noEmit --emitDeclarationOnly false",
-    "prepublishOnly": "bun run test:lint && bun run build"
+    "test:unit": "bun test src/"
   },
   "dependencies": {
     "@aztec/bb-prover": "5.0.0-nightly.20260220",
@@ -55,5 +46,14 @@
     "@aztec/simulator": "5.0.0-nightly.20260220",
     "@aztec/wallets": "5.0.0-nightly.20260220",
     "@types/ms": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "default": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      }
+    }
   }
 }
