@@ -113,6 +113,7 @@ jobs:
           AZTEC_NODE_URL: https://nextnet.aztec-labs.com
           PROVER_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/tee
+          VITE_ENV_NAME: nextnet
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

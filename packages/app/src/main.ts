@@ -5,7 +5,10 @@ import {
   checkTeeAttestation,
   checkTeeRexServer,
   deployTestAccount,
+  ENV_NAME,
   initializeWallet,
+  OTHER_ENV_NAME,
+  OTHER_ENV_URL,
   PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
   runTokenFlow,
@@ -23,6 +26,25 @@ const runCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 
 // ── Clock ──
 startClock();
+
+// ── Environment indicator ──
+if (ENV_NAME) {
+  const indicator = $("env-indicator");
+  indicator.classList.remove("hidden");
+
+  const badge = $("env-badge");
+  badge.textContent = ENV_NAME;
+  badge.className =
+    ENV_NAME === "devnet"
+      ? "text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 border rounded border-amber-700/50 text-amber-500 bg-amber-900/20"
+      : "text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 border rounded border-emerald-700/50 text-emerald-500 bg-emerald-900/20";
+
+  if (OTHER_ENV_URL && OTHER_ENV_NAME) {
+    const link = $("env-switch") as HTMLAnchorElement;
+    link.href = OTHER_ENV_URL;
+    link.textContent = `switch to ${OTHER_ENV_NAME} →`;
+  }
+}
 
 // ── Service checks ──
 async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
