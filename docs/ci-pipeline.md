@@ -63,27 +63,29 @@ Note: `app.yml` includes `packages/sdk/**` because the app depends on the SDK. `
 
 ### Branch protection
 
-Three gate jobs are required for merge: **SDK Status**, **App Status**, **Server Status**. These always run (`if: always()`) and report failure if any upstream job failed or was cancelled, pass if all passed or were skipped.
+Four gate jobs are required for merge: **SDK Status**, **App Status**, **Server Status**, **Infra Status**. These always run (`if: always()`) and report failure if any upstream job failed or was cancelled, pass if all passed or were skipped. **Infra Status** auto-passes when the `test-infra` label is absent, ensuring misc PRs aren't blocked by infrastructure tests.
 
 ---
 
-## 2. Infrastructure Testing (Label-Triggered)
+## 2. Infrastructure Testing
 
-Three workflows test server deployments on CI EC2 instances, triggered by PR labels.
+Three workflows test server deployments on CI EC2 instances.
 
 ### Combined: `infra.yml` (label: `test-infra`)
 
-Used by the aztec-nightlies auto-updater. Deploys both TEE + prover, runs full e2e.
+Runs on **all PRs** but only performs deploys/e2e when the `test-infra` label is present (added by the aztec-nightlies auto-updater). The **Infra Status** gate job is a required branch protection check — it auto-passes when the label is absent, and blocks merge on failure when triggered.
 
 ```mermaid
 graph TD
-    label["label: test-infra"] --> check["Gate check"]
-    check --> base["Build Base Image\n(_build-base.yml)"]
+    PR["Pull Request"] --> check{"test-infra\nlabel?"}
+    check -->|no| gate_pass["Infra Status\n(auto-pass)"]
+    check -->|yes| base["Build Base Image\n(_build-base.yml)"]
     base --> tee["Deploy TEE\n(CI EC2 enclave)"]
     base --> prover["Deploy Prover\n(CI EC2 container)"]
     tee & prover --> sdk_e2e["SDK E2E\n(TEE + Remote modes)"]
     tee & prover --> app_e2e["App E2E\n(TEE + Remote modes)"]
     sdk_e2e & app_e2e --> teardown["Teardown\n(stop both EC2s)"]
+    teardown --> gate_check["Infra Status\n(check results)"]
 ```
 
 ### Individual: `tee.yml` / `remote.yml` (labels: `test-tee` / `test-remote`)
