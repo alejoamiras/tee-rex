@@ -156,6 +156,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
           PROVER_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/tee
+          VITE_ENV_NAME: devnet
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

@@ -25,7 +25,7 @@ CloudFront (https://<CLOUDFRONT_DOMAIN>)
 
 ## Key Decisions
 
-- **No custom domain**: CloudFront default `*.cloudfront.net` domain with free HTTPS.
+- **Custom domain**: `tee-rex.dev` (Cloudflare DNS) with ACM wildcard cert (`*.tee-rex.dev`). Subdomains: `nextnet.tee-rex.dev` (prod) and `devnet.tee-rex.dev` (devnet). Root domain `tee-rex.dev` redirects to `nextnet.tee-rex.dev` via Cloudflare Redirect Rule. Subdomain CNAMEs use DNS-only mode (gray cloud, `proxied: false`) — Cloudflare proxy rewrites the `Host` header which breaks CloudFront. See `infra/cloudfront/custom-domain-setup.md` for the full setup runbook.
 - **COOP/COEP headers**: Required for SharedArrayBuffer (multi-threaded WASM proving). Applied via response headers policy on all behaviors.
 - **Origin timeout**: 120s (quota max without support ticket). Covers most proof generation (1-2 min). For proofs exceeding 120s, request a quota increase to 180s via AWS Support (`Response timeout per origin` quota in Service Quotas console).
 - **SPA fallback**: 403/404 custom error responses return `/index.html` with status 200.
@@ -127,4 +127,7 @@ aws s3api put-bucket-policy --bucket tee-rex-app-prod --policy '{
 |---|---|
 | `PROD_S3_BUCKET` | `tee-rex-app-prod` |
 | `PROD_CLOUDFRONT_DISTRIBUTION_ID` | `<DISTRIBUTION_ID>` |
-| `PROD_CLOUDFRONT_URL` | `https://<CLOUDFRONT_DOMAIN>` |
+| `PROD_CLOUDFRONT_URL` | `https://nextnet.tee-rex.dev` |
+| `DEVNET_S3_BUCKET` | `tee-rex-app-devnet` |
+| `DEVNET_CLOUDFRONT_DISTRIBUTION_ID` | `<DEVNET_DISTRIBUTION_ID>` |
+| `DEVNET_CLOUDFRONT_URL` | `https://devnet.tee-rex.dev` |

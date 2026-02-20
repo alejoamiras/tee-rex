@@ -81,6 +81,7 @@ export default defineConfig(({ mode, command }) => {
     AZTEC_NODE_URL: allEnv.AZTEC_NODE_URL,
     PROVER_URL: allEnv.PROVER_URL,
     TEE_URL: allEnv.TEE_URL,
+    VITE_ENV_NAME: allEnv.VITE_ENV_NAME,
   };
   return {
     plugins: [
@@ -152,6 +153,7 @@ export default defineConfig(({ mode, command }) => {
         PROVER_URL: env.PROVER_URL,
         TEE_URL: env.TEE_URL,
         E2E_RETRY_STALE_HEADER: env.E2E_RETRY_STALE_HEADER,
+        VITE_ENV_NAME: env.VITE_ENV_NAME,
       }),
     },
   };
