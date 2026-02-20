@@ -19,7 +19,7 @@ on:
         type: string
         default: "prover"
       base_tag:
-        description: "ECR image tag for base image (e.g. base-4.0.0-spartan.20260215)"
+        description: "ECR image tag for base image (e.g. base-5.0.0-nightly.20260220)"
         required: true
         type: string
     outputs:

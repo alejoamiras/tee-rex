@@ -1,4 +1,4 @@
-name: Aztec Spartan Update
+name: Aztec Nightlies Update
 
 on:
   schedule:
@@ -11,7 +11,7 @@ on:
         type: string
 
 concurrency:
-  group: aztec-spartan
+  group: aztec-nightlies
   cancel-in-progress: true
 
 permissions:
@@ -19,9 +19,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  # ── Job 1: Check if a newer spartan exists ──────────────────────────
+  # ── Job 1: Check if a newer nightly exists ──────────────────────────
   check-update:
-    name: Check for new spartan
+    name: Check for new nightly
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -35,7 +35,7 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Check spartan version
+      - name: Check nightly version
         id: check
         run: |
           if [ -n "${{ inputs.version }}" ]; then
@@ -47,7 +47,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             echo "Forced update to ${{ inputs.version }} (current: $CURRENT)"
           else
-            RESULT=$(bun scripts/check-aztec-spartan.ts)
+            RESULT=$(bun scripts/check-aztec-nightlies.ts)
             echo "$RESULT" | jq .
             NEEDS=$(echo "$RESULT" | jq -r .needsUpdate)
             LATEST=$(echo "$RESULT" | jq -r .latest)
@@ -58,7 +58,7 @@ jobs:
               echo "current_version=$CURRENT"
             } >> "$GITHUB_OUTPUT"
             if [ "$NEEDS" = "true" ]; then
-              echo "New spartan available: $CURRENT → $LATEST"
+              echo "New nightly available: $CURRENT → $LATEST"
             else
               echo "Already up to date at $CURRENT"
             fi
@@ -83,9 +83,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-spartan-${{ needs.check-update.outputs.new_version }}
+          key: ${{ runner.os }}-bun-nightlies-${{ needs.check-update.outputs.new_version }}
           restore-keys: |
-            ${{ runner.os }}-bun-spartan-
+            ${{ runner.os }}-bun-nightlies-
             ${{ runner.os }}-bun-
 
       - name: Update @aztec/* versions
@@ -98,7 +98,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          BRANCH="chore/aztec-spartan-${NEW_VERSION}"
+          BRANCH="chore/aztec-nightlies-${NEW_VERSION}"
 
           # If the branch already exists on the remote, skip — a prior run
           # already pushed it. Force-pushing would orphan the commit that
@@ -129,11 +129,11 @@ jobs:
 
       - name: Create or update PR
         run: |
-          BRANCH="chore/aztec-spartan-${NEW_VERSION}"
+          BRANCH="chore/aztec-nightlies-${NEW_VERSION}"
           TITLE="chore: update @aztec/* to ${NEW_VERSION}"
 
           BODY="$(cat <<'EOF'
-          ## Aztec Spartan Update
+          ## Aztec Nightlies Update
 
           Automated dependency bump. PR CI runs all tests (unit, e2e, TEE).
           Auto-merge enabled — will merge when all required checks pass.
@@ -141,7 +141,7 @@ jobs:
           [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
           ---
-          *Automated by [Aztec Spartan Update](${{ github.server_url }}/${{ github.repository }}/actions/workflows/aztec-spartan.yml) workflow.*
+          *Automated by [Aztec Nightlies Update](${{ github.server_url }}/${{ github.repository }}/actions/workflows/aztec-nightlies.yml) workflow.*
           EOF
           )"
 

@@ -142,6 +142,6 @@ aws iam update-assume-role-policy \
 ## Security Notes
 
 - **No long-lived AWS keys** stored anywhere. OIDC tokens are short-lived (1 hour).
-- **Trust policy** restricts role assumption to `main`, `chore/aztec-spartan-*`, and `pull_request` only.
+- **Trust policy** restricts role assumption to `main`, `chore/aztec-nightlies-*`, and `pull_request` only.
 - **EC2 permissions** scoped to instances tagged `Environment: ci` or `Environment: prod` — cannot touch other instances.
 - **ECR permissions** scoped to the `tee-rex` repository only.

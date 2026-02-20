@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       dist_tag:
-        description: "npm dist-tag (e.g. spartan, devnet)"
+        description: "npm dist-tag (e.g. nightlies, devnet)"
         required: true
         type: string
-        default: spartan
+        default: nightlies
       latest:
         description: "Whether the GitHub release should be marked as --latest"
         required: false
@@ -16,7 +16,7 @@ on:
   workflow_call:
     inputs:
       dist_tag:
-        description: "npm dist-tag (e.g. spartan, devnet)"
+        description: "npm dist-tag (e.g. nightlies, devnet)"
         required: true
         type: string
       latest:

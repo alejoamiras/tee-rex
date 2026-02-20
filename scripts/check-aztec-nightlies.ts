@@ -1,7 +1,7 @@
 /**
- * Check npm for the latest Aztec spartan and compare with current.
+ * Check npm for the latest Aztec nightlies and compare with current.
  *
- * Usage: bun scripts/check-aztec-spartan.ts
+ * Usage: bun scripts/check-aztec-nightlies.ts
  * Output: JSON with { current, latest, needsUpdate }
  */
 
@@ -26,7 +26,7 @@ async function getCurrentVersion(): Promise<string> {
   return version;
 }
 
-async function getLatestSpartan(): Promise<string> {
+async function getLatestNightlies(): Promise<string> {
   const proc = Bun.spawn(["npm", "view", "@aztec/aztec.js", "dist-tags", "--json"], {
     stdout: "pipe",
     stderr: "pipe",
@@ -38,9 +38,9 @@ async function getLatestSpartan(): Promise<string> {
     throw new Error(`npm view failed: ${stderr}`);
   }
   const tags = JSON.parse(output);
-  const spartan = tags.spartan;
-  if (!spartan) throw new Error("No 'spartan' dist-tag found for @aztec/aztec.js");
-  return spartan;
+  const nightly = tags.nightly;
+  if (!nightly) throw new Error("No 'nightly' dist-tag found for @aztec/aztec.js");
+  return nightly;
 }
 
 async function verifyAllPackagesExist(version: string): Promise<{ allExist: boolean; missing: string[] }> {
@@ -64,7 +64,7 @@ async function verifyAllPackagesExist(version: string): Promise<{ allExist: bool
 
 async function main() {
   const current = await getCurrentVersion();
-  const latest = await getLatestSpartan();
+  const latest = await getLatestNightlies();
 
   if (current === latest) {
     console.log(JSON.stringify({ current, latest, needsUpdate: false }));
