@@ -163,10 +163,17 @@ jobs:
   # ── Publish SDK to npm (spartan auto-update merges only) ─────────
   # Uses NPM_TOKEN (automation token) — OIDC trusted publishing only supports
   # one workflow file per package, which doesn't work with deploy-prod + deploy-devnet.
+  # Gated on validate-prod (full e2e against deployed servers) rather than just
+  # nextnet-check (lightweight connectivity smoke). Falls back to nextnet-check
+  # when validate-prod is skipped (no server/app changes).
   publish-sdk:
     name: Publish SDK
-    needs: nextnet-check
-    if: "github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/')"
+    needs: [validate-prod, nextnet-check]
+    if: |
+      always()
+      && (needs.validate-prod.result == 'success' || needs.validate-prod.result == 'skipped')
+      && needs.nextnet-check.result == 'success'
+      && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/'))
     uses: ./.github/workflows/_publish-sdk.yml
     secrets: inherit
     with:
