@@ -1,13 +1,13 @@
 {
   "name": "@alejoamiras/tee-rex-server",
-  "type": "module",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "bun --watch run src/index.ts",
     "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "test:unit": "bun test"
+    "test:unit": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@aztec/bb-prover": "5.0.0-nightly.20260220",

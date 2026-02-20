@@ -3,20 +3,21 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
     "dev": "vite",
     "dev:local-network:local": "PROVER_URL=http://localhost:4000 vite",
     "dev:local-network:prod": "PROVER_URL=https://d3d1wk4leq65j7.cloudfront.net/prover TEE_URL=https://d3d1wk4leq65j7.cloudfront.net/tee vite",
     "dev:nextnet:local": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=http://localhost:4000 vite",
     "dev:nextnet:prod": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=https://d3d1wk4leq65j7.cloudfront.net/prover TEE_URL=https://d3d1wk4leq65j7.cloudfront.net/tee vite",
-    "build": "vite build",
     "preview": "vite preview",
     "test": "bun test",
-    "test:unit": "bun test",
     "test:e2e": "bunx playwright test --project=mocked",
+    "test:e2e:all": "bun run test:e2e && bun run test:e2e:fullstack",
     "test:e2e:fullstack": "bunx playwright test --project=fullstack --workers=1",
-    "test:e2e:all": "bun run test:e2e && bun run test:e2e:fullstack"
+    "test:unit": "bun test"
   },
   "dependencies": {
+    "@alejoamiras/tee-rex": "workspace:*",
     "@aztec/accounts": "5.0.0-nightly.20260220",
     "@aztec/aztec.js": "5.0.0-nightly.20260220",
     "@aztec/bb-prover": "5.0.0-nightly.20260220",
@@ -29,8 +30,7 @@
     "@aztec/pxe": "5.0.0-nightly.20260220",
     "@aztec/simulator": "5.0.0-nightly.20260220",
     "@aztec/stdlib": "5.0.0-nightly.20260220",
-    "@aztec/wallets": "5.0.0-nightly.20260220",
-    "@alejoamiras/tee-rex": "workspace:*"
+    "@aztec/wallets": "5.0.0-nightly.20260220"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.6.1",

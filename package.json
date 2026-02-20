@@ -6,27 +6,28 @@
     "packages/app"
   ],
   "scripts": {
-    "build:base": "docker build -f Dockerfile.base -t tee-rex-base --platform linux/amd64 .",
-    "build": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -t tee-rex --platform linux/amd64 .",
-    "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
-    "dev": "bun run --cwd packages/server dev",
-    "start": "bun run --cwd packages/server start",
-    "lint": "biome check . && shellcheck infra/*.sh",
-    "lint:actions": "actionlint",
-    "lint:shell": "shellcheck infra/*.sh",
-    "lint:fix": "biome check --write .",
-    "format": "biome format --write .",
-    "test": "bun run lint && bun run test:typecheck && bun run test:unit",
-    "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
-    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/app test:unit",
-    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/app test:e2e:all",
-    "test:e2e:nextnet": "bun run --cwd packages/sdk test:e2e:nextnet",
-    "test:all": "bun run test && bun run test:e2e",
     "app": "bun run --cwd packages/app dev",
-    "sdk:build": "bun run --cwd packages/sdk build",
     "aztec:check": "bun scripts/check-aztec-nightlies.ts",
     "aztec:update": "bun scripts/update-aztec-version.ts",
-    "prepare": "husky"
+    "build": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -t tee-rex --platform linux/amd64 .",
+    "build:base": "docker build -f Dockerfile.base -t tee-rex-base --platform linux/amd64 .",
+    "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
+    "dev": "bun run --cwd packages/server dev",
+    "format": "biome format --write .",
+    "lint": "biome check . && shellcheck infra/*.sh && bun run lint:pkg",
+    "lint:actions": "actionlint",
+    "lint:fix": "biome check --write .",
+    "lint:pkg": "sort-package-json --check package.json packages/*/package.json",
+    "lint:shell": "shellcheck infra/*.sh",
+    "prepare": "husky",
+    "sdk:build": "bun run --cwd packages/sdk build",
+    "start": "bun run --cwd packages/server start",
+    "test": "bun run lint && bun run test:typecheck && bun run test:unit",
+    "test:all": "bun run test && bun run test:e2e",
+    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/app test:e2e:all",
+    "test:e2e:nextnet": "bun run --cwd packages/sdk test:e2e:nextnet",
+    "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
+    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/app test:unit"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -37,6 +38,9 @@
     ],
     "*.sh": [
       "shellcheck"
+    ],
+    "**/package.json": [
+      "sort-package-json"
     ]
   },
   "devDependencies": {
@@ -46,6 +50,7 @@
     "bun-types": "^1.3.9",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "sort-package-json": "^3.6.1",
     "typescript": "^5.9.3"
   }
 }
