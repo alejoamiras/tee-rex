@@ -19,6 +19,24 @@ resource "aws_s3_bucket_public_access_block" "prod" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "prod" {
+  bucket = aws_s3_bucket.prod.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "prod" {
+  bucket = aws_s3_bucket.prod.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 resource "aws_s3_bucket_policy" "prod" {
   bucket = aws_s3_bucket.prod.id
 
@@ -60,6 +78,24 @@ resource "aws_s3_bucket_public_access_block" "devnet" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "devnet" {
+  bucket = aws_s3_bucket.devnet.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "devnet" {
+  bucket = aws_s3_bucket.devnet.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_policy" "devnet" {

@@ -46,9 +46,9 @@ variable "instance_amis" {
 # -----------------------------------------------------------------------------
 
 variable "ssh_cidr_blocks" {
-  description = "CIDR blocks allowed SSH access to EC2 instances"
+  description = "CIDR blocks allowed SSH access — disabled by default (CI uses SSM). Set to your IP for debugging."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 }
 
 # -----------------------------------------------------------------------------
