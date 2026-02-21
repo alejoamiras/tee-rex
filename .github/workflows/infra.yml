@@ -77,9 +77,9 @@ jobs:
       prover_url: ${{ needs.deploy-prover.outputs.deployed == 'true' && 'http://localhost:4002' || 'http://localhost:4000' }}
       setup_prover_tunnel: ${{ needs.deploy-prover.outputs.deployed == 'true' }}
 
-  # ── App Fullstack E2E with both TEE + Remote against nextnet ───
+  # ── App Smoke E2E with both TEE + Remote against nextnet ───────
   e2e-app:
-    name: App E2E (TEE + Remote + nextnet)
+    name: App Smoke E2E (TEE + Remote + nextnet)
     needs: [deploy-tee, deploy-prover]
     if: ${{ !cancelled() && (needs.deploy-tee.outputs.deployed == 'true' || needs.deploy-prover.outputs.deployed == 'true') }}
     uses: ./.github/workflows/_e2e-app.yml
