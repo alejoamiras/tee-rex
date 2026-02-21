@@ -36,6 +36,8 @@ export interface AppDependencies {
 export function createApp(deps: AppDependencies): express.Express {
   const app = express();
 
+  // Permissive CORS: in prod the server sits behind CloudFront (same-origin),
+  // and in dev the Vite proxy handles it. This keeps the server itself stateless.
   app.use(cors());
 
   // The server always runs behind a reverse proxy (CloudFront + socat).
