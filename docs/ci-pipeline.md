@@ -1,6 +1,6 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-02-20.
+How the tee-rex CI/CD system works. Last updated: 2026-02-21.
 
 ---
 
@@ -39,9 +39,9 @@ graph LR
     app_changes -->|yes| app_lint["Lint"]
     app_changes -->|yes| app_unit["Unit Tests"]
     app_changes -->|yes| app_mocked["Mocked E2E\n(Playwright)"]
-    app_changes -->|yes| app_fullstack["Fullstack E2E\n(local network)"]
+    app_changes -->|yes| app_local["Local Network E2E\n(simulated proofs)"]
     app_changes -->|no| app_skip["Skip all"]
-    app_lint & app_unit & app_mocked & app_fullstack & app_skip --> app_gate["App Status\n(gate)"]
+    app_lint & app_unit & app_mocked & app_local & app_skip --> app_gate["App Status\n(gate)"]
 
     server --> srv_changes{"Server files\nchanged?"}
     srv_changes -->|yes| srv_lint["Lint"]
@@ -83,7 +83,7 @@ graph TD
     base --> tee["Deploy TEE\n(CI EC2 enclave)"]
     base --> prover["Deploy Prover\n(CI EC2 container)"]
     tee & prover --> sdk_e2e["SDK E2E\n(TEE + Remote modes)"]
-    tee & prover --> app_e2e["App E2E\n(TEE + Remote modes)"]
+    tee & prover --> app_e2e["App Smoke E2E\n(3 deploys vs nextnet)"]
     sdk_e2e & app_e2e --> teardown["Teardown\n(stop both EC2s)"]
     teardown --> gate_check["Infra Status\n(check results)"]
 ```
@@ -121,7 +121,7 @@ graph TD
     base --> tee["deploy-tee\n(Prod EC2 enclave)"]
     base --> prover["deploy-prover\n(Prod EC2 container)"]
 
-    tee & prover & app --> validate["validate-prod\n(deploy-only Playwright\nvs nextnet)"]
+    tee & prover & app --> validate["validate-prod\n(smoke Playwright:\n3 deploys vs nextnet)"]
 
     validate & nextnet -->|aztec auto-update only| publish["publish-sdk\n(npm + git tag + release)"]
 
@@ -149,7 +149,7 @@ graph TD
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
 | `publish-sdk` | Set version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
-| `validate-prod` | SSM tunnels to prod servers, deploy-only Playwright e2e (`-g "deploys account"`) vs nextnet | ~7 min |
+| `validate-prod` | SSM tunnels to prod servers, smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet | ~7 min |
 
 ### Conditional behavior
 
@@ -157,7 +157,7 @@ graph TD
 - **App-only changes**: Only `deploy-app` runs, server deploys skip
 - **Server/SDK changes**: Only server deploys run (app also deploys if SDK changed, since it's in both filters)
 - **`publish-sdk`**: Only runs when commit message starts with `chore: update @aztec/` (auto-update merges) or on manual dispatch. Gated by `validate-prod` (must pass or be skipped) AND `nextnet-check` (must pass). Can also be triggered standalone via `workflow_dispatch` on `_publish-sdk.yml` for manual retries.
-- **`validate-prod`**: Hard gate (no `continue-on-error`). Runs deploy-only tests (`-g "deploys account"`) for faster, more reliable validation. App uses `sendWithRetry` (via `E2E_RETRY_STALE_HEADER`) to handle stale block headers during proving.
+- **`validate-prod`**: Hard gate (no `continue-on-error`). Runs smoke tests (`--project=smoke`, 3 deploys) for faster, more reliable validation. App uses `sendWithRetry` (via `E2E_RETRY_STALE_HEADER`) to handle stale block headers during proving.
 
 ---
 
@@ -188,7 +188,7 @@ The `test-infra` label triggers `infra.yml` which does a full TEE + prover deplo
 | `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM | `environment`, `image_tag`, `base_tag` |
 | `_publish-sdk.yml` | Set SDK version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
-| `_e2e-app.yml` | Run app Playwright fullstack e2e with optional SSM tunnels | `tee_url`, `prover_url`, `aztec_node_url` |
+| `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnels. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url` |
 
 ---
 
@@ -237,7 +237,7 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 |----------|-----------|
 | `dorny/paths-filter` for change detection | Declarative, works for both `push` and `pull_request`, replaces copy-pasted shell scripts |
 | Gate job pattern | Branch protection requires specific job names; gate jobs always run and aggregate results |
-| `validate-prod` is a hard gate (no `continue-on-error`) | Scoped to deploy-only tests with `sendWithRetry` for reliability. Blocks `publish-sdk` on failure. |
+| `validate-prod` is a hard gate (no `continue-on-error`) | Scoped to smoke tests (3 deploys) with `sendWithRetry` for reliability. Blocks `publish-sdk` on failure. |
 | `workflow_dispatch` overrides all filters | Manual runs should always deploy/test everything |
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
