@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26)
 
 | Phase | Summary |
 |---|---|
@@ -319,6 +319,27 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - `infra.yml` now triggers on all PRs (not just `test-infra` label). When label absent, all jobs skip and Infra Status auto-passes. When present, runs full deploy + e2e and blocks merge on failure.
 - Added **Infra Status** as 4th required check in branch protection (alongside SDK/App/Server Status).
 - Prevents auto-merge from racing ahead of infrastructure tests (which caused PR #102 e2e failures).
+
+---
+
+## Phase 26: OpenTofu Infrastructure-as-Code Migration — DONE
+
+**Goal**: Codify all existing AWS infrastructure (6 EC2 instances, 2 CloudFront distributions, S3 buckets, ECR, IAM, security groups, EIPs, ACM) as OpenTofu configuration. Import-only — no resources recreated.
+
+**Strategy**: Single state file for all 3 environments (ci, prod, devnet). S3 remote state with DynamoDB locking. Local-only execution (no CI integration).
+
+**Key decisions:**
+- **Import-only migration**: All resources imported via `tofu import` CLI commands — IDs never appear in committed files.
+- **Security for public repo**: `terraform.tfvars` (gitignored) holds all real values. `.tf` files use `var.*` and `data.*` only. `terraform.tfvars.example` committed with placeholder values.
+- **Safety guardrails**: `lifecycle { prevent_destroy }` on S3, CloudFront, ACM, key pair. `lifecycle { ignore_changes = [ami, user_data] }` on all EC2 instances to prevent replacements.
+- **Safety snapshot**: `snapshot.sh` captures complete AWS state to `.snapshot/` (gitignored) before any imports — "break glass" recovery document.
+- **Replaced `infra/opentofu-example/`**: Deleted the Phase 21 research artifact, replaced with production OpenTofu configuration.
+
+**Files:**
+- `infra/tofu/*.tf` — 14 HCL files (backend, providers, versions, variables, data, iam, security-group, ec2, eip, ecr, s3, acm, cloudfront, outputs)
+- `infra/tofu/terraform.tfvars.example` — placeholder values (committed)
+- `infra/tofu/snapshot.sh` — AWS state capture script
+- `infra/tofu/README.md` — usage guide with import commands and safety notes
 
 ---
 

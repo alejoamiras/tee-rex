@@ -1,0 +1,21 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — NEVER commit it.
+
+# EC2
+ec2_public_key    = "ssh-ed25519 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+default_subnet_id = "subnet-XXXXXXXXXXXXXXXXX"
+
+instance_amis = {
+  ci_tee        = "ami-XXXXXXXXXXXXXXXXX"
+  ci_prover     = "ami-XXXXXXXXXXXXXXXXX"
+  prod_tee      = "ami-XXXXXXXXXXXXXXXXX"
+  prod_prover   = "ami-XXXXXXXXXXXXXXXXX"
+  devnet_tee    = "ami-XXXXXXXXXXXXXXXXX"
+  devnet_prover = "ami-XXXXXXXXXXXXXXXXX"
+}
+
+# SSH access (default: 0.0.0.0/0 — restrict if needed)
+# ssh_cidr_blocks = ["0.0.0.0/0"]
+
+# ACM
+acm_certificate_arn = "arn:aws:acm:us-east-1:XXXXXXXXXXXX:certificate/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"

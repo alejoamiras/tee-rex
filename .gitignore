@@ -27,3 +27,10 @@ packages/benchmarks/results/*.json
 # Playwright
 test-results/
 playwright-report/
+
+# OpenTofu / Terraform
+infra/tofu/.terraform/
+infra/tofu/*.tfstate
+infra/tofu/*.tfstate.*
+infra/tofu/terraform.tfvars
+infra/tofu/.snapshot/
