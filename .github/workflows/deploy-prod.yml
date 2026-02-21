@@ -257,12 +257,12 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Run app fullstack E2E against nextnet
+      - name: Run app smoke E2E against nextnet
         env:
           AZTEC_NODE_URL: https://nextnet.aztec-labs.com
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
-        run: bunx playwright test --project=fullstack --workers=1 -g "deploys account"
+        run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 
       - name: Cleanup SSM tunnels

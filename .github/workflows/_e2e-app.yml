@@ -1,4 +1,4 @@
-name: _App Fullstack E2E (reusable)
+name: _App E2E (reusable)
 
 on:
   workflow_call:
@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ""
+      test_script:
+        description: "Package script to run (e.g. test:e2e:local-network or test:e2e:smoke)"
+        required: false
+        type: string
+        default: "test:e2e:smoke"
       tee_url:
         description: TEE URL (enables TEE tests via SSM tunnel when set)
         required: false
@@ -31,7 +36,7 @@ on:
 
 jobs:
   e2e-app:
-    name: App Fullstack E2E
+    name: App E2E (${{ inputs.test_script }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -107,12 +112,12 @@ jobs:
           aztec_node_url: ${{ inputs.aztec_node_url }}
           prover_url: ${{ inputs.prover_url }}
 
-      - name: Run fullstack E2E tests
+      - name: Run E2E tests
         env:
           TEE_URL: ${{ inputs.tee_url }}
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
           PROVER_URL: ${{ inputs.prover_url }}
-        run: bun run --cwd packages/app test:e2e:fullstack
+        run: bun run --cwd packages/app ${{ inputs.test_script }}
 
       - name: Upload Aztec logs
         if: failure()
