@@ -28,13 +28,17 @@ resource "aws_instance" "ci_tee" {
     enabled = true
   }
 
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name        = "tee-rex-nitro"
     Environment = "ci"
   }
 
   lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64]
+    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }
 
@@ -46,6 +50,10 @@ resource "aws_instance" "ci_prover" {
   vpc_security_group_ids = [aws_security_group.tee_rex.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name        = "tee-rex-prover-ci"
     Environment = "ci"
@@ -53,7 +61,7 @@ resource "aws_instance" "ci_prover" {
   }
 
   lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64]
+    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }
 
@@ -73,6 +81,10 @@ resource "aws_instance" "prod_tee" {
     enabled = true
   }
 
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name        = "tee-rex-prod-tee"
     Environment = "prod"
@@ -80,7 +92,7 @@ resource "aws_instance" "prod_tee" {
   }
 
   lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64]
+    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }
 
@@ -92,6 +104,10 @@ resource "aws_instance" "prod_prover" {
   vpc_security_group_ids = [aws_security_group.tee_rex.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name        = "tee-rex-prod-prover"
     Environment = "prod"
@@ -99,7 +115,7 @@ resource "aws_instance" "prod_prover" {
   }
 
   lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64]
+    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }
 
@@ -119,6 +135,10 @@ resource "aws_instance" "devnet_tee" {
     enabled = true
   }
 
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name        = "tee-rex-devnet-tee"
     Environment = "devnet"
@@ -126,7 +146,7 @@ resource "aws_instance" "devnet_tee" {
   }
 
   lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64]
+    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }
 
@@ -138,6 +158,10 @@ resource "aws_instance" "devnet_prover" {
   vpc_security_group_ids = [aws_security_group.tee_rex.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name        = "tee-rex-devnet-prover"
     Environment = "devnet"
@@ -145,6 +169,6 @@ resource "aws_instance" "devnet_prover" {
   }
 
   lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64]
+    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }

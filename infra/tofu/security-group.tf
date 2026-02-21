@@ -1,5 +1,5 @@
 # Security group: tee-rex-sg
-# 2 ingress rules (SSH + CloudFront port range) + 1 default egress
+# Conditional SSH + narrow CloudFront rules (port 80 + port 4000) + default egress
 
 resource "aws_security_group" "tee_rex" {
   name        = "tee-rex-sg"
@@ -7,8 +7,10 @@ resource "aws_security_group" "tee_rex" {
   vpc_id      = data.aws_vpc.default.id
 }
 
-# SSH access
+# SSH access — disabled by default (ssh_cidr_blocks = [])
+# Add your IP to terraform.tfvars when debugging: ssh_cidr_blocks = ["1.2.3.4/32"]
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
+  count             = length(var.ssh_cidr_blocks) > 0 ? 1 : 0
   security_group_id = aws_security_group.tee_rex.id
   ip_protocol       = "tcp"
   from_port         = 22
@@ -17,15 +19,24 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
   description       = "SSH"
 }
 
-# CloudFront origins: prover (port 80) + TEE (port 4000)
-# Single rule covering the range, matching the original SG setup
-resource "aws_vpc_security_group_ingress_rule" "cloudfront" {
+# CloudFront → Prover (port 80)
+resource "aws_vpc_security_group_ingress_rule" "cloudfront_prover" {
   security_group_id = aws_security_group.tee_rex.id
   ip_protocol       = "tcp"
   from_port         = 80
+  to_port           = 80
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
+  description       = "CloudFront - Prover (port 80)"
+}
+
+# CloudFront → TEE (port 4000)
+resource "aws_vpc_security_group_ingress_rule" "cloudfront_tee" {
+  security_group_id = aws_security_group.tee_rex.id
+  ip_protocol       = "tcp"
+  from_port         = 4000
   to_port           = 4000
   prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
-  description       = "CloudFront (prover 80 + TEE 4000)"
+  description       = "CloudFront - TEE (port 4000)"
 }
 
 # Default egress (all traffic)
