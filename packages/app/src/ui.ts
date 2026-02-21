@@ -4,6 +4,10 @@ export function $(id: string): HTMLElement {
   return el;
 }
 
+export function $btn(id: string): HTMLButtonElement {
+  return $(id) as HTMLButtonElement;
+}
+
 export function setStatus(elementId: string, connected: boolean | null): void {
   const el = $(elementId);
   el.className = `status-dot ${

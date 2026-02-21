@@ -28,6 +28,16 @@ export const AZTEC_DISPLAY_URL = process.env.AZTEC_NODE_URL || "localhost:8080";
 /** Display-friendly prover URL for the services panel (reads env set by Vite define). */
 export const PROVER_DISPLAY_URL = process.env.PROVER_URL || "localhost:4000";
 
+// ── Retry & timeout constants ──
+const MAX_INIT_ATTEMPTS = 3;
+const MAX_SEND_ATTEMPTS = 3;
+const TX_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
+const TX_POLL_INTERVAL_MS = 1_000;
+const BLOCK_HEADER_NOT_FOUND = "Block header not found";
+/** Retry stale block headers only in E2E tests — not safe in production
+ *  because re-simulating may pick up different contract state. */
+const RETRY_STALE_HEADER = !!process.env.E2E_RETRY_STALE_HEADER;
+
 /** True when the PROVER_URL env var was set at build time — enables remote proving. */
 export const PROVER_CONFIGURED = !!process.env.PROVER_URL;
 
@@ -228,8 +238,6 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   return true;
 }
 
-const MAX_INIT_ATTEMPTS = 3;
-
 export async function initializeWallet(log: LogFn): Promise<boolean> {
   for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
     try {
@@ -338,13 +346,6 @@ function extractSimDetail(simResult: { stats: { timings: SimTimings } }): SimSte
   };
 }
 
-const BLOCK_HEADER_NOT_FOUND = "Block header not found";
-const MAX_SEND_ATTEMPTS = 3;
-
-/** Retry stale block headers only in E2E tests — not safe in production
- *  because re-simulating may pick up different contract state. */
-const RETRY_STALE_HEADER = !!process.env.E2E_RETRY_STALE_HEADER;
-
 /**
  * Send a tx, optionally retrying on "Block header not found" when enabled
  * via E2E_RETRY_STALE_HEADER. Re-simulates to refresh the block header when
@@ -375,9 +376,35 @@ async function sendWithRetry(
   throw new Error("Unreachable");
 }
 
+/** Simulate → prove/send → confirm a transaction and return a StepTiming. */
+async function executeStep(opts: {
+  step: string;
+  method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<TxHash> };
+  sendOpts: Record<string, unknown>;
+  log: LogFn;
+  onConfirming: () => void;
+}): Promise<StepTiming> {
+  const { step, method, sendOpts, log, onConfirming } = opts;
+  const stepStart = Date.now();
+
+  const simResult = await method.simulate({ ...sendOpts, includeMetadata: true });
+  const simulation = extractSimDetail(simResult);
+
+  const sendStart = Date.now();
+  const txHash = await sendWithRetry(method, sendOpts, log);
+  const proveSendMs = Date.now() - sendStart;
+
+  onConfirming();
+  const confirmStart = Date.now();
+  await waitForTx(txHash);
+  const confirmMs = Date.now() - confirmStart;
+
+  return { step, durationMs: Date.now() - stepStart, simulation, proveSendMs, confirmMs };
+}
+
 /** Poll until a transaction is no longer pending. Throws on dropped or timed-out txs. */
 async function waitForTx(txHash: TxHash): Promise<void> {
-  const deadline = Date.now() + 10 * 60 * 1000; // 10 minutes
+  const deadline = Date.now() + TX_TIMEOUT_MS;
   while (true) {
     const receipt = await state.node!.getTxReceipt(txHash);
     if (!receipt.isPending()) {
@@ -387,7 +414,7 @@ async function waitForTx(txHash: TxHash): Promise<void> {
     if (Date.now() > deadline) {
       throw new Error("Transaction confirmation timed out after 10 minutes");
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, TX_POLL_INTERVAL_MS));
   }
 }
 
@@ -516,136 +543,78 @@ export async function runTokenFlow(
     } else {
       onStep(`deploying bob account [${mode}]`);
       log(`Deploying second account (Bob) for transfer [${mode}]...`);
-      const stepStart = Date.now();
-
       const bobManager = await state.wallet.createSchnorrAccount(Fr.random(), Fr.random());
       const bobDeploy = await bobManager.getDeployMethod();
       const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
-      const bobSim = await bobDeploy.simulate({ ...bobSendOpts, includeMetadata: true });
-
-      const bobSendStart = Date.now();
-      const bobTxHash = await sendWithRetry(bobDeploy, bobSendOpts, log);
-      const bobProveSendMs = Date.now() - bobSendStart;
-
-      onStep(`confirming bob [${mode}]`);
-      const bobConfirmStart = Date.now();
-      await waitForTx(bobTxHash);
-      const bobConfirmMs = Date.now() - bobConfirmStart;
-
+      const bobStep = await executeStep({
+        step: "deploy bob",
+        method: bobDeploy,
+        sendOpts: bobSendOpts,
+        log,
+        onConfirming: () => onStep(`confirming bob [${mode}]`),
+      });
       bob = bobManager.address;
       state.registeredAddresses.push(bob);
-
-      const bobStepDuration = Date.now() - stepStart;
-      steps.push({
-        step: "deploy bob",
-        durationMs: bobStepDuration,
-        simulation: extractSimDetail(bobSim),
-        proveSendMs: bobProveSendMs,
-        confirmMs: bobConfirmMs,
-      });
-      log(`Bob deployed in ${(bobStepDuration / 1000).toFixed(1)}s`, "success");
+      steps.push(bobStep);
+      log(`Bob deployed in ${(bobStep.durationMs / 1000).toFixed(1)}s`, "success");
     }
 
     // Step 1: Deploy TokenContract
     onStep(`deploying token [${mode}]`);
     log(`Deploying TokenContract (admin=Alice) [${mode}]...`);
-    let stepStart = Date.now();
-
     const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
-    const tokenSim = await tokenDeploy.simulate({ from: alice, fee, includeMetadata: true });
-
-    const tokenSendStart = Date.now();
-    const tokenTxHash = await sendWithRetry(tokenDeploy, { from: alice, fee }, log);
-    const tokenProveSendMs = Date.now() - tokenSendStart;
-
-    onStep(`confirming token deploy [${mode}]`);
-    const tokenConfirmStart = Date.now();
-    await waitForTx(tokenTxHash);
-    const tokenConfirmMs = Date.now() - tokenConfirmStart;
-
-    const token = TokenContract.at(tokenDeploy.address!, state.wallet);
-
-    let stepDuration = Date.now() - stepStart;
-    steps.push({
+    const tokenStep = await executeStep({
       step: "deploy token",
-      durationMs: stepDuration,
-      simulation: extractSimDetail(tokenSim),
-      proveSendMs: tokenProveSendMs,
-      confirmMs: tokenConfirmMs,
+      method: tokenDeploy,
+      sendOpts: { from: alice, fee },
+      log,
+      onConfirming: () => onStep(`confirming token deploy [${mode}]`),
     });
+    const token = TokenContract.at(tokenDeploy.address!, state.wallet);
+    steps.push(tokenStep);
     log(
-      `Token deployed in ${(stepDuration / 1000).toFixed(1)}s — ${token.address.toString().slice(0, 20)}...`,
+      `Token deployed in ${(tokenStep.durationMs / 1000).toFixed(1)}s — ${token.address.toString().slice(0, 20)}...`,
       "success",
     );
 
     // Step 2: Mint 1000 TREX to Alice (private)
     onStep(`minting 1000 TREX [${mode}]`);
     log(`Minting 1000 TREX to Alice [${mode}]...`);
-    stepStart = Date.now();
-
-    const mintCall = token.methods.mint_to_private(alice, 1000n);
-    const mintSim = await mintCall.simulate({ from: alice, fee, includeMetadata: true });
-
-    const mintSendStart = Date.now();
-    const mintTxHash = await sendWithRetry(mintCall, { from: alice, fee }, log);
-    const mintProveSendMs = Date.now() - mintSendStart;
-
-    onStep(`confirming mint [${mode}]`);
-    const mintConfirmStart = Date.now();
-    await waitForTx(mintTxHash);
-    const mintConfirmMs = Date.now() - mintConfirmStart;
-
-    stepDuration = Date.now() - stepStart;
-    steps.push({
+    const mintStep = await executeStep({
       step: "mint to private",
-      durationMs: stepDuration,
-      simulation: extractSimDetail(mintSim),
-      proveSendMs: mintProveSendMs,
-      confirmMs: mintConfirmMs,
+      method: token.methods.mint_to_private(alice, 1000n),
+      sendOpts: { from: alice, fee },
+      log,
+      onConfirming: () => onStep(`confirming mint [${mode}]`),
     });
-    log(`Minted in ${(stepDuration / 1000).toFixed(1)}s`, "success");
+    steps.push(mintStep);
+    log(`Minted in ${(mintStep.durationMs / 1000).toFixed(1)}s`, "success");
 
     // Step 3: Transfer 500 TREX Alice → Bob (private)
     onStep(`transferring 500 TREX [${mode}]`);
     log(`Transferring 500 TREX Alice → Bob [${mode}]...`);
-    stepStart = Date.now();
-
-    const transferCall = token.methods.transfer(bob, 500n);
-    const transferSim = await transferCall.simulate({ from: alice, fee, includeMetadata: true });
-
-    const transferSendStart = Date.now();
-    const transferTxHash = await sendWithRetry(transferCall, { from: alice, fee }, log);
-    const transferProveSendMs = Date.now() - transferSendStart;
-
-    onStep(`confirming transfer [${mode}]`);
-    const transferConfirmStart = Date.now();
-    await waitForTx(transferTxHash);
-    const transferConfirmMs = Date.now() - transferConfirmStart;
-
-    stepDuration = Date.now() - stepStart;
-    steps.push({
+    const transferStep = await executeStep({
       step: "private transfer",
-      durationMs: stepDuration,
-      simulation: extractSimDetail(transferSim),
-      proveSendMs: transferProveSendMs,
-      confirmMs: transferConfirmMs,
+      method: token.methods.transfer(bob, 500n),
+      sendOpts: { from: alice, fee },
+      log,
+      onConfirming: () => onStep(`confirming transfer [${mode}]`),
     });
-    log(`Transferred in ${(stepDuration / 1000).toFixed(1)}s`, "success");
+    steps.push(transferStep);
+    log(`Transferred in ${(transferStep.durationMs / 1000).toFixed(1)}s`, "success");
 
     // Step 4: Check balances (simulate, no proof needed)
     onStep("checking balances");
     log("Checking balances...");
-    stepStart = Date.now();
-
+    const balanceStart = Date.now();
     const [aliceBalance, bobBalance] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
       token.methods.balance_of_private(bob).simulate({ from: bob }),
     ]);
-
-    stepDuration = Date.now() - stepStart;
-    steps.push({ step: "check balances", durationMs: stepDuration });
+    const balanceDuration = Date.now() - balanceStart;
+    steps.push({ step: "check balances", durationMs: balanceDuration });
     log(
-      `Balances — Alice: ${aliceBalance}, Bob: ${bobBalance} (${(stepDuration / 1000).toFixed(1)}s)`,
+      `Balances — Alice: ${aliceBalance}, Bob: ${bobBalance} (${(balanceDuration / 1000).toFixed(1)}s)`,
       "success",
     );
 

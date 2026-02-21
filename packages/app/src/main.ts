@@ -19,7 +19,7 @@ import {
   TEE_DISPLAY_URL,
   type UiMode,
 } from "./aztec";
-import { $, appendLog, formatDuration, setStatus, startClock } from "./ui";
+import { $, $btn, appendLog, formatDuration, setStatus, startClock } from "./ui";
 
 let deploying = false;
 const runCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
@@ -53,7 +53,7 @@ async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
 
   let teerex = false;
   if (PROVER_CONFIGURED) {
-    ($("mode-remote") as HTMLButtonElement).disabled = false;
+    $btn("mode-remote").disabled = false;
     teerex = await checkTeeRexServer();
     setStatus("teerex-status", teerex);
     $("teerex-label").textContent = teerex ? "available" : "unavailable";
@@ -88,14 +88,14 @@ $("mode-local").addEventListener("click", () => {
 });
 
 $("mode-remote").addEventListener("click", () => {
-  if (deploying || ($("mode-remote") as HTMLButtonElement).disabled) return;
+  if (deploying || $btn("mode-remote").disabled) return;
   setUiMode("remote");
   updateModeUI("remote");
   appendLog("Switched to remote proving mode");
 });
 
 $("mode-tee").addEventListener("click", () => {
-  if (deploying || ($("mode-tee") as HTMLButtonElement).disabled) return;
+  if (deploying || $btn("mode-tee").disabled) return;
   setUiMode("tee");
   updateModeUI("tee");
   appendLog("Switched to TEE proving mode");
@@ -103,8 +103,8 @@ $("mode-tee").addEventListener("click", () => {
 
 // ── Shared helpers ──
 function setActionButtonsDisabled(disabled: boolean): void {
-  ($("deploy-btn") as HTMLButtonElement).disabled = disabled;
-  ($("token-flow-btn") as HTMLButtonElement).disabled = disabled;
+  $btn("deploy-btn").disabled = disabled;
+  $btn("token-flow-btn").disabled = disabled;
 }
 
 function formatMs(ms: number): string {
@@ -274,7 +274,7 @@ $("deploy-btn").addEventListener("click", async () => {
   deploying = true;
   setActionButtonsDisabled(true);
 
-  const btn = $("deploy-btn") as HTMLButtonElement;
+  const btn = $btn("deploy-btn");
   btn.textContent = "Proving...";
 
   $("progress").classList.remove("hidden");
@@ -316,7 +316,7 @@ $("token-flow-btn").addEventListener("click", async () => {
   deploying = true;
   setActionButtonsDisabled(true);
 
-  const btn = $("token-flow-btn") as HTMLButtonElement;
+  const btn = $btn("token-flow-btn");
   btn.textContent = "Running...";
 
   $("progress").classList.remove("hidden");
@@ -375,7 +375,7 @@ async function init(): Promise<void> {
       $("tee-attestation-label").textContent =
         attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
       if (attestation.mode === "nitro") {
-        ($("mode-tee") as HTMLButtonElement).disabled = false;
+        $btn("mode-tee").disabled = false;
       }
       appendLog(
         `TEE attestation: ${attestation.mode ?? "unknown"}`,
