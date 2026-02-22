@@ -322,7 +322,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
-## Phase 26: OpenTofu Infrastructure-as-Code Migration — DONE (PRs #111, #112, #113)
+## Phase 26: OpenTofu Infrastructure-as-Code Migration — DONE (PRs #111, #112, #113, #117, #118)
 
 **Goal**: Codify all existing AWS infrastructure (6 EC2 instances, 2 CloudFront distributions, S3 buckets, ECR, IAM, security groups, EIPs, ACM) as OpenTofu configuration. Import-only — no resources recreated.
 
@@ -339,7 +339,8 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | Part | Summary |
 |---|---|
 | **26A** | OpenTofu migration — 14 HCL files covering all AWS resources. S3 remote state with DynamoDB locking. All resources imported via `tofu import`, `tofu plan` shows zero diff. (PR #111) |
-| **26B** | Security hardening — 13 findings (3 critical, 10 recommended). SSH disabled by default, SG port range split, redundant IAM policy removed, ECR immutable tags + scan-on-push, S3 encryption + versioning, CloudFront TLS 1.2 + HTTP/3 + security headers (HSTS, X-Content-Type-Options, X-Frame-Options), OIDC trust `pull_request` condition removed. All applied live via `tofu apply` — zero downtime. (PR #112) |
+| **26B** | Security hardening — 13 findings (3 critical, 10 recommended). SSH disabled by default, SG port range split, redundant IAM policy removed, ECR scan-on-push, S3 encryption + versioning, CloudFront TLS 1.2 + HTTP/3 + security headers (HSTS, X-Content-Type-Options, X-Frame-Options), OIDC trust `pull_request` condition removed. All applied live via `tofu apply` — zero downtime. (PR #112) |
+| **26D** | Post-merge fixes for 26B. (1) Added `ecr:DescribeImages` to both managed and inline CI IAM policies — missing permission caused `_build-base.yml` ECR check to fail silently (stderr redirected to `/dev/null`), making every Build Base Image job rebuild unnecessarily. (2) Reverted ECR from `IMMUTABLE` to `MUTABLE` tags — immutable tags are incompatible with static deploy tags (`prod-prover`, `prod-tee`) that get overwritten on each deploy. (3) Tofu state cleanup: `tofu state mv` for renamed inline policy, created missing managed policy + attachment, removed stale data source. Final `tofu plan` shows zero diff. (PRs #117, #118) |
 | **26C** | CI lint — `tofu fmt -check -diff` + `tofu init -backend=false` + `tofu validate` job in `actionlint.yml` with change detection for `infra/tofu/**/*.tf`. `lint:tofu` standalone script (mirrors `lint:actions` pattern — not in main `lint` chain). `tofu fmt` lint-staged hook auto-formats `.tf` files on commit. (PR #113) |
 
 **Files:**
