@@ -19,10 +19,8 @@ export function setupDOM(): void {
     <button id="deploy-btn" disabled></button>
     <button id="token-flow-btn" disabled></button>
     <div id="progress" class="hidden">
-      <pre id="ascii-art" class="ascii-art hidden"></pre>
+      <pre id="ascii-art" class="ascii-art"></pre>
     </div>
-    <span id="progress-text"></span>
-    <span id="elapsed-time"></span>
     <section id="results" class="hidden"></section>
     <div id="result-local"></div>
     <div id="time-local"></div>

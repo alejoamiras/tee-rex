@@ -288,7 +288,6 @@ $("deploy-btn").addEventListener("click", async () => {
   btn.textContent = "Proving...";
 
   $("progress").classList.remove("hidden");
-  $("elapsed-time").textContent = "0.0s";
 
   const ascii = new AsciiController($("ascii-art"));
   ascii.start(state.uiMode);
@@ -296,11 +295,8 @@ $("deploy-btn").addEventListener("click", async () => {
   try {
     const result = await deployTestAccount(
       appendLog,
-      (elapsedMs) => {
-        $("elapsed-time").textContent = formatDuration(elapsedMs);
-      },
+      () => {},
       (stepName) => {
-        $("progress-text").textContent = `${stepName}...`;
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
@@ -337,7 +333,6 @@ $("token-flow-btn").addEventListener("click", async () => {
   btn.textContent = "Running...";
 
   $("progress").classList.remove("hidden");
-  $("elapsed-time").textContent = "0.0s";
 
   const ascii = new AsciiController($("ascii-art"));
   ascii.start(state.uiMode);
@@ -345,11 +340,8 @@ $("token-flow-btn").addEventListener("click", async () => {
   try {
     const result = await runTokenFlow(
       appendLog,
-      (elapsedMs) => {
-        $("elapsed-time").textContent = formatDuration(elapsedMs);
-      },
+      () => {},
       (stepName) => {
-        $("progress-text").textContent = `${stepName}...`;
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },

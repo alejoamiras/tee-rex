@@ -20,8 +20,8 @@ describe("PhaseQueue", () => {
     queue.push("transmit");
     expect(phases).toEqual(["serialize"]);
 
-    // Wait for two drain cycles (500ms each + buffer)
-    await new Promise((r) => setTimeout(r, 1100));
+    // Wait for two drain cycles (1000ms each + buffer)
+    await new Promise((r) => setTimeout(r, 2200));
     expect(phases).toEqual(["serialize", "encrypt", "transmit"]);
     queue.clear();
   });
@@ -40,7 +40,7 @@ describe("PhaseQueue", () => {
     const queue = new PhaseQueue((p) => phases.push(p));
     queue.push("proving");
     // Wait past the min display time — should not emit anything new
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 1100));
     expect(phases).toEqual(["proving"]);
     expect(queue.current).toBe("proving");
     queue.clear();
@@ -71,6 +71,30 @@ describe("getFrameFn", () => {
       });
     }
   }
+
+  test("box frames have consistent line widths", () => {
+    // Phases that render boxes (not free-form like transmit/confirm)
+    const boxPhases: [UiMode, AnimationPhase][] = [
+      ["tee", "app:simulate"],
+      ["tee", "serialize"],
+      ["tee", "fetch-attestation"],
+      ["tee", "encrypt"],
+      ["tee", "proving"],
+      ["tee", "receive"],
+      ["remote", "proving"],
+      ["local", "proving"],
+    ];
+    for (const [mode, phase] of boxPhases) {
+      const fn = getFrameFn(mode, phase);
+      const frame = fn(5);
+      const lines = frame.split("\n").filter((l) => l.length > 0);
+      const widths = lines.map((l) => l.length);
+      const maxW = Math.max(...widths);
+      for (let i = 0; i < lines.length; i++) {
+        expect(widths[i]).toBe(maxW);
+      }
+    }
+  });
 
   test("frames change across ticks (proving animation)", () => {
     const fn = getFrameFn("tee", "proving");
