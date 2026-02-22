@@ -2,6 +2,19 @@ name: Deploy Devnet
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_servers:
+        description: "Deploy TEE + Prover servers"
+        type: boolean
+        default: true
+      deploy_app:
+        description: "Deploy frontend app"
+        type: boolean
+        default: true
+      publish_sdk:
+        description: "Publish SDK to npm (devnet tag)"
+        type: boolean
+        default: true
 
 concurrency:
   group: deploy-devnet
@@ -15,6 +28,7 @@ jobs:
   # ── Build base image (idempotent — skips if already in ECR) ─────
   ensure-base:
     name: Build Base Image
+    if: inputs.deploy_servers
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
@@ -22,6 +36,7 @@ jobs:
   deploy-tee:
     name: Deploy TEE (devnet)
     needs: ensure-base
+    if: inputs.deploy_servers
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
@@ -33,6 +48,7 @@ jobs:
   deploy-prover:
     name: Deploy Prover (devnet)
     needs: ensure-base
+    if: inputs.deploy_servers
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
     with:
@@ -44,6 +60,7 @@ jobs:
   validate-devnet:
     name: Validate Devnet
     needs: [deploy-tee, deploy-prover]
+    if: inputs.deploy_servers
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -140,6 +157,10 @@ jobs:
   deploy-app:
     name: Deploy App (devnet)
     needs: validate-devnet
+    if: |
+      !cancelled()
+      && inputs.deploy_app
+      && (needs.validate-devnet.result == 'success' || needs.validate-devnet.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -184,6 +205,10 @@ jobs:
   publish-sdk:
     name: Publish SDK (devnet)
     needs: validate-devnet
+    if: |
+      !cancelled()
+      && inputs.publish_sdk
+      && (needs.validate-devnet.result == 'success' || needs.validate-devnet.result == 'skipped')
     uses: ./.github/workflows/_publish-sdk.yml
     secrets: inherit
     with:
