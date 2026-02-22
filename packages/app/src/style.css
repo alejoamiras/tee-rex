@@ -147,3 +147,9 @@
 .step-sim-row .step-dots {
   border-bottom-color: var(--color-gray-900);
 }
+
+/* ── ASCII art animation ── */
+.ascii-art {
+  @apply mt-3 text-[10px] leading-[1.4] text-emerald-500/50 text-center whitespace-pre;
+  min-height: 6em;
+}
