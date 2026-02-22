@@ -7,8 +7,8 @@
 - **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
 - **App** (`/packages/app`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
-- **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows), sort-package-json (`package.json` key ordering)
-- **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits). lint-staged runs Biome on `*.{ts,tsx,js,jsx}`, shellcheck on `*.sh`, actionlint on `.github/workflows/*.yml`, and `sort-package-json` on `**/package.json`.
+- **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows), sort-package-json (`package.json` key ordering), OpenTofu fmt + validate (`.tf` files)
+- **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits). lint-staged runs Biome on `*.{ts,tsx,js,jsx}`, shellcheck on `*.sh`, actionlint on `.github/workflows/*.yml`, `sort-package-json` on `**/package.json`, and `tofu fmt` on `infra/tofu/*.tf`.
 - **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; shell & workflow lint: `actionlint.yml`; nightlies: `aztec-nightlies.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
@@ -116,6 +116,7 @@ bun run test             # Full checks (lint + typecheck + unit tests)
 bun run lint             # Linting only (biome + shellcheck + sort-package-json)
 bun run lint:shell       # Lint shell scripts only
 bun run lint:actions     # Lint GitHub Actions workflows
+bun run lint:tofu        # Lint OpenTofu files (fmt -check -diff)
 bun run lint:fix         # Auto-fix lint/format issues
 bun run test:e2e         # E2E tests (requires Aztec local network + server)
 bun run test:e2e:nextnet # Nextnet smoke test (requires internet)

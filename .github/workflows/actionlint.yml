@@ -1,4 +1,4 @@
-name: "Lint: Shell & Workflows"
+name: "Lint: Infra & Workflows"
 
 on:
   workflow_dispatch:
@@ -13,6 +13,7 @@ jobs:
     outputs:
       workflows: ${{ steps.override.outputs.workflows || steps.filter.outputs.workflows }}
       shell: ${{ steps.override.outputs.shell || steps.filter.outputs.shell }}
+      tofu: ${{ steps.override.outputs.tofu || steps.filter.outputs.tofu }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -24,12 +25,17 @@ jobs:
               - '.github/actions/**'
             shell:
               - 'infra/**/*.sh'
+            tofu:
+              - 'infra/tofu/**/*.tf'
       - name: Override for manual dispatch
         if: github.event_name == 'workflow_dispatch'
         id: override
         run: |
-          echo "workflows=true" >> "$GITHUB_OUTPUT"
-          echo "shell=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "workflows=true"
+            echo "shell=true"
+            echo "tofu=true"
+          } >> "$GITHUB_OUTPUT"
 
   actionlint:
     name: Lint workflows
@@ -58,10 +64,28 @@ jobs:
       - name: Run shellcheck
         run: shellcheck infra/*.sh
 
+  tofu:
+    name: Lint OpenTofu
+    needs: changes
+    if: needs.changes.outputs.tofu == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: '1.10.0'
+      - name: Format check
+        run: tofu -chdir=infra/tofu fmt -check -diff
+      - name: Init (providers only)
+        run: tofu -chdir=infra/tofu init -backend=false -input=false
+      - name: Validate
+        run: tofu -chdir=infra/tofu validate
+
   status:
     name: Actionlint Status
     if: always()
-    needs: [changes, actionlint, shellcheck]
+    needs: [changes, actionlint, shellcheck, tofu]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -73,6 +97,10 @@ jobs:
           fi
           if [ "${{ needs.shellcheck.result }}" = "failure" ]; then
             echo "Shellcheck failed"
+            exit 1
+          fi
+          if [ "${{ needs.tofu.result }}" = "failure" ]; then
+            echo "OpenTofu lint failed"
             exit 1
           fi
           echo "All checks passed (or skipped — no relevant changes)"
