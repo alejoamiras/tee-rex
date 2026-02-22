@@ -103,7 +103,7 @@ resource "aws_cloudfront_distribution" "prod" {
     target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
@@ -121,7 +121,7 @@ resource "aws_cloudfront_distribution" "prod" {
     target_origin_id           = "tee-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
@@ -232,7 +232,7 @@ resource "aws_cloudfront_distribution" "devnet" {
     target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
@@ -250,7 +250,7 @@ resource "aws_cloudfront_distribution" "devnet" {
     target_origin_id           = "tee-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
