@@ -113,7 +113,7 @@ After any structural change, **update the relevant docs in the same PR**:
 ```bash
 bun install              # Install dependencies
 bun run test             # Full checks (lint + typecheck + unit tests)
-bun run lint             # Linting only (biome + shellcheck + tofu fmt + sort-package-json)
+bun run lint             # Linting only (biome + shellcheck + sort-package-json)
 bun run lint:shell       # Lint shell scripts only
 bun run lint:actions     # Lint GitHub Actions workflows
 bun run lint:tofu        # Lint OpenTofu files (fmt -check -diff)
