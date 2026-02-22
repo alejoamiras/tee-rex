@@ -25,22 +25,6 @@ resource "aws_cloudfront_response_headers_policy" "coop_coep" {
       override = true
     }
   }
-
-  security_headers_config {
-    strict_transport_security {
-      access_control_max_age_sec = 63072000
-      include_subdomains         = true
-      preload                    = true
-      override                   = true
-    }
-    content_type_options {
-      override = true
-    }
-    frame_options {
-      frame_option = "DENY"
-      override     = true
-    }
-  }
 }
 
 resource "aws_cloudfront_function" "strip_prefix" {
@@ -61,7 +45,7 @@ resource "aws_cloudfront_distribution" "prod" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  http_version        = "http2and3"
+  http_version        = "http2"
   price_class         = "PriceClass_100"
   aliases             = var.prod_cloudfront_aliases
 
@@ -81,7 +65,7 @@ resource "aws_cloudfront_distribution" "prod" {
       http_port                = 80
       https_port               = 443
       origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
       origin_read_timeout      = 120
       origin_keepalive_timeout = 5
     }
@@ -96,7 +80,7 @@ resource "aws_cloudfront_distribution" "prod" {
       http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
       origin_read_timeout      = 120
       origin_keepalive_timeout = 5
     }
@@ -119,7 +103,7 @@ resource "aws_cloudfront_distribution" "prod" {
     target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
@@ -137,7 +121,7 @@ resource "aws_cloudfront_distribution" "prod" {
     target_origin_id           = "tee-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
@@ -190,7 +174,7 @@ resource "aws_cloudfront_distribution" "devnet" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  http_version        = "http2and3"
+  http_version        = "http2"
   price_class         = "PriceClass_100"
   aliases             = var.devnet_cloudfront_aliases
 
@@ -210,8 +194,8 @@ resource "aws_cloudfront_distribution" "devnet" {
       http_port                = 80
       https_port               = 443
       origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1.2"]
-      origin_read_timeout      = 120
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 60
       origin_keepalive_timeout = 5
     }
   }
@@ -225,8 +209,8 @@ resource "aws_cloudfront_distribution" "devnet" {
       http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1.2"]
-      origin_read_timeout      = 120
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 60
       origin_keepalive_timeout = 5
     }
   }
@@ -248,7 +232,7 @@ resource "aws_cloudfront_distribution" "devnet" {
     target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
@@ -266,7 +250,7 @@ resource "aws_cloudfront_distribution" "devnet" {
     target_origin_id           = "tee-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
     compress                   = true
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
