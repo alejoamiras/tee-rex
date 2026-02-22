@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27)
 
 | Phase | Summary |
 |---|---|
@@ -322,11 +322,11 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
-## Phase 26: OpenTofu Infrastructure-as-Code Migration — DONE
+## Phase 26: OpenTofu Infrastructure-as-Code Migration — DONE (PRs #111, #112, #113)
 
 **Goal**: Codify all existing AWS infrastructure (6 EC2 instances, 2 CloudFront distributions, S3 buckets, ECR, IAM, security groups, EIPs, ACM) as OpenTofu configuration. Import-only — no resources recreated.
 
-**Strategy**: Single state file for all 3 environments (ci, prod, devnet). S3 remote state with DynamoDB locking. Local-only execution (no CI integration).
+**Strategy**: Single state file for all 3 environments (ci, prod, devnet). S3 remote state with DynamoDB locking. Local-only execution (no CI integration). CI runs `tofu fmt -check` + `tofu validate` on every PR that touches `.tf` files.
 
 **Key decisions:**
 - **Import-only migration**: All resources imported via `tofu import` CLI commands — IDs never appear in committed files.
@@ -334,12 +334,33 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - **Safety guardrails**: `lifecycle { prevent_destroy }` on S3, CloudFront, ACM, key pair. `lifecycle { ignore_changes = [ami, user_data] }` on all EC2 instances to prevent replacements.
 - **Safety snapshot**: `snapshot.sh` captures complete AWS state to `.snapshot/` (gitignored) before any imports — "break glass" recovery document.
 - **Replaced `infra/opentofu-example/`**: Deleted the Phase 21 research artifact, replaced with production OpenTofu configuration.
+- **No `tofu plan` in CI**: fmt + validate catches 90% of issues with zero AWS credentials. Plan/apply remain local-only — appropriate for a solo/small-team project. Revisit when multiple contributors touch infra.
+
+| Part | Summary |
+|---|---|
+| **26A** | OpenTofu migration — 14 HCL files covering all AWS resources. S3 remote state with DynamoDB locking. All resources imported via `tofu import`, `tofu plan` shows zero diff. (PR #111) |
+| **26B** | Security hardening — 13 findings (3 critical, 10 recommended). SSH disabled by default, SG port range split, redundant IAM policy removed, ECR immutable tags + scan-on-push, S3 encryption + versioning, CloudFront TLS 1.2 + HTTP/3 + security headers (HSTS, X-Content-Type-Options, X-Frame-Options), OIDC trust `pull_request` condition removed. All applied live via `tofu apply` — zero downtime. (PR #112) |
+| **26C** | CI lint — `tofu fmt -check -diff` + `tofu init -backend=false` + `tofu validate` job in `actionlint.yml` with change detection for `infra/tofu/**/*.tf`. `lint:tofu` standalone script (mirrors `lint:actions` pattern — not in main `lint` chain). `tofu fmt` lint-staged hook auto-formats `.tf` files on commit. (PR #113) |
 
 **Files:**
 - `infra/tofu/*.tf` — 14 HCL files (backend, providers, versions, variables, data, iam, security-group, ec2, eip, ecr, s3, acm, cloudfront, outputs)
 - `infra/tofu/terraform.tfvars.example` — placeholder values (committed)
 - `infra/tofu/snapshot.sh` — AWS state capture script
 - `infra/tofu/README.md` — usage guide with import commands and safety notes
+
+---
+
+## Phase 27: Code Quality & Showcase Readiness — DONE (PRs #106, #107, #109, #110, #114)
+
+**Goal**: Polish the codebase for showcase readiness — enforce consistent formatting, improve test pipeline speed, clean up code, and make the live app more presentable.
+
+| Part | Summary |
+|---|---|
+| **27A** | `sort-package-json` added to quality pipeline — enforces canonical key ordering in all `package.json` files. Runs as auto-fix in lint-staged and as check-only gate in `bun run lint`. (PR #106) |
+| **27B** | Slim `CLAUDE.md` + add GitHub icon link to app header bar. (PR #107) |
+| **27C** | Code quality cleanup — extract `executeStep()` helper in `aztec.ts` (deduplicates simulate→send→confirm pattern, -58 lines), consolidate magic constants, add `$btn()` typed helper in `ui.ts` (eliminates 8 casts), add CORS comment in server. (PR #109) |
+| **27D** | Split app e2e into fast + slow suites. `demo.fullstack.spec.ts` → `demo.local-network.spec.ts` (12 tests, simulated proofs, ~5 min) + `demo.smoke.spec.ts` (3 deploy-only tests, real proofs). Shared helpers extracted to `fullstack.helpers.ts`. Per-PR pipeline (`app.yml`) now runs local-network tests instead of real-proof fullstack (~5 min vs 30-60 min). (PR #110) |
+| **27E** | App links cleanup — visible "GitHub" text label in header, replace raw CloudFront URLs (`d3d1wk4leq65j7.cloudfront.net`) with custom domain (`nextnet.tee-rex.dev`) in dev scripts. (PR #114) |
 
 ---
 
