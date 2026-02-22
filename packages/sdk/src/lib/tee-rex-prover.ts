@@ -19,6 +19,15 @@ export const ProvingMode = {
   remote: "remote",
 } as const;
 
+/** Sub-phases emitted during proof generation for UI animation. */
+export type ProverPhase =
+  | "serialize"
+  | "fetch-attestation"
+  | "encrypt"
+  | "transmit"
+  | "proving"
+  | "receive";
+
 export interface TeeRexAttestationConfig {
   /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
   requireAttestation?: boolean;
@@ -38,6 +47,7 @@ export interface TeeRexAttestationConfig {
 export class TeeRexProver extends BBLazyPrivateKernelProver {
   #provingMode: ProvingMode = ProvingMode.remote;
   #attestationConfig: TeeRexAttestationConfig = {};
+  #onPhase: ((phase: ProverPhase) => void) | null = null;
 
   constructor(
     private apiUrl: string,
@@ -61,6 +71,11 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#attestationConfig = config;
   }
 
+  /** Register a callback for proof generation sub-phase transitions (for UI animation). */
+  setOnPhase(callback: ((phase: ProverPhase) => void) | null) {
+    this.#onPhase = callback;
+  }
+
   async createChonkProof(
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
@@ -70,11 +85,13 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
           steps: executionSteps.length,
           functions: executionSteps.map((s) => s.functionName),
         });
+        this.#onPhase?.("proving");
         const start = performance.now();
         const result = await super.createChonkProof(executionSteps);
         logger.info("Local proof completed", {
           durationMs: Math.round(performance.now() - start),
         });
+        this.#onPhase?.("receive");
         return result;
       }
       case "remote": {
@@ -91,6 +108,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
     logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
+    this.#onPhase?.("serialize");
     const executionStepsSerialized = executionSteps.map((step) => ({
       functionName: step.functionName,
       witness: Array.from(step.witness.entries()),
@@ -99,13 +117,17 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       timings: step.timings,
     }));
     logger.debug("Serialized payload", { chars: JSON.stringify(executionStepsSerialized).length });
+    this.#onPhase?.("fetch-attestation");
     const encryptionPublicKey = await this.#fetchEncryptionPublicKey();
+    this.#onPhase?.("encrypt");
     const encryptedData = Base64.fromBytes(
       await encrypt({
         data: Bytes.fromString(JSON.stringify({ executionSteps: executionStepsSerialized })),
         encryptionPublicKey,
       }),
     ); // TODO(perf): serialize executionSteps -> bytes without intermediate encoding. Needs Aztec to support serialization of the PrivateExecutionStep class.
+    this.#onPhase?.("transmit");
+    this.#onPhase?.("proving");
     const response = await ky
       .post(joinURL(this.apiUrl, "prove"), {
         json: { data: encryptedData },
@@ -113,6 +135,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         retry: 2,
       })
       .json();
+    this.#onPhase?.("receive");
     const data = z
       .object({
         proof: schemas.Buffer,

@@ -68,6 +68,7 @@ export async function deployAndAssert(
 
   await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
   await expect(page.locator("#deploy-btn")).toHaveText("Proving...");
+  await expect(page.locator("#ascii-art")).not.toHaveClass(/hidden/);
 
   await expect(page.locator("#deploy-btn")).toHaveText("Deploy Test Account", {
     timeout: 10 * 60 * 1000,
@@ -79,6 +80,7 @@ export async function deployAndAssert(
   );
 
   await expect(page.locator("#progress")).toHaveClass(/hidden/);
+  await expect(page.locator("#ascii-art")).toHaveClass(/hidden/);
   await expect(page.locator("#results")).not.toHaveClass(/hidden/);
 
   const timeText = await page.locator(`#time-${mode}`).textContent();

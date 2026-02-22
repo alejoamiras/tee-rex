@@ -1,4 +1,5 @@
 import "./style.css";
+import { type AnimationPhase, AsciiController } from "./ascii-animation";
 import {
   AZTEC_DISPLAY_URL,
   checkAztecNode,
@@ -268,6 +269,15 @@ function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepT
   }
 }
 
+// ── ASCII animation helpers ──
+/** Map onStep step names to app-level animation phases. */
+function stepToPhase(stepName: string): AnimationPhase | null {
+  if (stepName.includes("simulat")) return "app:simulate";
+  if (stepName.includes("proving") || stepName.includes("deploying")) return "app:prove";
+  if (stepName.includes("confirm")) return "app:confirm";
+  return null;
+}
+
 // ── Deploy ──
 $("deploy-btn").addEventListener("click", async () => {
   if (deploying) return;
@@ -278,17 +288,19 @@ $("deploy-btn").addEventListener("click", async () => {
   btn.textContent = "Proving...";
 
   $("progress").classList.remove("hidden");
-  $("elapsed-time").textContent = "0.0s";
+
+  const ascii = new AsciiController($("ascii-art"));
+  ascii.start(state.uiMode);
 
   try {
     const result = await deployTestAccount(
       appendLog,
-      (elapsedMs) => {
-        $("elapsed-time").textContent = formatDuration(elapsedMs);
-      },
+      () => {},
       (stepName) => {
-        $("progress-text").textContent = `${stepName}...`;
+        const phase = stepToPhase(stepName);
+        if (phase) ascii.pushPhase(phase);
       },
+      (phase) => ascii.pushPhase(phase),
     );
 
     appendLog("--- step breakdown ---");
@@ -303,6 +315,7 @@ $("deploy-btn").addEventListener("click", async () => {
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
+    ascii.stop();
     deploying = false;
     setActionButtonsDisabled(false);
     btn.textContent = "Deploy Test Account";
@@ -320,17 +333,19 @@ $("token-flow-btn").addEventListener("click", async () => {
   btn.textContent = "Running...";
 
   $("progress").classList.remove("hidden");
-  $("elapsed-time").textContent = "0.0s";
+
+  const ascii = new AsciiController($("ascii-art"));
+  ascii.start(state.uiMode);
 
   try {
     const result = await runTokenFlow(
       appendLog,
-      (elapsedMs) => {
-        $("elapsed-time").textContent = formatDuration(elapsedMs);
-      },
+      () => {},
       (stepName) => {
-        $("progress-text").textContent = `${stepName}...`;
+        const phase = stepToPhase(stepName);
+        if (phase) ascii.pushPhase(phase);
       },
+      (phase) => ascii.pushPhase(phase),
     );
 
     appendLog("--- step breakdown ---");
@@ -343,6 +358,7 @@ $("token-flow-btn").addEventListener("click", async () => {
   } catch (err) {
     appendLog(`Token flow failed: ${err}`, "error");
   } finally {
+    ascii.stop();
     deploying = false;
     setActionButtonsDisabled(false);
     btn.textContent = "Run Token Flow";

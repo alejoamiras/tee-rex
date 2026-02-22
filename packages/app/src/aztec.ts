@@ -1,4 +1,4 @@
-import { type ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
+import { type ProverPhase, type ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing/lazy";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { NO_WAIT } from "@aztec/aztec.js/contracts";
@@ -422,6 +422,7 @@ export async function deployTestAccount(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
   onStep: (stepName: string) => void,
+  onPhase?: (phase: ProverPhase) => void,
 ): Promise<DeployResult> {
   if (!state.wallet) {
     throw new Error("Wallet not initialized");
@@ -433,6 +434,7 @@ export async function deployTestAccount(
   const mode = state.uiMode;
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
+  state.prover?.setOnPhase(onPhase ?? null);
 
   const interval = setInterval(() => {
     onTick(Date.now() - totalStart);
@@ -512,6 +514,7 @@ export async function deployTestAccount(
 
     return { address, steps, totalDurationMs, mode };
   } finally {
+    state.prover?.setOnPhase(null);
     clearInterval(interval);
   }
 }
@@ -520,6 +523,7 @@ export async function runTokenFlow(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
   onStep: (stepName: string) => void,
+  onPhase?: (phase: ProverPhase) => void,
 ): Promise<TokenFlowResult> {
   if (!state.wallet || state.registeredAddresses.length < 1) {
     throw new Error("Wallet not initialized — deploy at least one account first");
@@ -530,6 +534,7 @@ export async function runTokenFlow(
   const fee = { paymentMethod: state.feePaymentMethod! };
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
+  state.prover?.setOnPhase(onPhase ?? null);
 
   const interval = setInterval(() => {
     onTick(Date.now() - totalStart);
@@ -630,6 +635,7 @@ export async function runTokenFlow(
       tokenAddress: token.address.toString(),
     };
   } finally {
+    state.prover?.setOnPhase(null);
     clearInterval(interval);
   }
 }
