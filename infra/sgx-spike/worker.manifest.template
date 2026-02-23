@@ -13,6 +13,7 @@ loader.env.NODE_PATH = "/app/node_modules"
 loader.env.CRS_PATH = "/crs"
 loader.env.PORT = "5000"
 loader.env.HARDWARE_CONCURRENCY = "1"
+loader.env.MALLOC_ARENA_MAX = "1"
 
 loader.argv = ["node", "/app/worker.js"]
 

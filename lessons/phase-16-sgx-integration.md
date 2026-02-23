@@ -1,8 +1,8 @@
 # Phase 16 (28) — SGX Integration Lessons
 
-## Decision: Path B (integrate now with ~15x overhead)
+## Decision: Path B (integrate now)
 
-Chose to integrate SGX with the current ~15x overhead (due to EPC paging on 8MB EPC) rather than waiting for EDMM support in Gramine. Rationale: the overhead is acceptable for a proof-of-concept, and EDMM in a future Gramine release will bring it within 5x without code changes.
+Chose to integrate SGX with the current overhead rather than waiting for EDMM support in Gramine. The DC4ds_v3 VM has 16GB EPC (not 8MB as initially assumed), so EPC paging is not the bottleneck. With `MALLOC_ARENA_MAX=1`, bb completes successfully in ~52s inside SGX (vs ~11s outside SGX, ~5x overhead). EDMM in a future Gramine release may reduce this further.
 
 ## TCP protocol: length-prefixed framing
 
@@ -40,28 +40,35 @@ Phase 15E benchmarks showed that threading doesn't help in SGX (EPC paging domin
 | 5 | Raw proof returned to SDK | Failed — `ChonkProofWithPublicInputs.fromBuffer()` expects `[4-byte BE uint32: field count][N × 32-byte Fr fields]`, but bb CLI outputs raw field data without the length prefix |
 | 6 | Added 4-byte BE uint32 length prefix (`fieldCount = rawProof.length / 32`) in worker before sending | Deployed. Format is correct (matches `ChonkProofWithPublicInputs.toBuffer()` format). E2e validation blocked by bb crash below. |
 
-## bb heap corruption in SGX (consistent)
+## bb heap corruption in SGX — RESOLVED with MALLOC_ARENA_MAX=1
 
-bb 5.0.0-nightly.20260223 crashes consistently at the 4th circuit (`private_kernel_inner`) during `ChonkAccumulate` with:
+### The crash
+
+bb 5.0.0-nightly.20260223 crashed consistently at the 4th circuit (`private_kernel_inner`) during `ChonkAccumulate` with:
 - "corrupted size vs. prev_size" (glibc heap corruption)
 - "Invalid argument"
 
-The crash is in bb itself, not in our wrapper code. The binary hash matches local (md5: `31c6baf7cf86b901afa54080ed7c9eb9`). The same binary works outside SGX on the same VM (4 threads, 283 MiB peak, 93,216-byte proof). Inside the Gramine enclave, bb processes 3 circuits then crashes deterministically on the 4th.
+**Confirmed: SGX-only issue.** The same bb binary with the same msgpack data succeeds outside SGX on the same VM (4 threads, 283 MiB peak, 93,216-byte proof). Inside the Gramine enclave, bb processed 3 circuits then crashed deterministically on the 4th.
 
-**EPC is NOT the bottleneck.** The DC4ds_v3 VM has 16GB EPC (`0x400000000`), and `sgx.enclave_size = "4G"`. bb's 283MB working set fits comfortably. The crash is a Gramine compatibility issue, not memory pressure.
+**EPC is NOT the bottleneck.** The DC4ds_v3 VM has 16GB EPC (`0x400000000`), and `sgx.enclave_size = "4G"`. bb's 283MB working set fits comfortably.
 
-The crash may be caused by:
-1. Gramine `exec()` child enclave isolation — bb runs in a separate enclave from the Node.js worker, with independent memory management
-2. A Gramine syscall interception bug — "Invalid argument" (EINVAL) suggests a syscall returns an unexpected error inside the child enclave
-3. glibc allocator behavior differences under Gramine's signal/fault handling
+### Debugging
 
-**Confirmed: SGX-only issue.** Running the same bb binary with the same msgpack data directly on the VM (outside SGX) succeeds perfectly: 11 circuits, peak 283 MiB, 93,216-byte proof.
+| Attempt | Approach | Result |
+|---|---|---|
+| 1 | Reduced `sgx.enclave_size` from 16G to 4G | Same crash — not an enclave size issue |
+| 2 | Enabled `log_level=trace` in manifest | bb ran as child process [P2:T12:bb] via Gramine `exec()`, syscall trace visible |
+| 3 | Added `MALLOC_ARENA_MAX=1` to manifest | **FIXED** — bb completed all 11 circuits, 93,216-byte proof, HTTP 200 in 52s |
 
-**Next steps**:
-1. Rebuild manifest with `log_level=debug` to identify the failing syscall
-2. Try running bb directly via its own Gramine manifest (not as a child of Node.js exec)
-3. Check Gramine GitHub issues for known `exec()` child enclave bugs
-4. Try `loader.env.MALLOC_ARENA_MAX = "1"` to reduce glibc allocator complexity
+### Root cause
+
+glibc allocates a 64MB per-thread malloc arena by default. With `sgx.max_threads=32`, the child enclave (bb) could allocate up to 2GB just for arenas — competing with bb's 283MB working set inside the 4G enclave. The arena metadata corruption caused "corrupted size vs. prev_size" when glibc tried to reuse arena memory.
+
+`MALLOC_ARENA_MAX=1` forces all threads to share a single arena, reducing memory overhead and eliminating the corruption. Since bb runs single-threaded (`HARDWARE_CONCURRENCY=1`), there's no performance penalty.
+
+### Key takeaway
+
+**Always set `MALLOC_ARENA_MAX=1` in Gramine manifests for memory-intensive workloads.** glibc's per-thread arena allocation interacts badly with SGX enclave memory limits. The default arena count (`8 × CPU cores`) can consume gigabytes of virtual address space that Gramine must back with EPC or swap.
 
 **Key lesson**: Gramine `exec()` isolation means child processes (bb) get their own enclave with independent filesystem state. `tmpfs` mounts are per-enclave — use passthrough mounts for shared data between parent and child. Note: passthrough means decrypted data touches host filesystem — acceptable for spike, not production.
 

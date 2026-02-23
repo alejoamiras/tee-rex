@@ -1,42 +1,36 @@
-# Gramine manifest for Aztec Barretenberg (bb) prover binary.
-# Build: gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu bb.manifest.template bb.manifest
+# Gramine manifest for standalone bb (Barretenberg) proof generation.
+# Runs bb in its own SGX enclave, invoked from the host by the Express server.
+# Avoids the Gramine fork() bug (#1156) that crashes multi-threaded Node.js.
+#
+# Build: gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu -Dra_type=dcap bb.manifest.template bb.manifest
 # Sign:  gramine-sgx-sign --manifest bb.manifest --output bb.manifest.sgx
-# Run:   gramine-sgx bb --version
+# Run:   gramine-sgx bb prove --scheme chonk --ivc_inputs_path /tmp/prove-xxx/ivc-inputs.msgpack -o /tmp/prove-xxx
 
 libos.entrypoint = "/app/bb"
 
 loader.log_level = "{{ log_level }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdir }}"
-loader.env.HOME = "/tmp"
-
-# CRS files location — bb reads these for SRS (structured reference string)
 loader.env.CRS_PATH = "/crs"
-
-# Control bb thread count — the official mechanism is HARDWARE_CONCURRENCY
-# (OMP_NUM_THREADS/RAYON_NUM_THREADS have no effect on bb)
 loader.env.HARDWARE_CONCURRENCY = "1"
-
-# Prevent glibc from allocating 64MB per-thread arenas (SGX memory optimization)
 loader.env.MALLOC_ARENA_MAX = "1"
 
-# Insecure: allow command-line args and env forwarding (remove in production)
+# Allow command-line args (bb prove --scheme chonk ...)
 loader.insecure__use_cmdline_argv = true
-loader.insecure__use_host_env = true
 
 fs.mounts = [
   { path = "/lib",                uri = "file:{{ gramine.runtimedir() }}" },
   { path = "{{ arch_libdir }}",   uri = "file:{{ arch_libdir }}" },
   { path = "/usr",                uri = "file:/usr" },
-  { path = "/app/bb",             uri = "file:/app/bb" },
+  { path = "/app",                uri = "file:/app" },
   { path = "/crs",                uri = "file:/crs" },
-  { path = "/tmp",                uri = "file:/tmp", type = "tmpfs" },
+  { path = "/tmp",                uri = "file:/tmp" },
 ]
 
-# SGX configuration
-sgx.debug = true
-sgx.enclave_size = "16G"
-sgx.max_threads = 32
+# SGX configuration — bb uses ~283MB peak memory, 2G is plenty
+sgx.debug = false
+sgx.enclave_size = "2G"
+sgx.max_threads = 4
 sgx.remote_attestation = "{{ ra_type }}"
 
 sgx.trusted_files = [
