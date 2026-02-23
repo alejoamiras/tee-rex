@@ -166,41 +166,89 @@ function transmitFrames(mode: "tee" | "remote"): FrameFn {
   };
 }
 
-function provingFramesTee(): FrameFn {
-  const steps = ["decrypting payload...", "loading circuits...", "generating zk proof.."];
-  return (tick) => {
-    const shown = Math.min(steps.length, Math.floor(tick / 8) + 1);
-    const rows = steps.map((s, i) => {
-      if (i < shown - 1) return `> ${s}  ✓`;
-      if (i === shown - 1) return `> ${s}  ${i === steps.length - 1 ? spin(tick) : "✓"}`;
-      return "";
-    });
-    return box(["", ...rows, "", `  ${progressBar(tick, 22)}`, ""], "double", "AWS NITRO ENCLAVE");
-  };
-}
+const MODE_CONFIG: Record<UiMode, { border: Border; title: string; wrap?: Border }> = {
+  tee: { border: "double", title: "AWS NITRO ENCLAVE" },
+  remote: { border: "single", title: "REMOTE SERVER" },
+  local: { border: "single", title: "wasm prover", wrap: "round" },
+};
 
-function provingFramesRemote(): FrameFn {
-  const steps = ["deserializing...", "generating zk proof.."];
-  return (tick) => {
-    const shown = Math.min(steps.length, Math.floor(tick / 8) + 1);
-    const rows = steps.map((s, i) => {
-      if (i < shown - 1) return `> ${s}       ✓`;
-      if (i === shown - 1) return `> ${s}       ${i === steps.length - 1 ? spin(tick) : "✓"}`;
-      return "";
-    });
-    return box(["", ...rows, "", `  ${progressBar(tick, 22)}`, ""], "single", "REMOTE SERVER");
-  };
-}
+function provingFrames(mode: UiMode): FrameFn {
+  const W = 24;
+  const { border, title, wrap } = MODE_CONFIG[mode];
 
-function provingFramesLocal(): FrameFn {
+  const inputPlain = [
+    "fn: deploy_account",
+    "args: 0x7a2f...3b1c",
+    "witness: Map(42)",
+    "bytecode: 1.2 MB",
+  ].map((s) => s.padEnd(W));
+
+  const inputCipher = [
+    "a4F8#kL$mN2&pQ9*rT5^w%8!",
+    "xC7@dG3%jH6(bE0)vI4+zRn#",
+    "qW9$tY1&uO5*iP8^eA2!sD6@",
+    "mK3#fJ7$gL4%hN0&bV9*cX2+",
+  ];
+
+  const proofPlain = ["proof: 0xab3f...c712", "public_inputs: [42,..]"].map((s) => s.padEnd(W));
+
+  const proofCipher = ["rH5&nB8*vL2#tF6@wK9$jQ1%", "eM4^pC7!xA3+yD0(sG5)uI2&"];
+
+  const blank = "".padEnd(W);
+
   return (tick) => {
-    const inner = box(
-      [`> generating zk proof ${spin(tick)}`, `  ${progressBar(tick, 22)}`],
-      "single",
-      "wasm prover",
-    );
-    // Wrap in outer round box with 1-char padding on each side
-    const innerLines = inner.split("\n");
+    let inputRows: string[];
+    let proofRows: string[];
+
+    if (tick < 10) {
+      // Stage 1: inputs appear line-by-line
+      const shown = Math.min(inputPlain.length, Math.floor(tick / 2) + 1);
+      inputRows = inputPlain.map((l, i) => (i < shown ? l : blank));
+      proofRows = [blank, blank];
+    } else if (tick < 30) {
+      // Stage 2: inputs morph to cipher
+      const progress = Math.min(1, (tick - 10) / 20);
+      inputRows = inputPlain.map((p, i) => {
+        const c = inputCipher[i];
+        const cut = Math.floor(c.length * progress);
+        return c.slice(0, cut) + p.slice(cut);
+      });
+      proofRows = [blank, blank];
+    } else {
+      // Stage 3: ciphered inputs scroll, proof crystallizes then shimmers
+      inputRows = inputCipher.map((c, i) => {
+        const shift = (tick + i * 7) % c.length;
+        return c.slice(shift) + c.slice(0, shift);
+      });
+      const proofProgress = Math.min(1, (tick - 30) / 10);
+      if (proofProgress < 1) {
+        proofRows = proofCipher.map((c, i) => {
+          const p = proofPlain[i];
+          const cut = Math.floor(p.length * proofProgress);
+          return p.slice(0, cut) + c.slice(cut);
+        });
+      } else {
+        // Shimmer — a few glitch characters scan across the proof lines
+        proofRows = proofPlain.map((p, i) => {
+          const c = proofCipher[i];
+          const chars = [...p];
+          for (let j = 0; j < 3; j++) {
+            const idx = (tick + i * 5 + j) % W;
+            chars[idx] = c[idx];
+          }
+          return chars.join("");
+        });
+      }
+    }
+
+    const lines = [blank, ...inputRows, blank, ...proofRows, blank, progressBar(tick, W), blank];
+
+    const inner = box(lines, border, title);
+
+    if (!wrap) return inner;
+
+    // Wrap in outer round box (local mode) — strip inner indent for symmetric padding
+    const innerLines = inner.split("\n").map((l) => l.slice(2));
     const w = Math.max(...innerLines.map((l) => l.length)) + 2;
     return [
       `  ╭${"─".repeat(w)}╮`,
@@ -244,15 +292,10 @@ export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
     case "transmit":
       return transmitFrames(mode === "tee" ? "tee" : "remote");
     case "proving":
-      if (mode === "tee") return provingFramesTee();
-      if (mode === "remote") return provingFramesRemote();
-      return provingFramesLocal();
+    case "app:prove":
+      return provingFrames(mode);
     case "receive":
       return receiveFrames();
-    case "app:prove":
-      if (mode === "tee") return provingFramesTee();
-      if (mode === "remote") return provingFramesRemote();
-      return provingFramesLocal();
     case "app:confirm":
       return confirmFrames();
   }
