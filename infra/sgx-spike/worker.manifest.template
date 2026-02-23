@@ -1,5 +1,5 @@
-# Gramine manifest for the minimal Node.js enclave worker.
-# Build: gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu worker.manifest.template worker.manifest
+# Gramine manifest for the TEE-Rex SGX enclave worker.
+# Build: gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu -Dra_type=dcap worker.manifest.template worker.manifest
 # Sign:  gramine-sgx-sign --manifest worker.manifest --output worker.manifest.sgx
 # Run:   gramine-sgx node /app/worker.js
 
@@ -11,11 +11,10 @@ loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdi
 loader.env.HOME = "/tmp"
 loader.env.NODE_PATH = "/app/node_modules"
 loader.env.CRS_PATH = "/crs"
+loader.env.PORT = "5000"
+loader.env.HARDWARE_CONCURRENCY = "1"
 
 loader.argv = ["node", "/app/worker.js"]
-
-# Insecure env forwarding for debugging (remove in production)
-loader.insecure__use_host_env = true
 
 fs.mounts = [
   { path = "/lib",                uri = "file:{{ gramine.runtimedir() }}" },
@@ -23,12 +22,12 @@ fs.mounts = [
   { path = "/usr",                uri = "file:/usr" },
   { path = "/app",                uri = "file:/app" },
   { path = "/crs",                uri = "file:/crs" },
-  { path = "/tmp",                uri = "file:/tmp", type = "tmpfs" },
+  { path = "/tmp",                uri = "file:/tmp" },
   { path = "/etc",                uri = "file:/etc" },
 ]
 
 # SGX configuration
-sgx.debug = true
+sgx.debug = false
 sgx.enclave_size = "16G"
 sgx.max_threads = 32
 sgx.remote_attestation = "{{ ra_type }}"

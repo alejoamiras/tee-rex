@@ -2,8 +2,9 @@ import { describe, expect, mock, test } from "bun:test";
 import * as openpgp from "openpgp";
 import { Base64, Bytes } from "ox";
 import { type AppDependencies, createApp } from "./index.js";
-import { StandardAttestationService } from "./lib/attestation-service.js";
+import { SgxAttestationService, StandardAttestationService } from "./lib/attestation-service.js";
 import { EncryptionService } from "./lib/encryption-service.js";
+import type { SgxWorkerClient } from "./lib/sgx-worker-client.js";
 
 /** Encrypt data using a public key (mirrors what the SDK does). */
 async function encryptForKey(data: Uint8Array, publicKeyArmored: string): Promise<Uint8Array> {
@@ -312,6 +313,97 @@ describe("POST /prove", () => {
       expect(body.proof).toBeDefined();
       expect(typeof body.proof).toBe("string");
       expect(prover.createChonkProof).toHaveBeenCalledTimes(1);
+    } finally {
+      close();
+    }
+  });
+});
+
+describe("POST /prove (SGX mode)", () => {
+  /** Create a test app wired in SGX mode with a mocked SgxWorkerClient. */
+  function createSgxTestApp() {
+    const encryption = new EncryptionService();
+    const mockProof = Buffer.from("sgx-proof-bytes");
+    const sgxWorker = {
+      getPublicKey: mock(() => Promise.resolve("sgx-public-key")),
+      getQuote: mock(() => Promise.resolve(Buffer.from("sgx-quote"))),
+      prove: mock(() => Promise.resolve(mockProof)),
+    } as unknown as SgxWorkerClient;
+    const attestation = new SgxAttestationService(sgxWorker);
+    const prover = {
+      createChonkProof: mock(() => Promise.resolve({ toBuffer: () => Buffer.alloc(0) })),
+    };
+    const deps = { prover, encryption, attestation, sgxWorker } as unknown as AppDependencies;
+    const app = createApp(deps);
+    return { app, sgxWorker, prover };
+  }
+
+  test("forwards encrypted data to SGX worker and returns proof", async () => {
+    const { app, sgxWorker, prover } = createSgxTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: Base64.fromBytes(new Uint8Array([1, 2, 3])) }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { proof: string };
+      expect(body.proof).toBeDefined();
+      // SGX mode should call the worker, not the local prover
+      expect(sgxWorker.prove).toHaveBeenCalledTimes(1);
+      expect(prover.createChonkProof).not.toHaveBeenCalled();
+    } finally {
+      close();
+    }
+  });
+
+  test("returns 400 for missing data field in SGX mode", async () => {
+    const { app } = createSgxTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      close();
+    }
+  });
+});
+
+describe("GET /attestation (SGX mode)", () => {
+  test("returns sgx attestation with quote and public key", async () => {
+    const sgxWorker = {
+      getPublicKey: mock(() =>
+        Promise.resolve(
+          "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsgx\n-----END PGP PUBLIC KEY BLOCK-----",
+        ),
+      ),
+      getQuote: mock(() => Promise.resolve(Buffer.from("dcap-quote-bytes"))),
+      prove: mock(),
+    } as unknown as SgxWorkerClient;
+    const attestation = new SgxAttestationService(sgxWorker);
+    const encryption = new EncryptionService();
+    const prover = { createChonkProof: mock() };
+    const deps = { prover, encryption, attestation, sgxWorker } as unknown as AppDependencies;
+    const app = createApp(deps);
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/attestation`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as { mode: string; quote: string; publicKey: string };
+      expect(body.mode).toBe("sgx");
+      expect(body.publicKey).toContain("-----BEGIN PGP PUBLIC KEY BLOCK-----");
+      expect(body.quote).toBeDefined();
+      expect(Buffer.from(body.quote, "base64").toString()).toBe("dcap-quote-bytes");
     } finally {
       close();
     }

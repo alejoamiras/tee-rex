@@ -75,12 +75,13 @@ function bbWorkerPlugin(): Plugin {
 
 export default defineConfig(({ mode, command }) => {
   // Load all env vars for config use (proxy targets). Only AZTEC_NODE_URL, PROVER_URL,
-  // and TEE_URL are exposed to the browser via the explicit `define` block below.
+  // TEE_URL, and SGX_URL are exposed to the browser via the explicit `define` block below.
   const allEnv = loadEnv(mode, process.cwd(), "");
   const env = {
     AZTEC_NODE_URL: allEnv.AZTEC_NODE_URL,
     PROVER_URL: allEnv.PROVER_URL,
     TEE_URL: allEnv.TEE_URL,
+    SGX_URL: allEnv.SGX_URL,
     VITE_ENV_NAME: allEnv.VITE_ENV_NAME,
   };
   return {
@@ -124,6 +125,19 @@ export default defineConfig(({ mode, command }) => {
             rewrite: (path: string) => path.replace(/^\/tee/, ""),
           },
         }),
+        ...(env.SGX_URL && {
+          "/sgx": {
+            target: env.SGX_URL,
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/sgx/, ""),
+          },
+          // Proxy Azure MAA requests to avoid CORS in the browser
+          "/maa": {
+            target: "https://sharedeus.eus.attest.azure.net",
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/maa/, ""),
+          },
+        }),
       },
       fs: {
         // Allow serving files from the monorepo root (WASM files in node_modules)
@@ -152,6 +166,7 @@ export default defineConfig(({ mode, command }) => {
         AZTEC_NODE_URL: env.AZTEC_NODE_URL,
         PROVER_URL: env.PROVER_URL,
         TEE_URL: env.TEE_URL,
+        SGX_URL: env.SGX_URL,
         E2E_RETRY_STALE_HEADER: env.E2E_RETRY_STALE_HEADER,
         VITE_ENV_NAME: env.VITE_ENV_NAME,
       }),

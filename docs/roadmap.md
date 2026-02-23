@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27)
+## Completed Phases (1–14, 15E, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28)
 
 | Phase | Summary |
 |---|---|
@@ -28,7 +28,9 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **18A** | Optional remote/TEE modes via env vars. `PROVER_CONFIGURED` / `TEE_CONFIGURED` feature flags (from `PROVER_URL` / `TEE_URL` at build time). Buttons start disabled in HTML, JS enables when configured. `/prover` and `/tee` Vite proxies conditional. Service panel labels: "not configured" / "available" / "unavailable" / "attested". Fullstack e2e skip guards for remote/TEE. `deploy-prod.yml` passes `TEE_URL` to app build. |
 | **18B** | Granular benchmark UI — `NO_WAIT` + `waitForTx()` polling for prove+send/confirm sub-timings |
 | **18C** | Attribution update — "made with ♥ by alejo · inspired by nemi.fi" across all READMEs and app footer |
+| **15E** | SGX feasibility spike — ZK proof generation validated inside Intel SGX via Gramine on Azure DC4ds_v3. All 4 tests passed: bb runs in SGX (~15x overhead due to EPC paging), DCAP attestation works, minimal Node.js worker decrypts + proves inside enclave |
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
+| **28** | SGX integration (Path B) — `"sgx"` as third TeeMode alongside `"standard"` and `"nitro"`. Server-side: `SgxWorkerClient` (TCP, length-prefixed JSON), `SgxAttestationService` (DCAP quote via worker), `/prove` route branches for SGX (forwards encrypted data, never sees plaintext). SDK-side: `verifySgxAttestation()` via Azure MAA (JWT verification with `jose`), `TeeRexProver` extended with `"sgx"` discriminated union + `expectedMrEnclave`/`expectedMrSigner` config. Infra: worker.js hardened (length framing, `get_quote` action, `--scheme chonk`, graceful shutdown, `HARDWARE_CONCURRENCY=1`), production manifest (`sgx.debug=false`, no `insecure__use_host_env`), systemd unit, deploy script |
 
 ---
 
@@ -56,6 +58,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 - **Server uses `PrivateExecutionStepSchema` from `@aztec/stdlib/kernel`** instead of a hand-rolled Zod schema for `/prove` validation. This keeps the schema automatically in sync across Aztec version updates and avoids format mismatches.
 - **Custom domain (`tee-rex.dev`)**: Cloudflare DNS + ACM wildcard cert + CloudFront alternate domain names. `nextnet.tee-rex.dev` (prod) and `devnet.tee-rex.dev` (devnet). Subdomain CNAMEs use DNS-only mode (`proxied: false`) — Cloudflare proxy rewrites `Host` header, breaking CloudFront. Root domain redirects via Cloudflare Redirect Rule (requires `proxied: true` A record). `VITE_ENV_NAME` env var controls frontend badge/switcher. Runbook: `infra/cloudfront/custom-domain-setup.md`.
 - **`sendWithRetry` + `E2E_RETRY_STALE_HEADER`**: On live networks, proving takes 50-90s, during which the block header can go stale ("Block header not found"). `sendWithRetry()` in `aztec.ts` re-simulates to refresh the header and retries up to 3 times. **Gated behind `E2E_RETRY_STALE_HEADER` env var** — only active during Playwright e2e tests (set in `playwright.config.ts` webServer env, forwarded via `vite.config.ts` define block). In production, sends fail immediately — re-simulating silently is unsafe because contract state or user inputs could change between attempts.
+- **SGX enclave architecture**: In SGX mode, the Express server (outside SGX) communicates with a Gramine SGX worker via TCP (length-prefixed JSON). The worker holds the P-256 OpenPGP private key, decrypts payloads, and runs `bb prove` — plaintext never exists outside the enclave. DCAP attestation quotes are verified client-side via Azure MAA (Microsoft Azure Attestation). P-256 keys used (not curve25519) because Gramine's OpenSSL lacks curve25519 support. SDK's `encrypt()` handles any key type transparently.
 - **Rate limit localhost exemption**: `/prove` rate limit (10 req/hour/IP) exempts `127.0.0.1` and `::1` via `skip` callback. SSM tunnels and local dev arrive as localhost; public traffic via CloudFront has `X-Forwarded-For`. Safe because only SSM-credentialed users can reach localhost on EC2.
 - **validate-prod scoped to deploy-only tests**: `validate-prod` in `deploy-prod.yml` runs `-g "deploys account"` (3 deploy tests, 1 prove call each) instead of the full 12-test suite. The comprehensive suite runs in `infra.yml` on PRs. `continue-on-error` removed — validate-prod is now a hard gate.
 
@@ -369,7 +372,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C, further work in Phase 17F
 - Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
-- Phase 15 TEE generalization research (TeeProvider interface) — tackle after core features stabilize
+- ~~Phase 15 TEE generalization research (TeeProvider interface)~~ Done: Phase 15E (SGX spike) + Phase 28 (SGX integration)
 - ~~**Gate `publish-sdk` on `validate-prod` instead of `nextnet-check`**~~ Done (#96)
 - ~~**IAM trust policy audit**~~ Done
 - ~~**IAM S3 DeleteObject scoping**~~ Done (#73)

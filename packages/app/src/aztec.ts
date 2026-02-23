@@ -16,9 +16,10 @@ import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
-export type UiMode = "local" | "remote" | "tee";
+export type UiMode = "local" | "remote" | "nitro" | "sgx";
 
-const AZTEC_NODE_URL = process.env.AZTEC_NODE_URL || "/aztec";
+/** Always use the Vite/CloudFront proxy path — AZTEC_NODE_URL env var only configures the proxy target. */
+const AZTEC_NODE_URL = "/aztec";
 /** Vite dev server / CloudFront proxy path for the prover (not the actual URL). */
 const PROVER_PROXY_PATH = "/prover";
 
@@ -47,6 +48,12 @@ export const TEE_CONFIGURED = !!process.env.TEE_URL;
 /** Display-friendly TEE URL for the services panel. */
 export const TEE_DISPLAY_URL = process.env.TEE_URL || "";
 
+/** True when SGX_URL was set at build time — enables SGX auto-configuration. */
+export const SGX_CONFIGURED = !!process.env.SGX_URL;
+
+/** Display-friendly SGX URL for the services panel. */
+export const SGX_DISPLAY_URL = process.env.SGX_URL || "";
+
 /** Environment name: "nextnet", "devnet", or undefined (local dev) */
 export const ENV_NAME = process.env.VITE_ENV_NAME || undefined;
 
@@ -67,6 +74,7 @@ export interface AztecState {
   provingMode: ProvingMode;
   uiMode: UiMode;
   teeServerUrl: string;
+  sgxServerUrl: string;
   /** True when the network requires real proofs (not simulated). */
   proofsRequired: boolean;
   feePaymentMethod: SponsoredFeePaymentMethod | undefined;
@@ -85,6 +93,7 @@ export const state: AztecState = {
   provingMode: "local",
   uiMode: "local",
   teeServerUrl: "/tee",
+  sgxServerUrl: "/sgx",
   proofsRequired: false,
   feePaymentMethod: undefined,
 };
@@ -275,19 +284,26 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
       state.prover.setApiUrl(PROVER_PROXY_PATH);
       state.prover.setAttestationConfig({});
       break;
-    case "tee":
+    case "nitro":
       if (teeUrl) state.teeServerUrl = teeUrl;
       state.provingMode = "remote";
       state.prover.setProvingMode("remote");
       state.prover.setApiUrl(state.teeServerUrl);
       state.prover.setAttestationConfig({ requireAttestation: true });
       break;
+    case "sgx":
+      if (teeUrl) state.sgxServerUrl = teeUrl;
+      state.provingMode = "remote";
+      state.prover.setProvingMode("remote");
+      state.prover.setApiUrl(state.sgxServerUrl);
+      state.prover.setAttestationConfig({ requireAttestation: true, maaEndpoint: "/maa" });
+      break;
   }
 }
 
 export async function checkTeeAttestation(
   url: string,
-): Promise<{ reachable: boolean; mode: "nitro" | "standard" | null }> {
+): Promise<{ reachable: boolean; mode: "nitro" | "sgx" | "standard" | null }> {
   try {
     const res = await fetch(`${url}/attestation`, {
       signal: AbortSignal.timeout(5000),

@@ -40,7 +40,7 @@
             <a id="env-switch" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors" href="#"></a>
           </div>
           <p class="mt-1.5 text-xs tracking-wide text-gray-500 uppercase">
-            Compare local, remote &amp; TEE zero-knowledge proving
+            Compare local, remote, Nitro &amp; SGX zero-knowledge proving
           </p>
         </div>
       </header>
@@ -64,10 +64,16 @@
             <span id="teerex-url" class="text-gray-600 ml-auto font-light"></span>
           </div>
           <div class="flex items-center gap-3 text-xs">
-            <span id="tee-status" class="status-dot status-unknown"></span>
-            <span class="text-gray-400 w-28">TEE Enclave</span>
-            <span id="tee-attestation-label" class="text-[10px] text-gray-600">not configured</span>
-            <span id="tee-url" class="text-gray-600 ml-auto font-light"></span>
+            <span id="nitro-status" class="status-dot status-unknown"></span>
+            <span class="text-gray-400 w-28">Nitro Enclave</span>
+            <span id="nitro-attestation-label" class="text-[10px] text-gray-600">not configured</span>
+            <span id="nitro-url" class="text-gray-600 ml-auto font-light"></span>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span id="sgx-status" class="status-dot status-unknown"></span>
+            <span class="text-gray-400 w-28">SGX Enclave</span>
+            <span id="sgx-attestation-label" class="text-[10px] text-gray-600">not configured</span>
+            <span id="sgx-url" class="text-gray-600 ml-auto font-light"></span>
           </div>
           <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
             <span id="wallet-dot" class="status-dot status-unknown"></span>
@@ -98,12 +104,20 @@
             ▸ Remote <span class="text-gray-600 normal-case tracking-normal">(server)</span>
           </button>
           <button
-            id="mode-tee"
+            id="mode-nitro"
             disabled
-            title="TEE proving not configured"
+            title="Nitro proving not configured"
             class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
           >
-            ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
+            ▸ Nitro <span class="text-gray-600 normal-case tracking-normal">(aws)</span>
+          </button>
+          <button
+            id="mode-sgx"
+            disabled
+            title="SGX proving not configured"
+            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+          >
+            ▸ SGX <span class="text-gray-600 normal-case tracking-normal">(intel)</span>
           </button>
         </div>
       </section>
@@ -140,7 +154,7 @@
         <div class="border-b border-gray-800 px-4 py-1.5">
           <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
         </div>
-        <div class="p-3 grid grid-cols-3 gap-2">
+        <div class="p-3 grid grid-cols-4 gap-2">
           <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
             <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
             <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
@@ -153,11 +167,17 @@
             <div id="tag-remote" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
             <div id="steps-remote" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
           </div>
-          <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
-            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>
-            <div id="time-tee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-            <div id="tag-tee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-            <div id="steps-tee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+          <div id="result-nitro" class="border border-gray-800 p-4 text-center transition-colors">
+            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Nitro (aws)</div>
+            <div id="time-nitro" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+            <div id="tag-nitro" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+            <div id="steps-nitro" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+          </div>
+          <div id="result-sgx" class="border border-gray-800 p-4 text-center transition-colors">
+            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">SGX (intel)</div>
+            <div id="time-sgx" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+            <div id="tag-sgx" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+            <div id="steps-sgx" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
           </div>
         </div>
       </section>

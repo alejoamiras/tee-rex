@@ -134,8 +134,9 @@ function serializeFrames(): FrameFn {
   };
 }
 
-function fetchAttestationFrames(mode: "tee" | "remote"): FrameFn {
-  const title = mode === "tee" ? "NITRO ATTESTATION" : "SERVER KEY";
+function fetchAttestationFrames(mode: UiMode): FrameFn {
+  const title =
+    mode === "nitro" ? "NITRO ATTESTATION" : mode === "sgx" ? "SGX ATTESTATION" : "SERVER KEY";
   return (tick) =>
     box([`> fetching key...     ${spin(tick)}`, `  ${progressBar(tick, 22)}`], "single", title);
 }
@@ -155,8 +156,8 @@ function encryptFrames(): FrameFn {
   };
 }
 
-function transmitFrames(mode: "tee" | "remote"): FrameFn {
-  const target = mode === "tee" ? "ENCLAVE" : "SERVER";
+function transmitFrames(mode: UiMode): FrameFn {
+  const target = mode === "nitro" || mode === "sgx" ? "ENCLAVE" : "SERVER";
   const trackW = 24;
   const slots = trackW - 4; // positions for >>> within the track
   return (tick) => {
@@ -167,7 +168,8 @@ function transmitFrames(mode: "tee" | "remote"): FrameFn {
 }
 
 const MODE_CONFIG: Record<UiMode, { border: Border; title: string; wrap?: Border }> = {
-  tee: { border: "double", title: "AWS NITRO ENCLAVE" },
+  nitro: { border: "double", title: "AWS NITRO ENCLAVE" },
+  sgx: { border: "double", title: "INTEL SGX ENCLAVE" },
   remote: { border: "single", title: "REMOTE SERVER" },
   local: { border: "single", title: "wasm prover", wrap: "round" },
 };
@@ -286,11 +288,11 @@ export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
     case "serialize":
       return serializeFrames();
     case "fetch-attestation":
-      return fetchAttestationFrames(mode === "tee" ? "tee" : "remote");
+      return fetchAttestationFrames(mode);
     case "encrypt":
       return encryptFrames();
     case "transmit":
-      return transmitFrames(mode === "tee" ? "tee" : "remote");
+      return transmitFrames(mode);
     case "proving":
     case "app:prove":
       return provingFrames(mode);

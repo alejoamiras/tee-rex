@@ -16,6 +16,7 @@ import {
 import { EncryptionService } from "./lib/encryption-service.js";
 import { setupLogging } from "./lib/logging.js";
 import { ProverService } from "./lib/prover-service.js";
+import { SgxWorkerClient } from "./lib/sgx-worker-client.js";
 
 declare global {
   namespace Express {
@@ -31,6 +32,7 @@ export interface AppDependencies {
   prover: ProverService;
   encryption: EncryptionService;
   attestation: AttestationService;
+  sgxWorker?: SgxWorkerClient;
 }
 
 export function createApp(deps: AppDependencies): express.Express {
@@ -82,33 +84,45 @@ export function createApp(deps: AppDependencies): express.Express {
           .json({ error: "Invalid request body: expected { data: string }", requestId: req.id });
         return;
       }
-      let decryptedData: unknown;
-      try {
-        const encryptedData = Base64.toBytes(body.data.data);
-        decryptedData = JSON.parse(
-          Bytes.toString(
-            await deps.encryption.decrypt({
-              data: encryptedData,
-            }),
-          ),
-        );
-      } catch (err) {
-        logger.warn("Failed to decrypt/parse prove payload", {
-          requestId: req.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        res.status(400).json({ error: "Failed to decrypt request payload", requestId: req.id });
-        return;
-      }
 
-      const data = z
-        .object({ executionSteps: z.array(PrivateExecutionStepSchema) })
-        .parse(decryptedData);
-      const proof = await deps.prover.createChonkProof(data.executionSteps);
-      logger.info("Prove request completed", { requestId: req.id });
-      res.json({
-        proof: Base64.fromBytes(proof.toBuffer()), // proof will be publicly posted on chain, so no need to encrypt
-      });
+      if (deps.sgxWorker) {
+        // SGX mode: forward encrypted data directly to the enclave worker.
+        // The server NEVER sees plaintext — the worker decrypts, proves,
+        // and returns only the proof bytes.
+        const encryptedBytes = Base64.toBytes(body.data.data);
+        const proofBuffer = await deps.sgxWorker.prove(Buffer.from(encryptedBytes));
+        logger.info("SGX prove request completed", { requestId: req.id });
+        res.json({ proof: Base64.fromBytes(proofBuffer) });
+      } else {
+        // Standard/Nitro mode: decrypt + parse + prove on the server.
+        let decryptedData: unknown;
+        try {
+          const encryptedData = Base64.toBytes(body.data.data);
+          decryptedData = JSON.parse(
+            Bytes.toString(
+              await deps.encryption.decrypt({
+                data: encryptedData,
+              }),
+            ),
+          );
+        } catch (err) {
+          logger.warn("Failed to decrypt/parse prove payload", {
+            requestId: req.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          res.status(400).json({ error: "Failed to decrypt request payload", requestId: req.id });
+          return;
+        }
+
+        const data = z
+          .object({ executionSteps: z.array(PrivateExecutionStepSchema) })
+          .parse(decryptedData);
+        const proof = await deps.prover.createChonkProof(data.executionSteps);
+        logger.info("Prove request completed", { requestId: req.id });
+        res.json({
+          proof: Base64.fromBytes(proof.toBuffer()), // proof will be publicly posted on chain, so no need to encrypt
+        });
+      }
     } catch (err) {
       next(err);
     }
@@ -164,14 +178,23 @@ if (import.meta.main) {
   await setupLogging();
 
   const teeMode = z
-    .enum(["standard", "nitro"])
+    .enum(["standard", "nitro", "sgx"])
     .catch("standard")
     .parse(process.env.TEE_MODE) as TeeMode;
+
+  const sgxWorker =
+    teeMode === "sgx"
+      ? new SgxWorkerClient(
+          process.env.SGX_WORKER_HOST || "127.0.0.1",
+          Number.parseInt(process.env.SGX_WORKER_PORT || "5000", 10),
+        )
+      : undefined;
 
   const app = createApp({
     prover: new ProverService(),
     encryption: new EncryptionService(),
-    attestation: createAttestationService(teeMode),
+    attestation: createAttestationService(teeMode, sgxWorker),
+    sgxWorker,
   });
 
   const port = process.env.PORT || 4000;
