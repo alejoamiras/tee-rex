@@ -13,10 +13,12 @@ loader.env.HOME = "/tmp"
 # CRS files location — bb reads these for SRS (structured reference string)
 loader.env.CRS_PATH = "/crs"
 
-# Force single-threaded mode to avoid Gramine pthread mutex issues
-loader.env.OMP_NUM_THREADS = "1"
-loader.env.BB_NUM_THREADS = "1"
-loader.env.RAYON_NUM_THREADS = "1"
+# Control bb thread count — the official mechanism is HARDWARE_CONCURRENCY
+# (OMP_NUM_THREADS/RAYON_NUM_THREADS have no effect on bb)
+loader.env.HARDWARE_CONCURRENCY = "1"
+
+# Prevent glibc from allocating 64MB per-thread arenas (SGX memory optimization)
+loader.env.MALLOC_ARENA_MAX = "1"
 
 # Insecure: allow command-line args and env forwarding (remove in production)
 loader.insecure__use_cmdline_argv = true
