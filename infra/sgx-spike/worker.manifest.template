@@ -28,7 +28,7 @@ fs.mounts = [
 
 # SGX configuration
 sgx.debug = false
-sgx.enclave_size = "16G"
+sgx.enclave_size = "4G"
 sgx.max_threads = 32
 sgx.remote_attestation = "{{ ra_type }}"
 

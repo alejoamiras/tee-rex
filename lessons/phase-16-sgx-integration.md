@@ -46,16 +46,22 @@ bb 5.0.0-nightly.20260223 crashes consistently at the 4th circuit (`private_kern
 - "corrupted size vs. prev_size" (glibc heap corruption)
 - "Invalid argument"
 
-The crash is in bb itself, not in our wrapper code. The binary hash matches local (md5: `31c6baf7cf86b901afa54080ed7c9eb9`). The same binary works locally (4.2s, proofSize=2913). Inside SGX with 8MB EPC (everything else paged), bb processes 3 circuits then crashes on the 4th.
+The crash is in bb itself, not in our wrapper code. The binary hash matches local (md5: `31c6baf7cf86b901afa54080ed7c9eb9`). The same binary works outside SGX on the same VM (4 threads, 283 MiB peak, 93,216-byte proof). Inside the Gramine enclave, bb processes 3 circuits then crashes deterministically on the 4th.
 
-Previous successful run (86.3s, 93K proof) was with the same binary and inputs of similar structure. The crash may be caused by:
-1. Memory corruption during EPC paging under pressure
-2. glibc allocator issues with Gramine's page fault handler
-3. Non-deterministic memory layout leading to intermittent corruption
+**EPC is NOT the bottleneck.** The DC4ds_v3 VM has 16GB EPC (`0x400000000`), and `sgx.enclave_size = "4G"`. bb's 283MB working set fits comfortably. The crash is a Gramine compatibility issue, not memory pressure.
 
-**Confirmed: SGX-only issue.** Running the same bb binary with the same msgpack data directly on the VM (outside SGX) succeeds perfectly: 11 circuits, peak 283 MiB, 93,216-byte proof. The crash only happens inside the Gramine enclave with 8MB EPC.
+The crash may be caused by:
+1. Gramine `exec()` child enclave isolation — bb runs in a separate enclave from the Node.js worker, with independent memory management
+2. A Gramine syscall interception bug — "Invalid argument" (EINVAL) suggests a syscall returns an unexpected error inside the child enclave
+3. glibc allocator behavior differences under Gramine's signal/fault handling
 
-**Next steps**: Try with a DCsv3 VM (which has 128MB EPC) instead of DCsv2 (8MB EPC), or investigate Gramine's malloc configuration (e.g., `LD_PRELOAD` with jemalloc/tcmalloc).
+**Confirmed: SGX-only issue.** Running the same bb binary with the same msgpack data directly on the VM (outside SGX) succeeds perfectly: 11 circuits, peak 283 MiB, 93,216-byte proof.
+
+**Next steps**:
+1. Rebuild manifest with `log_level=debug` to identify the failing syscall
+2. Try running bb directly via its own Gramine manifest (not as a child of Node.js exec)
+3. Check Gramine GitHub issues for known `exec()` child enclave bugs
+4. Try `loader.env.MALLOC_ARENA_MAX = "1"` to reduce glibc allocator complexity
 
 **Key lesson**: Gramine `exec()` isolation means child processes (bb) get their own enclave with independent filesystem state. `tmpfs` mounts are per-enclave — use passthrough mounts for shared data between parent and child. Note: passthrough means decrypted data touches host filesystem — acceptable for spike, not production.
 
