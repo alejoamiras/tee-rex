@@ -1,0 +1,51 @@
+# Gramine manifest for Aztec Barretenberg (bb) prover binary.
+# Build: gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu bb.manifest.template bb.manifest
+# Sign:  gramine-sgx-sign --manifest bb.manifest --output bb.manifest.sgx
+# Run:   gramine-sgx bb --version
+
+libos.entrypoint = "/app/bb"
+
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdir }}"
+loader.env.HOME = "/tmp"
+
+# CRS files location — bb reads these for SRS (structured reference string)
+loader.env.CRS_PATH = "/crs"
+
+# Force single-threaded mode to avoid Gramine pthread mutex issues
+loader.env.OMP_NUM_THREADS = "1"
+loader.env.BB_NUM_THREADS = "1"
+loader.env.RAYON_NUM_THREADS = "1"
+
+# Insecure: allow command-line args and env forwarding (remove in production)
+loader.insecure__use_cmdline_argv = true
+loader.insecure__use_host_env = true
+
+fs.mounts = [
+  { path = "/lib",                uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "{{ arch_libdir }}",   uri = "file:{{ arch_libdir }}" },
+  { path = "/usr",                uri = "file:/usr" },
+  { path = "/app/bb",             uri = "file:/app/bb" },
+  { path = "/crs",                uri = "file:/crs" },
+  { path = "/tmp",                uri = "file:/tmp", type = "tmpfs" },
+]
+
+# SGX configuration
+sgx.debug = true
+sgx.enclave_size = "16G"
+sgx.max_threads = 32
+sgx.remote_attestation = "{{ ra_type }}"
+
+sgx.trusted_files = [
+  "file:{{ gramine.libos }}",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/",
+  "file:/usr/{{ arch_libdir }}/",
+  "file:/app/bb",
+]
+
+sgx.allowed_files = [
+  "file:/tmp/",
+  "file:/crs/",
+]
