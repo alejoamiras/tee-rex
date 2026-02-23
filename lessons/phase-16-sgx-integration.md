@@ -53,7 +53,9 @@ Previous successful run (86.3s, 93K proof) was with the same binary and inputs o
 2. glibc allocator issues with Gramine's page fault handler
 3. Non-deterministic memory layout leading to intermittent corruption
 
-**Next steps**: Try with a DCsv3 VM (which has 128MB EPC) instead of DCsv2 (8MB EPC), or investigate Gramine's malloc configuration.
+**Confirmed: SGX-only issue.** Running the same bb binary with the same msgpack data directly on the VM (outside SGX) succeeds perfectly: 11 circuits, peak 283 MiB, 93,216-byte proof. The crash only happens inside the Gramine enclave with 8MB EPC.
+
+**Next steps**: Try with a DCsv3 VM (which has 128MB EPC) instead of DCsv2 (8MB EPC), or investigate Gramine's malloc configuration (e.g., `LD_PRELOAD` with jemalloc/tcmalloc).
 
 **Key lesson**: Gramine `exec()` isolation means child processes (bb) get their own enclave with independent filesystem state. `tmpfs` mounts are per-enclave — use passthrough mounts for shared data between parent and child. Note: passthrough means decrypted data touches host filesystem — acceptable for spike, not production.
 
