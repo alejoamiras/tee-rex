@@ -88,7 +88,7 @@ resource "aws_cloudfront_distribution" "prod" {
 
   # SGX Azure origin (HTTP, port 4000)
   origin {
-    domain_name = var.sgx_prod_fqdn
+    domain_name = azurerm_public_ip.sgx["prod"].fqdn
     origin_id   = "sgx-azure"
 
     custom_origin_config {
@@ -248,9 +248,9 @@ resource "aws_cloudfront_distribution" "devnet" {
     }
   }
 
-  # SGX Azure origin (HTTP, port 4000) — shares prod IP for now
+  # SGX Azure origin (HTTP, port 4000) — shares prod VM for now
   origin {
-    domain_name = var.sgx_prod_fqdn
+    domain_name = azurerm_public_ip.sgx["prod"].fqdn
     origin_id   = "sgx-azure"
 
     custom_origin_config {
