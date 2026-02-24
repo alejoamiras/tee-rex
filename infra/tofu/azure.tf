@@ -20,19 +20,35 @@ locals {
     devnet = "10.1.1.0/24"
     ci     = "10.2.1.0/24"
   }
+  # Prod keeps original "spike" Azure names to avoid destroy/recreate
+  sgx_names = {
+    prod   = "sgx-spike"
+    devnet = "sgx-devnet"
+    ci     = "sgx-ci"
+  }
+  sgx_rg_names = {
+    prod   = "tee-rex-sgx-spike"
+    devnet = "tee-rex-sgx-devnet"
+    ci     = "tee-rex-sgx-ci"
+  }
+  sgx_vm_names = {
+    prod   = "tee-rex-sgx-spike"
+    devnet = "tee-rex-sgx-devnet"
+    ci     = "tee-rex-sgx-ci"
+  }
 }
 
 # Resource groups — single destroy target cleans up everything per env
 resource "azurerm_resource_group" "sgx" {
   for_each = local.sgx_environments
-  name     = "tee-rex-sgx-${each.key}"
+  name     = local.sgx_rg_names[each.key]
   location = local.sgx_location
 }
 
 # Network
 resource "azurerm_virtual_network" "sgx" {
   for_each            = local.sgx_environments
-  name                = "sgx-${each.key}-vnet"
+  name                = "${local.sgx_names[each.key]}-vnet"
   address_space       = [local.sgx_address_spaces[each.key]]
   location            = azurerm_resource_group.sgx[each.key].location
   resource_group_name = azurerm_resource_group.sgx[each.key].name
@@ -40,7 +56,7 @@ resource "azurerm_virtual_network" "sgx" {
 
 resource "azurerm_subnet" "sgx" {
   for_each             = local.sgx_environments
-  name                 = "sgx-${each.key}-subnet"
+  name                 = "${local.sgx_names[each.key]}-subnet"
   resource_group_name  = azurerm_resource_group.sgx[each.key].name
   virtual_network_name = azurerm_virtual_network.sgx[each.key].name
   address_prefixes     = [local.sgx_subnet_prefixes[each.key]]
@@ -48,7 +64,7 @@ resource "azurerm_subnet" "sgx" {
 
 resource "azurerm_network_security_group" "sgx" {
   for_each            = local.sgx_environments
-  name                = "sgx-${each.key}-nsg"
+  name                = "${local.sgx_names[each.key]}-nsg"
   location            = azurerm_resource_group.sgx[each.key].location
   resource_group_name = azurerm_resource_group.sgx[each.key].name
 
@@ -85,7 +101,7 @@ resource "azurerm_subnet_network_security_group_association" "sgx" {
 
 resource "azurerm_public_ip" "sgx" {
   for_each            = local.sgx_environments
-  name                = "sgx-${each.key}-pip"
+  name                = "${local.sgx_names[each.key]}-pip"
   location            = azurerm_resource_group.sgx[each.key].location
   resource_group_name = azurerm_resource_group.sgx[each.key].name
   allocation_method   = "Static"
@@ -94,7 +110,7 @@ resource "azurerm_public_ip" "sgx" {
 
 resource "azurerm_network_interface" "sgx" {
   for_each            = local.sgx_environments
-  name                = "sgx-${each.key}-nic"
+  name                = "${local.sgx_names[each.key]}-nic"
   location            = azurerm_resource_group.sgx[each.key].location
   resource_group_name = azurerm_resource_group.sgx[each.key].name
 
@@ -109,7 +125,7 @@ resource "azurerm_network_interface" "sgx" {
 # VMs — Standard_DC4ds_v3: 4 vCPU, 32GB RAM, 16GB EPC (~$0.45/hr)
 resource "azurerm_linux_virtual_machine" "sgx" {
   for_each            = local.sgx_environments
-  name                = "tee-rex-sgx-${each.key}"
+  name                = local.sgx_vm_names[each.key]
   resource_group_name = azurerm_resource_group.sgx[each.key].name
   location            = azurerm_resource_group.sgx[each.key].location
   size                = "Standard_DC4ds_v3"

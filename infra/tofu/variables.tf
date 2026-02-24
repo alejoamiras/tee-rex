@@ -129,8 +129,8 @@ variable "azure_ssh_public_key" {
   sensitive   = true
 }
 
-variable "sgx_prod_public_ip" {
-  description = "Public IP of the production SGX Azure VM (for CloudFront origin)"
+variable "sgx_prod_fqdn" {
+  description = "FQDN of the production SGX Azure VM (CloudFront requires domain, not IP)"
   type        = string
   default     = ""
 }
