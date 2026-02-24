@@ -1,0 +1,136 @@
+name: _Deploy SGX (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Deployment environment (ci, prod, or devnet)
+        required: false
+        type: string
+        default: "ci"
+    outputs:
+      deployed:
+        description: Whether the SGX enclave was deployed successfully
+        value: ${{ jobs.deploy.outputs.deployed }}
+      sgx_url:
+        description: SGX server URL (http://<public-ip>:4000)
+        value: ${{ jobs.deploy.outputs.sgx_url }}
+
+jobs:
+  deploy:
+    name: Deploy SGX Enclave
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      deployed: ${{ steps.health.outputs.deployed }}
+      sgx_url: ${{ steps.health.outputs.sgx_url }}
+    env:
+      RESOURCE_GROUP: tee-rex-sgx-${{ inputs.environment }}
+      VM_NAME: tee-rex-sgx-${{ inputs.environment }}
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Validate required secrets ────────────────────────────────
+      - name: Validate secrets
+        run: |
+          missing=()
+          [[ -z "${{ secrets.AZURE_CLIENT_ID }}" ]] && missing+=("AZURE_CLIENT_ID")
+          [[ -z "${{ secrets.AZURE_TENANT_ID }}" ]] && missing+=("AZURE_TENANT_ID")
+          [[ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]] && missing+=("AZURE_SUBSCRIPTION_ID")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      # ── Azure login via OIDC ─────────────────────────────────────
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ── Start Azure VM ───────────────────────────────────────────
+      - name: Start Azure VM
+        run: |
+          echo "Starting VM ${VM_NAME} in ${RESOURCE_GROUP}..."
+          az vm start -g "$RESOURCE_GROUP" -n "$VM_NAME"
+          echo "VM started"
+
+          # Wait for Azure agent to be ready (poll with run-command)
+          echo "Waiting for Azure agent..."
+          for i in $(seq 1 30); do
+            if az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM_NAME" \
+              --command-id RunShellScript --scripts "echo ready" \
+              --query 'value[0].message' -o tsv 2>/dev/null | grep -q "ready"; then
+              echo "Agent ready (attempt $i)"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "Agent not ready after 5 minutes"
+              exit 1
+            fi
+            sleep 10
+          done
+
+      # ── Deploy SGX worker ────────────────────────────────────────
+      - name: Deploy SGX worker
+        run: |
+          # Base64-encode deploy files (same pattern as _deploy-tee.yml SSM)
+          WORKER_B64=$(base64 -w0 infra/sgx-spike/worker.js)
+          MANIFEST_B64=$(base64 -w0 infra/sgx-spike/worker.manifest.template)
+          SERVICE_B64=$(base64 -w0 infra/sgx-spike/tee-rex-sgx-worker.service)
+          SCRIPT_B64=$(base64 -w0 infra/sgx-spike/ci-deploy-sgx-remote.sh)
+
+          RESULT=$(az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM_NAME" \
+            --command-id RunShellScript \
+            --scripts "
+              echo '${WORKER_B64}' | base64 -d > /tmp/worker.js
+              echo '${MANIFEST_B64}' | base64 -d > /tmp/worker.manifest.template
+              echo '${SERVICE_B64}' | base64 -d > /tmp/tee-rex-sgx-worker.service
+              echo '${SCRIPT_B64}' | base64 -d > /tmp/deploy.sh
+              chmod +x /tmp/deploy.sh
+              /tmp/deploy.sh
+            " \
+            --query 'value[0].message' -o tsv)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -q "deployed successfully"; then
+            echo "SGX worker deployed"
+          else
+            echo "::error::SGX worker deployment may have failed — check output above"
+            exit 1
+          fi
+
+      # ── Health Check ─────────────────────────────────────────────
+      - name: Health check
+        id: health
+        run: |
+          # Get the VM's public IP for the sgx_url output
+          PUBLIC_IP=$(az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -d \
+            --query publicIps -o tsv 2>/dev/null || echo "")
+
+          for i in $(seq 1 30); do
+            RESULT=$(az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM_NAME" \
+              --command-id RunShellScript \
+              --scripts "curl -sf http://localhost:4000/attestation | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[\"mode\"])'" \
+              --query 'value[0].message' -o tsv 2>/dev/null || echo "")
+
+            if echo "$RESULT" | grep -q "sgx"; then
+              echo "SGX enclave healthy (attempt $i)"
+              echo "deployed=true" >> "$GITHUB_OUTPUT"
+              if [ -n "$PUBLIC_IP" ]; then
+                echo "sgx_url=http://${PUBLIC_IP}:4000" >> "$GITHUB_OUTPUT"
+              fi
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Health check failed after 2.5 minutes"
+          echo "deployed=false" >> "$GITHUB_OUTPUT"
+          exit 1

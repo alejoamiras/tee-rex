@@ -92,6 +92,16 @@ jobs:
       image_tag: prod-prover
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
+  # ── Deploy SGX enclave to production ──────────────────────────────
+  deploy-sgx:
+    name: Deploy SGX (prod)
+    needs: changes
+    if: needs.changes.outputs.servers == 'true'
+    uses: ./.github/workflows/_deploy-sgx.yml
+    secrets: inherit
+    with:
+      environment: prod
+
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:
     name: Deploy App (prod)
@@ -113,6 +123,7 @@ jobs:
           AZTEC_NODE_URL: https://nextnet.aztec-labs.com
           PROVER_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/tee
+          SGX_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/sgx
           VITE_ENV_NAME: nextnet
 
       - name: Configure AWS credentials
@@ -184,7 +195,7 @@ jobs:
   # ── Post-deploy validation against nextnet ───────────────────────
   validate-prod:
     name: Validate Prod (nextnet)
-    needs: [changes, deploy-tee, deploy-prover, deploy-app]
+    needs: [changes, deploy-tee, deploy-prover, deploy-sgx, deploy-app]
     if: "!cancelled() && (needs.changes.outputs.servers == 'true' || needs.changes.outputs.app == 'true')"
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -262,6 +273,7 @@ jobs:
           AZTEC_NODE_URL: https://nextnet.aztec-labs.com
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SGX_URL: http://${{ secrets.SGX_PROD_VM_IP }}:4000
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 

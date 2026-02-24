@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy_servers:
-        description: "Deploy TEE + Prover servers"
+        description: "Deploy TEE + Prover + SGX servers"
         type: boolean
         default: true
       deploy_app:
@@ -56,10 +56,19 @@ jobs:
       image_tag: devnet-prover
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
+  # ── Deploy SGX enclave to devnet ────────────────────────────────
+  deploy-sgx:
+    name: Deploy SGX (devnet)
+    if: inputs.deploy_servers
+    uses: ./.github/workflows/_deploy-sgx.yml
+    secrets: inherit
+    with:
+      environment: devnet
+
   # ── Validate devnet (BLOCKING — must pass before app/SDK) ──────
   validate-devnet:
     name: Validate Devnet
-    needs: [deploy-tee, deploy-prover]
+    needs: [deploy-tee, deploy-prover, deploy-sgx]
     if: inputs.deploy_servers
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -134,6 +143,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SGX_URL: http://${{ secrets.SGX_DEVNET_VM_IP }}:4000
         run: bun run --cwd packages/sdk test:e2e
 
       - name: Install Playwright browsers
@@ -144,6 +154,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SGX_URL: http://${{ secrets.SGX_DEVNET_VM_IP }}:4000
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 
@@ -177,6 +188,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.DEVNET_AZTEC_NODE_URL }}
           PROVER_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/tee
+          SGX_URL: ${{ secrets.DEVNET_CLOUDFRONT_URL }}/sgx
           VITE_ENV_NAME: devnet
 
       - name: Configure AWS credentials

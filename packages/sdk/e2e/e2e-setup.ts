@@ -40,6 +40,8 @@ export const config = {
   proverUrl: process.env.PROVER_URL || "http://localhost:4000",
   /** Optional TEE server URL — TEE tests are skipped when not set. */
   teeUrl: process.env.TEE_URL || "",
+  /** Optional SGX server URL — SGX tests are skipped when not set. */
+  sgxUrl: process.env.SGX_URL || "",
 };
 
 /** True when pointing at a local sandbox (default). */

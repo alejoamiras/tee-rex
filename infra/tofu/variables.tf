@@ -114,11 +114,11 @@ variable "devnet_cloudfront_aliases" {
 }
 
 # -----------------------------------------------------------------------------
-# Azure — SGX spike (Phase 15E)
+# Azure — SGX VMs (prod, devnet, ci)
 # -----------------------------------------------------------------------------
 
 variable "azure_subscription_id" {
-  description = "Azure subscription ID for SGX spike resources"
+  description = "Azure subscription ID for SGX resources"
   type        = string
   sensitive   = true
 }
@@ -127,4 +127,10 @@ variable "azure_ssh_public_key" {
   description = "SSH public key for Azure SGX VM access"
   type        = string
   sensitive   = true
+}
+
+variable "sgx_prod_public_ip" {
+  description = "Public IP of the production SGX Azure VM (for CloudFront origin)"
+  type        = string
+  default     = ""
 }

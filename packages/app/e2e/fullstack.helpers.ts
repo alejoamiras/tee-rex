@@ -58,7 +58,7 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 /** Deploy a test account and assert all UI state transitions. */
 export async function deployAndAssert(
   page: Page,
-  mode: "local" | "remote" | "tee",
+  mode: "local" | "remote" | "nitro" | "sgx",
   deployCount: Record<string, number>,
 ): Promise<void> {
   const expectedTag = deployCount[mode] === 0 ? "cold" : "warm";
@@ -104,7 +104,7 @@ export async function deployAndAssert(
 /** Run token flow and assert all UI state transitions. */
 export async function runTokenFlowAndAssert(
   page: Page,
-  mode: "local" | "remote" | "tee",
+  mode: "local" | "remote" | "nitro" | "sgx",
 ): Promise<void> {
   await page.click("#token-flow-btn");
 
@@ -143,8 +143,14 @@ export async function runTokenFlowAndAssert(
   await expect(page.locator("#token-flow-btn")).toBeEnabled();
 }
 
-/** Verify TEE attestation passed (auto-checked on init when TEE_URL is set). */
-export async function assertTeeAttested(page: Page): Promise<void> {
-  await expect(page.locator("#tee-status")).toHaveClass(/status-online/, { timeout: 30_000 });
-  await expect(page.locator("#tee-attestation-label")).toHaveText("attested");
+/** Verify Nitro attestation passed (auto-checked on init when TEE_URL is set). */
+export async function assertNitroAttested(page: Page): Promise<void> {
+  await expect(page.locator("#nitro-status")).toHaveClass(/status-online/, { timeout: 30_000 });
+  await expect(page.locator("#nitro-attestation-label")).toHaveText("attested");
+}
+
+/** Verify SGX attestation passed (auto-checked on init when SGX_URL is set). */
+export async function assertSgxAttested(page: Page): Promise<void> {
+  await expect(page.locator("#sgx-status")).toHaveClass(/status-online/, { timeout: 30_000 });
+  await expect(page.locator("#sgx-attestation-label")).toHaveText("attested");
 }

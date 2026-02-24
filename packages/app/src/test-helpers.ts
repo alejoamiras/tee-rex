@@ -12,10 +12,14 @@ export function setupDOM(): void {
     <span id="wallet-state"></span>
     <button id="mode-local"></button>
     <button id="mode-remote" disabled></button>
-    <button id="mode-tee" disabled></button>
-    <span id="tee-status" class="status-dot status-unknown"></span>
-    <span id="tee-attestation-label"></span>
-    <span id="tee-url"></span>
+    <button id="mode-nitro" disabled></button>
+    <button id="mode-sgx" disabled></button>
+    <span id="nitro-status" class="status-dot status-unknown"></span>
+    <span id="nitro-attestation-label"></span>
+    <span id="nitro-url"></span>
+    <span id="sgx-status" class="status-dot status-unknown"></span>
+    <span id="sgx-attestation-label"></span>
+    <span id="sgx-url"></span>
     <button id="deploy-btn" disabled></button>
     <button id="token-flow-btn" disabled></button>
     <div id="progress" class="hidden">
@@ -30,10 +34,14 @@ export function setupDOM(): void {
     <div id="time-remote"></div>
     <div id="tag-remote"></div>
     <div id="steps-remote" class="hidden"></div>
-    <div id="result-tee"></div>
-    <div id="time-tee"></div>
-    <div id="tag-tee"></div>
-    <div id="steps-tee" class="hidden"></div>
+    <div id="result-nitro"></div>
+    <div id="time-nitro"></div>
+    <div id="tag-nitro"></div>
+    <div id="steps-nitro" class="hidden"></div>
+    <div id="result-sgx"></div>
+    <div id="time-sgx"></div>
+    <div id="tag-sgx"></div>
+    <div id="steps-sgx" class="hidden"></div>
     <div id="log"></div>
     <span id="log-count"></span>
   `;
