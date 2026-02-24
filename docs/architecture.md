@@ -29,20 +29,20 @@ The SDK encrypts proving inputs so that only the enclave can read them, the encl
                                   │          │          │
               ┌───────────────────┘          │          └───────────────────┐
               ▼                              ▼                              ▼
-┌──────────────────────┐  ┌──────────────────────────────┐  ┌──────────────────────────────┐
-│   Prover EC2 (AWS)   │  │    TEE EC2 (AWS Nitro)       │  │    SGX VM (Azure DCdsv3)     │
-│                      │  │                              │  │                              │
-│  Express + bb (WASM) │  │  socat TCP:4000↔vsock:16:5K  │  │  Express (outside SGX)       │
-│  No attestation      │  │  ┌────────────────────────┐  │  │  ┌────────────────────────┐  │
-│  Standard mode       │  │  │   Nitro Enclave        │  │  │  │  Gramine SGX Enclave   │  │
-│                      │  │  │                        │  │  │  │                        │  │
-│                      │  │  │  Express + bb (WASM)   │  │  │  │  Node.js worker.js     │  │
-│                      │  │  │  NSM hardware (/dev/nsm)│  │  │  │  bb binary (native)    │  │
-│                      │  │  │  curve25519 keys       │  │  │  │  DCAP (/dev/attestation)│  │
-│                      │  │  └────────────────────────┘  │  │  │  P-256 keys             │  │
-│                      │  │  No network, no disk, no SSH │  │  │  └────────────────────────┘  │
-└──────────────────────┘  └──────────────────────────────┘  │  TCP:5000 (loopback only)    │
-                                                            └──────────────────────────────┘
+┌──────────────────────┐  ┌────────────────────────────────┐  ┌────────────────────────────────┐
+│   Prover EC2 (AWS)   │  │     TEE EC2 (AWS Nitro)        │  │     SGX VM (Azure DCdsv3)      │
+│                      │  │                                │  │                                │
+│  Express + bb (WASM) │  │  socat TCP:4000↔vsock:16:5K    │  │  Express (outside SGX)         │
+│  No attestation      │  │  ┌──────────────────────────┐  │  │  ┌──────────────────────────┐  │
+│  Standard mode       │  │  │  Nitro Enclave           │  │  │  │  Gramine SGX Enclave     │  │
+│                      │  │  │                          │  │  │  │                          │  │
+│                      │  │  │  Express + bb (WASM)     │  │  │  │  Node.js worker.js       │  │
+│                      │  │  │  NSM hardware (/dev/nsm) │  │  │  │  bb binary (native)      │  │
+│                      │  │  │  curve25519 keys         │  │  │  │  DCAP (/dev/attestation)  │  │
+│                      │  │  └──────────────────────────┘  │  │  │  P-256 keys               │  │
+│                      │  │  No network, no disk, no SSH   │  │  └──────────────────────────┘  │
+│                      │  │                                │  │  TCP:5000 (loopback only)      │
+└──────────────────────┘  └────────────────────────────────┘  └────────────────────────────────┘
 ```
 
 ## Four Proving Modes
@@ -219,10 +219,11 @@ Single state file in S3 (`tee-rex-tofu-state`, eu-west-2) manages all environmen
 ### CloudFront Routing
 
 ```
-nextnet.tee-rex.dev (prod)          devnet.tee-rex.dev
-├── /*         → S3 bucket           ├── /*         → S3 bucket
-├── /prover/*  → Prover EC2:80       ├── /prover/*  → Prover EC2:80
-└── /tee/*     → TEE EC2:4000        └── /tee/*     → TEE EC2:4000
+nextnet.tee-rex.dev (prod)            devnet.tee-rex.dev
+├── /*         → S3 bucket             ├── /*         → S3 bucket
+├── /prover/*  → Prover EC2:80         ├── /prover/*  → Prover EC2:80
+├── /tee/*     → TEE EC2:4000          ├── /tee/*     → TEE EC2:4000
+└── /sgx/*     → SGX VM:4000           └── /sgx/*     → SGX VM:4000
 ```
 
 CloudFront Functions strip the path prefix at viewer-request (`/prover/prove` → `/prove`).
