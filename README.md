@@ -16,13 +16,16 @@
   **[nextnet.tee-rex.dev](https://nextnet.tee-rex.dev)** · **[devnet.tee-rex.dev](https://devnet.tee-rex.dev)**
 </div>
 
-Prove [Aztec](https://aztec.network) transactions inside an AWS Nitro Enclave. The SDK encrypts proving inputs so that only the enclave can read them, generates the proof inside the TEE, and returns it to the client.
+Prove [Aztec](https://aztec.network) transactions inside hardware-isolated Trusted Execution Environments. Supports **two TEE backends** — AWS Nitro Enclaves and Intel SGX (via Gramine) — giving clients a choice of trust roots and cloud providers.
+
+The SDK encrypts proving inputs so that only the enclave can read them, the enclave generates the proof, and returns the public proof to the client.
 
 ## Features
 
-- Delegate Aztec transaction proving to a TEE (AWS Nitro Enclave)
-- Encrypt sensitive data with TEE-attested encryption keys (curve25519 + AES-256-GCM)
-- Verify Nitro attestation documents (COSE_Sign1, certificate chain, PCR values)
+- Delegate Aztec transaction proving to a TEE (AWS Nitro Enclave or Intel SGX)
+- Encrypt sensitive data with TEE-attested encryption keys (OpenPGP)
+- Verify Nitro attestation (COSE_Sign1, certificate chain, PCR values)
+- Verify SGX attestation (DCAP quote via Azure MAA, MRENCLAVE/MRSIGNER)
 - Drop-in replacement for Aztec's default prover ([SDK docs](packages/sdk/README.md))
 - Seamless fallback to local WASM proving
 - Use the hosted TEE or run your own
@@ -54,12 +57,15 @@ See the [SDK README](packages/sdk/README.md) for the full API reference.
 tee-rex/
 ├── packages/
 │   ├── sdk/       → @alejoamiras/tee-rex (npm package)
-│   │              Drop-in Aztec prover: local (WASM) or remote (TEE)
-│   ├── server/    → Express server (runs in Nitro Enclave or standalone)
+│   │              Drop-in Aztec prover: local/remote/nitro/sgx
+│   ├── server/    → Express server (TEE_MODE=standard|nitro|sgx)
 │   │              Handles /prove, /attestation endpoints
-│   └── app/       → Vite frontend demo (local/remote/TEE mode toggle)
-├── infra/         → Deploy scripts, IAM policies, CloudFront config
-└── docs/          → Architecture diagrams, CI pipeline reference
+│   └── app/       → Vite frontend demo (4-mode toggle)
+├── infra/
+│   ├── tofu/      → OpenTofu IaC (AWS + Azure, single state file)
+│   ├── sgx-spike/ → SGX Gramine worker, manifests, deploy scripts
+│   └── *.sh       → Nitro deploy scripts, enclave management
+└── docs/          → Architecture, SGX deployment, CI pipeline
 ```
 
 For architecture diagrams and detailed flow descriptions, see [docs/architecture.md](docs/architecture.md).
@@ -90,7 +96,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 | Document | Description |
 |----------|-------------|
 | [SDK README](packages/sdk/README.md) | SDK installation, API reference, usage examples |
-| [Architecture](docs/architecture.md) | System diagrams, proving flow, Docker strategy |
+| [Architecture](docs/architecture.md) | Dual-TEE system overview, Nitro + SGX data flows, infra layout |
+| [How It Works](docs/how-it-works.md) | Attestation protocols, security properties, glossary |
+| [SGX Deployment](docs/sgx-deployment.md) | Step-by-step SGX provisioning, manifest reference, troubleshooting |
 | [CI Pipeline](docs/ci-pipeline.md) | Workflow reference, change detection, deploy logic |
 | [CLAUDE.md](CLAUDE.md) | Full development roadmap and architectural decisions |
 

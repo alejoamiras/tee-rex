@@ -5,6 +5,8 @@ Delegate [Aztec](https://aztec.network) transaction proving to a Trusted Executi
 [![npm](https://img.shields.io/npm/v/@alejoamiras/tee-rex)](https://www.npmjs.com/package/@alejoamiras/tee-rex)
 [![SDK](https://github.com/alejoamiras/tee-rex/actions/workflows/sdk.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/sdk.yml)
 
+Supports **two TEE backends**: AWS Nitro Enclaves and Intel SGX (via Gramine). The SDK auto-detects the backend from the server's `/attestation` response and handles encryption, attestation verification, and proof deserialization transparently.
+
 ## Installation
 
 ```sh
@@ -48,13 +50,18 @@ prover.setProvingMode(ProvingMode.local);
 ### Configure attestation verification
 
 ```ts
+// Nitro Enclave attestation (AWS)
 prover.setAttestationConfig({
-  // reject servers not running in a TEE
   requireAttestation: true,
-  // verify enclave identity via PCR values
   expectedPCRs: { 0: "abc123..." },
-  // attestation freshness (default: 5 minutes)
   maxAgeMs: 5 * 60 * 1000,
+});
+
+// SGX attestation (Intel, via Azure MAA)
+prover.setAttestationConfig({
+  requireAttestation: true,
+  expectedMrEnclave: "398bdbd5122052...",
+  expectedMrSigner: "a1b2c3d4e5f6...",
 });
 ```
 
@@ -63,7 +70,7 @@ prover.setAttestationConfig({
 ### `TeeRexProver`
 
 Aztec private kernel prover that can generate proofs locally or on a remote
-tee-rex server running inside an AWS Nitro Enclave.
+tee-rex server running inside an AWS Nitro Enclave or Intel SGX enclave.
 
 ```ts
 class TeeRexProver extends BBLazyPrivateKernelProver {
@@ -79,7 +86,7 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 - **`...args`** — forwarded to `BBLazyPrivateKernelProver` (typically a `CircuitSimulator` instance)
 - **`setProvingMode(mode)`** — switch between `"remote"` (TEE) and `"local"` (WASM) proving
 - **`setApiUrl(url)`** — update the tee-rex server URL at runtime
-- **`setAttestationConfig(config)`** — configure attestation verification (PCR checks, freshness, require TEE)
+- **`setAttestationConfig(config)`** — configure attestation verification (PCR/MRENCLAVE checks, freshness, require TEE)
 - **`createChonkProof(steps)`** — overrides the parent to route proofs through the TEE server in remote mode
 
 ### `ProvingMode`
@@ -94,7 +101,10 @@ type ProvingMode = "local" | "remote";
 ```ts
 interface TeeRexAttestationConfig {
   requireAttestation?: boolean;  // reject servers in standard (non-TEE) mode
-  expectedPCRs?: Record<number, string>;  // expected PCR values (hex strings)
+  expectedPCRs?: Record<number, string>;  // Nitro: expected PCR values (hex)
+  expectedMrEnclave?: string;  // SGX: expected MRENCLAVE (hex)
+  expectedMrSigner?: string;   // SGX: expected MRSIGNER (hex)
+  maaEndpoint?: string;  // SGX: Azure MAA endpoint (default: shared East US)
   maxAgeMs?: number;  // max attestation age in ms (default: 5 min)
 }
 ```
@@ -110,11 +120,24 @@ function verifyNitroAttestation(
 ): Promise<{ publicKey: string; document: NitroAttestationDocument }>
 ```
 
-### `AttestationError`
+### `verifySgxAttestation`
 
-Error thrown when attestation verification fails. Includes a machine-readable `code` for programmatic handling.
+Verify an SGX DCAP attestation quote via Azure MAA and extract the public key. Used internally by `TeeRexProver` but exported for advanced use cases.
 
 ```ts
+function verifySgxAttestation(
+  quoteBase64: string,
+  publicKey: string,
+  options?: SgxAttestationVerifyOptions,
+): Promise<SgxAttestationResult>
+```
+
+### `AttestationError` / `SgxAttestationError`
+
+Errors thrown when attestation verification fails. Include a machine-readable `code` for programmatic handling.
+
+```ts
+// Nitro
 class AttestationError extends Error {
   readonly code: AttestationErrorCode;
 }
@@ -129,6 +152,21 @@ const AttestationErrorCode = {
   NONCE_MISMATCH: "NONCE_MISMATCH",
   MISSING_KEY: "MISSING_KEY",
 } as const;
+
+// SGX
+class SgxAttestationError extends Error {
+  readonly code: SgxAttestationErrorCode;
+}
+
+const SgxAttestationErrorCode = {
+  INVALID_QUOTE: "INVALID_QUOTE",
+  MAA_VERIFICATION_FAILED: "MAA_VERIFICATION_FAILED",
+  JWT_VERIFICATION_FAILED: "JWT_VERIFICATION_FAILED",
+  MRENCLAVE_MISMATCH: "MRENCLAVE_MISMATCH",
+  MRSIGNER_MISMATCH: "MRSIGNER_MISMATCH",
+  EXPIRED: "EXPIRED",
+  REPORT_DATA_MISMATCH: "REPORT_DATA_MISMATCH",
+} as const;
 ```
 
 ## How It Works
@@ -137,13 +175,20 @@ const AttestationErrorCode = {
 
 In **remote** mode, `createChonkProof`:
 
-1. Fetches the server's attestation document from `/attestation`
-2. Verifies the Nitro attestation (COSE_Sign1 signature, certificate chain, PCRs)
-3. Encrypts the proving inputs with the server's attested public key (curve25519 + AES-256-GCM)
-4. POSTs the encrypted data to `/prove` (with automatic retry on transient failures)
-5. Deserializes and returns the proof
+1. Fetches the server's attestation from `/attestation`
+2. Auto-detects the TEE backend from the response (`mode: "nitro"` or `mode: "sgx"`)
+3. Verifies attestation:
+   - **Nitro**: COSE_Sign1 signature → AWS Nitro Root CA certificate chain → PCR values
+   - **SGX**: DCAP quote → Azure MAA → JWT signature verification → MRENCLAVE/MRSIGNER → public key hash binding
+4. Encrypts the proving inputs with the enclave's attested public key (OpenPGP):
+   - **Nitro**: curve25519 + AES-256-GCM
+   - **SGX**: P-256 + AES-256-GCM (Gramine's OpenSSL lacks curve25519)
+5. POSTs the encrypted data to `/prove`
+6. Deserializes and returns the proof
 
 In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createChonkProof` which runs Barretenberg WASM in the browser or Node.js.
+
+The server never sees plaintext in either TEE mode — it forwards the encrypted blob to the enclave, which decrypts and proves.
 
 ## Requirements
 
