@@ -27,8 +27,8 @@ This creates:
 
 Get the VM IP:
 ```bash
-tofu output sgx_spike_public_ip    # e.g., 20.121.207.246
-tofu output sgx_spike_ssh          # ssh azureuser@20.121.207.246
+tofu output sgx_spike_public_ip    # e.g., <VM_IP>
+tofu output sgx_spike_ssh          # ssh azureuser@<VM_IP>
 ```
 
 ### VM Size Selection
@@ -94,7 +94,7 @@ node -e "console.log(require('@aztec/bb.js/package.json').version)"
 Use the deploy script:
 
 ```bash
-export SGX_VM_IP=20.121.207.246
+export SGX_VM_IP=<VM_IP>  # get from: tofu output sgx_spike_public_ip
 ./infra/sgx-spike/ci-deploy-sgx.sh
 ```
 
