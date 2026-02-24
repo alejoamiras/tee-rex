@@ -16,7 +16,7 @@ A **Trusted Execution Environment (TEE)** is a hardware-isolated enclave that ru
 2. **Nobody can tamper with the code** — the enclave runs exactly the code it was built with
 3. **It can prove what it's running** — the hardware generates a cryptographic attestation document signed by the chip manufacturer
 
-TEE-Rex uses **AWS Nitro Enclaves** as the TEE. The idea:
+TEE-Rex supports **two TEE backends** — AWS Nitro Enclaves and Intel SGX (via Gramine) — providing a choice of trust roots and cloud providers. The idea:
 
 - The client encrypts its proving inputs with a key that only the enclave holds
 - The enclave decrypts, generates the proof, and returns it
@@ -130,6 +130,24 @@ This means:
 - The EC2 instance owner cannot see inside the enclave
 - The code running inside is cryptographically verified
 
+## What Makes Intel SGX Different
+
+Intel SGX (Software Guard Extensions) takes a different approach from Nitro. Instead of an isolated VM, SGX creates an **encrypted memory region** (enclave) within a regular process. The CPU encrypts enclave memory with a hardware key — even a physical memory dump reveals nothing.
+
+TEE-Rex runs the SGX enclave via [Gramine](https://gramineproject.io/), a library OS that lets unmodified Linux applications (Node.js, bb) run inside SGX without code changes.
+
+Key properties:
+- **Encrypted memory** — the CPU transparently encrypts/decrypts enclave pages. The OS, hypervisor, and hardware attacks cannot read enclave memory.
+- **Code measurement** — MRENCLAVE (hash of enclave code) and MRSIGNER (hash of signing key) uniquely identify what's running.
+- **DCAP attestation** — the enclave generates a quote signed by the CPU, verified via Intel's DCAP infrastructure (or Azure MAA as a convenience proxy).
+- **No VM overhead** — the enclave runs as a process on the host, not a separate VM. But Gramine adds its own overhead (~5x for memory-intensive workloads).
+
+TEE-Rex's SGX architecture splits the work:
+- **Express server** (outside SGX) — receives HTTPS requests, forwards encrypted blobs to the worker. Never sees plaintext.
+- **Gramine worker** (inside SGX) — holds the private key, decrypts, runs `bb prove`, returns the proof.
+
+This design avoids the Gramine `fork()` bug that crashes multi-threaded Node.js.
+
 ## The SDK: `@alejoamiras/tee-rex`
 
 The SDK (`TeeRexProver`) is a drop-in replacement for Aztec's local prover. It extends `BBLazyPrivateKernelProver` and overrides the `createChonkProof()` method.
@@ -142,13 +160,20 @@ const prover = new TeeRexProver("https://tee-rex.example.com", wasmSimulator);
 // Switch between local (WASM) and remote (TEE) proving
 prover.setProvingMode("remote");
 
-// Optionally require attestation verification with PCR pinning
+// Optionally require Nitro attestation verification
 prover.setAttestationConfig({
   requireAttestation: true,
   expectedPCRs: {
     0: "8ea65149c7369a...", // Hash of enclave image
   },
   maxAgeMs: 300_000, // 5 minutes
+});
+
+// Or SGX attestation verification
+prover.setAttestationConfig({
+  requireAttestation: true,
+  expectedMrEnclave: "398bdbd5122052...", // Hash of enclave code
+  expectedMrSigner: "a1b2c3d4e5f6...",   // Hash of signing key
 });
 
 // Use it like any other Aztec prover — the SDK handles
@@ -158,9 +183,9 @@ const proof = await prover.createChonkProof(executionSteps);
 
 Two modes:
 - **`"local"`** — proves using WASM Barretenberg locally (default, always works)
-- **`"remote"`** — encrypts and delegates to the TEE server
+- **`"remote"`** — encrypts and delegates to the TEE server (Nitro or SGX, auto-detected from `/attestation` response)
 
-## The Docker Image: Multi-Stage Build
+## The Docker Image: Multi-Stage Build (Nitro)
 
 The `Dockerfile.nitro` uses three stages:
 
@@ -172,21 +197,23 @@ The `Dockerfile.nitro` uses three stages:
 
 The `libnsm.so` library is what lets the server talk to the NSM hardware device. It must be compiled from source — there is no pre-built package.
 
+The SGX backend doesn't use Docker — it runs directly on the Azure VM inside Gramine. See the [SGX Deployment Guide](./sgx-deployment.md) for details.
+
 ## Security Properties
 
-| Property | How It's Achieved |
-|----------|-------------------|
-| **Confidentiality** | Proving inputs encrypted with enclave's key (OpenPGP) |
-| **Authenticity** | Attestation document signed by Nitro Hypervisor, chained to AWS Root CA |
-| **Integrity** | PCR values hash every byte of enclave code; any change = different PCRs |
-| **Freshness** | Attestation timestamp checked; reject if > 5 minutes old |
-| **Isolation** | No network, no disk, no shell — only vsock controlled by hypervisor |
-| **Non-extractability** | Private key generated inside enclave, never leaves it |
+| Property | Nitro | SGX |
+|----------|-------|-----|
+| **Confidentiality** | OpenPGP curve25519 encryption | OpenPGP P-256 encryption |
+| **Authenticity** | COSE_Sign1 → AWS Nitro Root CA | DCAP quote → Azure MAA JWT |
+| **Integrity** | PCR0/1/2 hash all enclave code | MRENCLAVE hashes all enclave code |
+| **Freshness** | Attestation timestamp < 5 min | MAA JWT `iat` claim < 5 min |
+| **Isolation** | No network, no disk (vsock only) | Encrypted memory (loopback TCP) |
+| **Non-extractability** | Key in enclave memory only | Key in enclave memory only |
 
 ## What's NOT Encrypted
 
 - **The proof itself** — ZK proofs are public by design (they go on-chain)
-- **The attestation document** — it's meant to be verified by anyone
+- **The attestation document / quote** — it's meant to be verified by anyone
 - **The public key** — it's, well, public
 
 ## Glossary
@@ -195,9 +222,16 @@ The `libnsm.so` library is what lets the server talk to the NSM hardware device.
 |------|---------|
 | **TEE** | Trusted Execution Environment — hardware-isolated secure enclave |
 | **Nitro Enclave** | AWS's TEE implementation, based on the Nitro Hypervisor |
+| **SGX** | Intel Software Guard Extensions — CPU-level encrypted memory enclaves |
+| **Gramine** | Library OS that runs unmodified Linux apps inside SGX enclaves |
 | **NSM** | Nitro Security Module — hardware device inside the enclave that generates attestation |
-| **PCR** | Platform Configuration Register — hash measurement of enclave contents (code, kernel, config) |
-| **COSE_Sign1** | CBOR Object Signing format — how the attestation document is signed |
+| **DCAP** | Data Center Attestation Primitives — Intel's attestation framework for SGX |
+| **Azure MAA** | Microsoft Azure Attestation — cloud service that verifies SGX DCAP quotes and returns JWTs |
+| **PCR** | Platform Configuration Register — hash measurement of Nitro enclave contents |
+| **MRENCLAVE** | Measurement of SGX enclave code (analogous to Nitro PCR0) |
+| **MRSIGNER** | Hash of the SGX enclave signing key |
+| **EPC** | Enclave Page Cache — hardware-encrypted memory available to SGX enclaves |
+| **COSE_Sign1** | CBOR Object Signing format — how Nitro attestation documents are signed |
 | **vsock** | Virtual socket — the only communication channel into/out of a Nitro Enclave |
 | **libnsm.so** | Shared library for calling the NSM device via FFI |
 | **Barretenberg** | Aztec's proving backend — generates zero-knowledge proofs |
