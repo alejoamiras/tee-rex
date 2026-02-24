@@ -25,7 +25,6 @@ import {
 import { $, $btn, appendLog, formatDuration, setStatus, startClock } from "./ui";
 
 let deploying = false;
-const runCount: Record<string, number> = { local: 0, remote: 0, nitro: 0, sgx: 0 };
 
 // ── Clock ──
 startClock();
@@ -265,11 +264,7 @@ function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepT
   const tagEl = $(`tag-${suffix}`);
   tagEl.textContent = tag;
   tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${
-    tag === "token flow"
-      ? "text-cyan-500/70"
-      : tag === "cold"
-        ? "text-amber-500/70"
-        : "text-cyan-500/70"
+    tag ? "text-cyan-500/70" : "text-gray-700"
   }`;
 
   $(`result-${suffix}`).classList.add("result-filled");
@@ -319,9 +314,7 @@ $("deploy-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    runCount[result.mode]++;
-    const isCold = runCount[result.mode] === 1;
-    showResult(result.mode, result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
+    showResult(result.mode, result.totalDurationMs, "", result.steps);
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {

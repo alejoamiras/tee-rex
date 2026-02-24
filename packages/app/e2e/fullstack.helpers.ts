@@ -59,11 +59,7 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 export async function deployAndAssert(
   page: Page,
   mode: "local" | "remote" | "nitro" | "sgx",
-  deployCount: Record<string, number>,
 ): Promise<void> {
-  const expectedTag = deployCount[mode] === 0 ? "cold" : "warm";
-  deployCount[mode]++;
-
   await page.click("#deploy-btn");
 
   await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
@@ -87,7 +83,6 @@ export async function deployAndAssert(
   expect(timeText).not.toBe("—");
   expect(timeText).toMatch(/^\d+\.\d+s$/);
 
-  await expect(page.locator(`#tag-${mode}`)).toHaveText(expectedTag);
   await expect(page.locator(`#result-${mode}`)).toHaveClass(/result-filled/);
   await expect(page.locator("#log")).toContainText("Deployed in");
   await expect(page.locator("#log")).toContainText("step breakdown");

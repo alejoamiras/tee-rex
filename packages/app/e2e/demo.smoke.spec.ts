@@ -21,7 +21,6 @@ const TEE_URL = process.env.TEE_URL || "";
 const SGX_URL = process.env.SGX_URL || "";
 
 let sharedPage: Page;
-const deployCount: Record<string, number> = { local: 0, remote: 0, nitro: 0, sgx: 0 };
 
 test.describe.configure({ mode: "serial" });
 
@@ -45,7 +44,7 @@ test.describe("Nitro", () => {
     await page.click("#mode-nitro");
     await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
     await assertNitroAttested(page);
-    await deployAndAssert(page, "nitro", deployCount);
+    await deployAndAssert(page, "nitro");
   });
 });
 
@@ -61,7 +60,7 @@ test.describe("SGX", () => {
     await page.click("#mode-sgx");
     await expect(page.locator("#mode-sgx")).toHaveClass(/mode-active/);
     await assertSgxAttested(page);
-    await deployAndAssert(page, "sgx", deployCount);
+    await deployAndAssert(page, "sgx");
   });
 });
 
@@ -76,7 +75,7 @@ test.describe("remote", () => {
     const page = sharedPage;
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 });
 
@@ -87,6 +86,6 @@ test.describe("local", () => {
     const page = sharedPage;
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 });

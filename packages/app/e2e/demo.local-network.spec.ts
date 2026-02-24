@@ -20,7 +20,6 @@ const PROVER_URL = process.env.PROVER_URL || "";
 const TEE_URL = process.env.TEE_URL || "";
 
 let sharedPage: Page;
-const deployCount: Record<string, number> = { local: 0, remote: 0, nitro: 0, sgx: 0 };
 
 test.describe.configure({ mode: "serial" });
 
@@ -44,7 +43,7 @@ test.describe("Nitro", () => {
     await page.click("#mode-nitro");
     await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
     await assertNitroAttested(page);
-    await deployAndAssert(page, "nitro", deployCount);
+    await deployAndAssert(page, "nitro");
   });
 
   test("runs full token flow", async () => {
@@ -59,7 +58,7 @@ test.describe("Nitro", () => {
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 
   test("Nitro -> remote deploys successfully", async () => {
@@ -71,7 +70,7 @@ test.describe("Nitro", () => {
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 });
 
@@ -87,7 +86,7 @@ test.describe("remote", () => {
     await expect(page.locator("#mode-remote")).toBeEnabled();
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 
   test("runs full token flow", async () => {
@@ -102,7 +101,7 @@ test.describe("remote", () => {
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 
   test("remote -> Nitro deploys successfully", async () => {
@@ -115,7 +114,7 @@ test.describe("remote", () => {
     await page.click("#mode-nitro");
     await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
     await assertNitroAttested(page);
-    await deployAndAssert(page, "nitro", deployCount);
+    await deployAndAssert(page, "nitro");
   });
 });
 
@@ -126,7 +125,7 @@ test.describe("local", () => {
     const page = sharedPage;
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 
   test("runs full token flow", async () => {
@@ -141,7 +140,7 @@ test.describe("local", () => {
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 
   test("local -> Nitro deploys successfully", async () => {
@@ -154,6 +153,6 @@ test.describe("local", () => {
     await page.click("#mode-nitro");
     await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
     await assertNitroAttested(page);
-    await deployAndAssert(page, "nitro", deployCount);
+    await deployAndAssert(page, "nitro");
   });
 });
