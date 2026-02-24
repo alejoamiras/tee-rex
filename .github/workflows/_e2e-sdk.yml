@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: "http://localhost:4000"
+      sgx_url:
+        description: SGX URL (enables SGX tests when set — no tunnel needed, public IP)
+        required: false
+        type: string
+        default: ""
       setup_prover_tunnel:
         description: Set up SSM tunnel to deployed prover instance
         required: false
@@ -107,6 +112,7 @@ jobs:
       - name: Run SDK E2E tests
         env:
           TEE_URL: ${{ inputs.tee_url }}
+          SGX_URL: ${{ inputs.sgx_url }}
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
           PROVER_URL: ${{ inputs.prover_url }}
         run: bun run --cwd packages/sdk test:e2e

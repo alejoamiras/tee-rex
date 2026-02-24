@@ -1,12 +1,15 @@
+import { createHash } from "node:crypto";
 import { getLogger } from "@logtape/logtape";
+import type { SgxWorkerClient } from "./sgx-worker-client.js";
 
 const logger = getLogger(["tee-rex", "server", "attestation"]);
 
-export type TeeMode = "standard" | "nitro";
+export type TeeMode = "standard" | "nitro" | "sgx";
 
 export type AttestationResponse =
   | { mode: "standard"; publicKey: string }
-  | { mode: "nitro"; attestationDocument: string; publicKey: string };
+  | { mode: "nitro"; attestationDocument: string; publicKey: string }
+  | { mode: "sgx"; quote: string; publicKey: string };
 
 export interface AttestationService {
   getAttestation(publicKey: string): Promise<AttestationResponse>;
@@ -53,7 +56,7 @@ export class NitroAttestationService implements AttestationService {
  * descriptor (the handle is never closed), eventually crashing the
  * enclave process when it hits the FD limit (~8-9 minutes of traffic).
  */
-// biome-ignore lint/suspicious/noExplicitAny: bun:ffi types unavailable via dynamic import
+// biome doesn't flag this — bun:ffi types are unavailable via dynamic import
 let nsmLib: any;
 
 async function getNsmLib() {
@@ -133,12 +136,43 @@ async function getNitroAttestationDocument(publicKey: Uint8Array): Promise<Uint8
   }
 }
 
-export function createAttestationService(mode: TeeMode): AttestationService {
+/**
+ * SGX mode: generates a DCAP attestation quote via the Gramine SGX worker.
+ * The public key hash is embedded in the quote's user_report_data so clients
+ * can verify the key is bound to a specific enclave measurement.
+ */
+export class SgxAttestationService implements AttestationService {
+  constructor(private worker: SgxWorkerClient) {}
+
+  async getAttestation(_publicKey: string): Promise<AttestationResponse> {
+    logger.info("Generating SGX DCAP attestation");
+    const publicKey = await this.worker.getPublicKey();
+    const publicKeyHash = createHash("sha256").update(publicKey).digest();
+    const quote = await this.worker.getQuote(publicKeyHash);
+    logger.info("SGX DCAP attestation generated", { quoteSize: quote.byteLength });
+    return {
+      mode: "sgx",
+      quote: quote.toString("base64"),
+      publicKey,
+    };
+  }
+}
+
+export function createAttestationService(
+  mode: TeeMode,
+  sgxWorker?: SgxWorkerClient,
+): AttestationService {
   switch (mode) {
     case "standard":
       return new StandardAttestationService();
     case "nitro":
       return new NitroAttestationService();
+    case "sgx": {
+      if (!sgxWorker) {
+        throw new Error("SGX mode requires an SgxWorkerClient instance");
+      }
+      return new SgxAttestationService(sgxWorker);
+    }
     default:
       throw new Error(`Unknown TEE mode: ${mode}`);
   }

@@ -1,5 +1,5 @@
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
-import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
+import { type PrivateExecutionStep, serializePrivateExecutionSteps } from "@aztec/stdlib/kernel";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
 import ky from "ky";
@@ -11,6 +11,7 @@ import { z } from "zod";
 import { type AttestationVerifyOptions, verifyNitroAttestation } from "./attestation.js";
 import { encrypt } from "./encrypt.js";
 import { logger } from "./logger.js";
+import { type SgxAttestationVerifyOptions, verifySgxAttestation } from "./sgx-attestation.js";
 
 /** Whether proofs are generated locally (WASM) or on a remote tee-rex server. */
 export type ProvingMode = ValueOf<typeof ProvingMode>;
@@ -31,8 +32,14 @@ export type ProverPhase =
 export interface TeeRexAttestationConfig {
   /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
   requireAttestation?: boolean;
-  /** Expected PCR values to verify against the attestation document. */
+  /** Expected PCR values to verify against the Nitro attestation document. */
   expectedPCRs?: AttestationVerifyOptions["expectedPCRs"];
+  /** Expected MRENCLAVE value (hex) for SGX attestation. */
+  expectedMrEnclave?: string;
+  /** Expected MRSIGNER value (hex) for SGX attestation. */
+  expectedMrSigner?: string;
+  /** Azure MAA endpoint for SGX DCAP verification. */
+  maaEndpoint?: SgxAttestationVerifyOptions["maaEndpoint"];
   /** Maximum age of attestation documents in milliseconds. Default: 5 minutes. */
   maxAgeMs?: number;
 }
@@ -109,23 +116,36 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   ): Promise<ChonkProofWithPublicInputs> {
     logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
     this.#onPhase?.("serialize");
-    const executionStepsSerialized = executionSteps.map((step) => ({
-      functionName: step.functionName,
-      witness: Array.from(step.witness.entries()),
-      bytecode: Base64.fromBytes(step.bytecode),
-      vk: Base64.fromBytes(step.vk),
-      timings: step.timings,
-    }));
-    logger.debug("Serialized payload", { chars: JSON.stringify(executionStepsSerialized).length });
     this.#onPhase?.("fetch-attestation");
-    const encryptionPublicKey = await this.#fetchEncryptionPublicKey();
+    const { publicKey: encryptionPublicKey, mode: serverMode } =
+      await this.#fetchEncryptionPublicKey();
     this.#onPhase?.("encrypt");
+
+    let payloadBytes: Uint8Array;
+    if (serverMode === "sgx") {
+      // SGX mode: serialize as msgpack (IVC inputs) so the enclave worker can
+      // pass it directly to `bb prove --scheme chonk --ivc_inputs_path`.
+      const msgpack = serializePrivateExecutionSteps(executionSteps);
+      logger.debug("Serialized msgpack payload", { bytes: msgpack.length });
+      payloadBytes = new Uint8Array(msgpack);
+    } else {
+      // Standard/Nitro mode: serialize as JSON for the Node.js prover service.
+      const executionStepsSerialized = executionSteps.map((step) => ({
+        functionName: step.functionName,
+        witness: Array.from(step.witness.entries()),
+        bytecode: Base64.fromBytes(step.bytecode),
+        vk: Base64.fromBytes(step.vk),
+        timings: step.timings,
+      }));
+      logger.debug("Serialized JSON payload", {
+        chars: JSON.stringify(executionStepsSerialized).length,
+      });
+      payloadBytes = Bytes.fromString(JSON.stringify({ executionSteps: executionStepsSerialized }));
+    }
+
     const encryptedData = Base64.fromBytes(
-      await encrypt({
-        data: Bytes.fromString(JSON.stringify({ executionSteps: executionStepsSerialized })),
-        encryptionPublicKey,
-      }),
-    ); // TODO(perf): serialize executionSteps -> bytes without intermediate encoding. Needs Aztec to support serialization of the PrivateExecutionStep class.
+      await encrypt({ data: payloadBytes, encryptionPublicKey }),
+    );
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
     const response = await ky
@@ -144,7 +164,10 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     return ChonkProofWithPublicInputs.fromBuffer(data.proof);
   }
 
-  async #fetchEncryptionPublicKey() {
+  async #fetchEncryptionPublicKey(): Promise<{
+    publicKey: string;
+    mode: "standard" | "nitro" | "sgx";
+  }> {
     const response = await ky.get(joinURL(this.apiUrl, "attestation"), { retry: 2 }).json();
     const data = z
       .discriminatedUnion("mode", [
@@ -152,6 +175,11 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         z.object({
           mode: z.literal("nitro"),
           attestationDocument: z.string(),
+          publicKey: z.string(),
+        }),
+        z.object({
+          mode: z.literal("sgx"),
+          quote: z.string(),
           publicKey: z.string(),
         }),
       ])
@@ -166,7 +194,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
           );
         }
         logger.warn("Server is running in standard mode (no TEE attestation)");
-        return data.publicKey;
+        return { publicKey: data.publicKey, mode: data.mode };
       }
       case "nitro": {
         try {
@@ -174,7 +202,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
             expectedPCRs: this.#attestationConfig.expectedPCRs,
             maxAgeMs: this.#attestationConfig.maxAgeMs,
           });
-          return publicKey;
+          return { publicKey, mode: data.mode };
         } catch (err) {
           // In browser environments, node:crypto is unavailable. Fall back to the
           // server-provided public key. The attestation document was still fetched
@@ -187,7 +215,29 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
               "Nitro attestation verification unavailable (browser environment). Using server-provided public key.",
               { error: err.message },
             );
-            return data.publicKey;
+            return { publicKey: data.publicKey, mode: data.mode };
+          }
+          throw err;
+        }
+      }
+      case "sgx": {
+        try {
+          const { publicKey } = await verifySgxAttestation(data.quote, data.publicKey, {
+            expectedMrEnclave: this.#attestationConfig.expectedMrEnclave,
+            expectedMrSigner: this.#attestationConfig.expectedMrSigner,
+            maaEndpoint: this.#attestationConfig.maaEndpoint,
+            maxAgeMs: this.#attestationConfig.maxAgeMs,
+          });
+          return { publicKey, mode: data.mode };
+        } catch (err) {
+          // In browser environments, fetch to Azure MAA may fail due to CORS.
+          // Fall back to the server-provided public key over HTTPS.
+          if (err instanceof TypeError && err.message.includes("fetch")) {
+            logger.warn(
+              "SGX attestation verification unavailable (browser environment). Using server-provided public key.",
+              { error: err.message },
+            );
+            return { publicKey: data.publicKey, mode: data.mode };
           }
           throw err;
         }

@@ -30,10 +30,10 @@ resource "aws_cloudfront_response_headers_policy" "coop_coep" {
 resource "aws_cloudfront_function" "strip_prefix" {
   name    = "tee-rex-strip-prefix"
   runtime = "cloudfront-js-2.0"
-  comment = "Strip /prover or /tee prefix from URI"
+  comment = "Strip /prover, /tee, or /sgx prefix from URI"
   publish = true
 
-  code = "function handler(event) { var request = event.request; request.uri = request.uri.replace(/^\\/(prover|tee)/, '') || '/'; return request; }"
+  code = "function handler(event) { var request = event.request; request.uri = request.uri.replace(/^\\/(prover|tee|sgx)/, '') || '/'; return request; }"
 }
 
 # -----------------------------------------------------------------------------
@@ -41,7 +41,7 @@ resource "aws_cloudfront_function" "strip_prefix" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "prod" {
-  comment             = "tee-rex production — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex production — app (S3) + prover/TEE (EC2) + SGX (Azure)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -86,6 +86,21 @@ resource "aws_cloudfront_distribution" "prod" {
     }
   }
 
+  # SGX Azure origin (HTTP, port 4000)
+  origin {
+    domain_name = azurerm_public_ip.sgx["prod"].fqdn
+    origin_id   = "sgx-azure"
+
+    custom_origin_config {
+      http_port                = 4000
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
   # Default behavior: S3 static app
   default_cache_behavior {
     target_origin_id           = "s3-app"
@@ -119,6 +134,24 @@ resource "aws_cloudfront_distribution" "prod" {
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
     target_origin_id           = "tee-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  # /sgx/* -> SGX Azure VM
+  ordered_cache_behavior {
+    path_pattern               = "/sgx/*"
+    target_origin_id           = "sgx-azure"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
@@ -170,7 +203,7 @@ resource "aws_cloudfront_distribution" "prod" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "devnet" {
-  comment             = "tee-rex devnet — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex devnet — app (S3) + prover/TEE/SGX (EC2/Azure)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -215,6 +248,21 @@ resource "aws_cloudfront_distribution" "devnet" {
     }
   }
 
+  # SGX Azure origin (HTTP, port 4000) — shares prod VM for now
+  origin {
+    domain_name = azurerm_public_ip.sgx["prod"].fqdn
+    origin_id   = "sgx-azure"
+
+    custom_origin_config {
+      http_port                = 4000
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
   # Default behavior: S3 static app
   default_cache_behavior {
     target_origin_id           = "s3-app"
@@ -248,6 +296,24 @@ resource "aws_cloudfront_distribution" "devnet" {
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
     target_origin_id           = "tee-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  # /sgx/* -> SGX Azure VM
+  ordered_cache_behavior {
+    path_pattern               = "/sgx/*"
+    target_origin_id           = "sgx-azure"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id

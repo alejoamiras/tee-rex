@@ -112,3 +112,20 @@ variable "devnet_cloudfront_aliases" {
   type        = list(string)
   default     = ["devnet.tee-rex.dev"]
 }
+
+# -----------------------------------------------------------------------------
+# Azure — SGX VMs (prod, devnet, ci)
+# -----------------------------------------------------------------------------
+
+variable "azure_subscription_id" {
+  description = "Azure subscription ID for SGX resources"
+  type        = string
+  sensitive   = true
+}
+
+variable "azure_ssh_public_key" {
+  description = "SSH public key for Azure SGX VM access"
+  type        = string
+  sensitive   = true
+}
+

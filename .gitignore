@@ -34,3 +34,6 @@ infra/tofu/*.tfstate
 infra/tofu/*.tfstate.*
 infra/tofu/terraform.tfvars
 infra/tofu/.snapshot/
+
+# Lessons with sensitive operational data (credentials, IPs, etc.)
+lessons/sensitive/

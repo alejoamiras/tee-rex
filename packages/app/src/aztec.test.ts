@@ -4,6 +4,8 @@ import {
   checkTeeAttestation,
   checkTeeRexServer,
   PROVER_CONFIGURED,
+  SGX_CONFIGURED,
+  SGX_DISPLAY_URL,
   setUiMode,
   state,
   TEE_CONFIGURED,
@@ -20,6 +22,7 @@ afterEach(() => {
   state.provingMode = "local";
   state.uiMode = "local";
   state.teeServerUrl = "/tee";
+  state.sgxServerUrl = "/sgx";
   state.proofsRequired = false;
   state.feePaymentMethod = undefined;
 });
@@ -78,6 +81,16 @@ describe("checkTeeAttestation", () => {
     expect(await checkTeeAttestation("http://tee.local:4000")).toEqual({
       reachable: true,
       mode: "nitro",
+    });
+  });
+
+  test("returns reachable=true and mode=sgx", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(JSON.stringify({ mode: "sgx" }), { status: 200 })),
+    );
+    expect(await checkTeeAttestation("http://sgx.local:4000")).toEqual({
+      reachable: true,
+      mode: "sgx",
     });
   });
 
@@ -163,9 +176,9 @@ describe("setUiMode", () => {
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
   });
 
-  test("tee mode sets remote proving with custom URL and attestation", () => {
-    setUiMode("tee", "https://tee.example.com:4000");
-    expect(state.uiMode).toBe("tee");
+  test("nitro mode sets remote proving with custom URL and attestation", () => {
+    setUiMode("nitro", "https://tee.example.com:4000");
+    expect(state.uiMode).toBe("nitro");
     expect(state.provingMode).toBe("remote");
     expect(state.teeServerUrl).toBe("https://tee.example.com:4000");
     expect(mockSetProvingMode).toHaveBeenCalledWith("remote");
@@ -173,10 +186,29 @@ describe("setUiMode", () => {
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({ requireAttestation: true });
   });
 
-  test("tee mode without URL uses existing teeServerUrl", () => {
+  test("nitro mode without URL uses existing teeServerUrl", () => {
     state.teeServerUrl = "https://existing.example.com";
-    setUiMode("tee");
+    setUiMode("nitro");
     expect(mockSetApiUrl).toHaveBeenCalledWith("https://existing.example.com");
+  });
+
+  test("sgx mode sets remote proving with custom URL and attestation + maaEndpoint", () => {
+    setUiMode("sgx", "https://sgx.example.com:4000");
+    expect(state.uiMode).toBe("sgx");
+    expect(state.provingMode).toBe("remote");
+    expect(state.sgxServerUrl).toBe("https://sgx.example.com:4000");
+    expect(mockSetProvingMode).toHaveBeenCalledWith("remote");
+    expect(mockSetApiUrl).toHaveBeenCalledWith("https://sgx.example.com:4000");
+    expect(mockSetAttestationConfig).toHaveBeenCalledWith({
+      requireAttestation: true,
+      maaEndpoint: "/maa",
+    });
+  });
+
+  test("sgx mode without URL uses existing sgxServerUrl", () => {
+    state.sgxServerUrl = "https://existing-sgx.example.com";
+    setUiMode("sgx");
+    expect(mockSetApiUrl).toHaveBeenCalledWith("https://existing-sgx.example.com");
   });
 });
 
@@ -208,6 +240,20 @@ describe("feature flags", () => {
   test("TEE_CONFIGURED is false when TEE_URL is empty string", () => {
     if (!process.env.TEE_URL) {
       expect(TEE_CONFIGURED).toBe(false);
+    }
+  });
+
+  test("SGX_CONFIGURED reflects process.env.SGX_URL truthiness", () => {
+    expect(SGX_CONFIGURED).toBe(!!process.env.SGX_URL);
+  });
+
+  test("SGX_DISPLAY_URL falls back to empty string when SGX_URL not set", () => {
+    expect(SGX_DISPLAY_URL).toBe(process.env.SGX_URL || "");
+  });
+
+  test("SGX_CONFIGURED is false when SGX_URL is empty string", () => {
+    if (!process.env.SGX_URL) {
+      expect(SGX_CONFIGURED).toBe(false);
     }
   });
 });

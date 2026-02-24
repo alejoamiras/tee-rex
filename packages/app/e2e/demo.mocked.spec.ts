@@ -38,17 +38,17 @@ test("page loads with correct initial state", async ({ page }) => {
   const remoteBtn = page.locator("#mode-remote");
   await expect(remoteBtn).not.toHaveClass(/mode-active/);
 
-  // TEE button is disabled (TEE_URL not set)
-  const teeBtn = page.locator("#mode-tee");
-  await expect(teeBtn).not.toHaveClass(/mode-active/);
-  await expect(teeBtn).toBeDisabled();
+  // Nitro button is disabled (TEE_URL not set)
+  const nitroBtn = page.locator("#mode-nitro");
+  await expect(nitroBtn).not.toHaveClass(/mode-active/);
+  await expect(nitroBtn).toBeDisabled();
 
   // Action buttons are disabled
   await expect(page.locator("#deploy-btn")).toBeDisabled();
   await expect(page.locator("#token-flow-btn")).toBeDisabled();
 
-  // TEE service row shows "not configured" by default
-  await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
+  // Nitro service row shows "not configured" by default
+  await expect(page.locator("#nitro-attestation-label")).toHaveText("not configured");
 });
 
 test("mode buttons toggle active class (local and remote)", async ({ page }) => {
@@ -74,36 +74,36 @@ test("mode buttons toggle active class (local and remote)", async ({ page }) => 
   await expect(page.locator("#mode-remote")).not.toHaveClass(/mode-active/);
 });
 
-test("TEE button is disabled when TEE_URL is not configured", async ({ page }) => {
+test("Nitro button is disabled when TEE_URL is not configured", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // TEE button stays disabled (force-click guards tested in mocked-unconfigured)
-  await expect(page.locator("#mode-tee")).toBeDisabled();
+  // Nitro button stays disabled (force-click guards tested in mocked-unconfigured)
+  await expect(page.locator("#mode-nitro")).toBeDisabled();
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
 });
 
-test("TEE service row elements are present in the UI", async ({ page }) => {
+test("Nitro service row elements are present in the UI", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // TEE service row exists with status dot and attestation label
-  await expect(page.locator("#tee-status")).toBeVisible();
-  await expect(page.locator("#tee-attestation-label")).toBeVisible();
+  // Nitro service row exists with status dot and attestation label
+  await expect(page.locator("#nitro-status")).toBeVisible();
+  await expect(page.locator("#nitro-attestation-label")).toBeVisible();
   // URL span is empty (hidden) when TEE_URL is not set — just check it exists
-  await expect(page.locator("#tee-url")).toHaveCount(1);
+  await expect(page.locator("#nitro-url")).toHaveCount(1);
 });
 
-test("TEE service row shows not configured when TEE_URL is not set", async ({ page }) => {
+test("Nitro service row shows not configured when TEE_URL is not set", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/");
   await expect(page.locator("#log")).toContainText("services");
 
-  // Without TEE_URL, the service row shows "not configured"
-  await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
-  await expect(page.locator("#tee-url")).toHaveText("");
+  // Without TEE_URL, the Nitro service row shows "not configured"
+  await expect(page.locator("#nitro-attestation-label")).toHaveText("not configured");
+  await expect(page.locator("#nitro-url")).toHaveText("");
 });
 
 test("service dots show online and teerex label shows available when services respond OK", async ({

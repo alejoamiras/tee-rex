@@ -116,4 +116,26 @@ describe("TeeRexProver", () => {
       expect(deployed).toBeDefined();
     }, 600000);
   });
+
+  describe.skipIf(!config.sgxUrl)("SGX", () => {
+    test("should return sgx attestation from SGX server", async () => {
+      const response = await fetch(`${config.sgxUrl}/attestation`);
+      const data = await response.json();
+
+      expect(data.mode).toBe("sgx");
+      expect(data.quote).toBeDefined();
+      expect(data.publicKey).toContain("BEGIN PGP PUBLIC KEY BLOCK");
+      logger.info("SGX attestation verified", { mode: data.mode });
+    });
+
+    test("should deploy account with SGX proving", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setApiUrl(config.sgxUrl);
+      prover.setProvingMode(ProvingMode.remote);
+
+      const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
+      expect(deployed).toBeDefined();
+    }, 600000);
+  });
 });

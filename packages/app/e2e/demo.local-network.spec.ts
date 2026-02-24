@@ -10,7 +10,7 @@
  */
 import { expect, type Page, test } from "@playwright/test";
 import {
-  assertTeeAttested,
+  assertNitroAttested,
   deployAndAssert,
   initSharedPage,
   runTokenFlowAndAssert,
@@ -20,7 +20,6 @@ const PROVER_URL = process.env.PROVER_URL || "";
 const TEE_URL = process.env.TEE_URL || "";
 
 let sharedPage: Page;
-const deployCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 
 test.describe.configure({ mode: "serial" });
 
@@ -32,46 +31,46 @@ test.afterAll(async () => {
   if (sharedPage) await sharedPage.close();
 });
 
-// ── TEE proving (fastest — run first to minimize stale block headers on live networks) ──
+// ── Nitro proving (fastest — run first to minimize stale block headers on live networks) ──
 
-test.describe("TEE", () => {
+test.describe("Nitro", () => {
   test.beforeEach(() => {
     test.skip(!TEE_URL, "TEE_URL env var not set");
   });
 
   test("deploys account", async () => {
     const page = sharedPage;
-    await page.click("#mode-tee");
-    await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await assertTeeAttested(page);
-    await deployAndAssert(page, "tee", deployCount);
+    await page.click("#mode-nitro");
+    await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
+    await assertNitroAttested(page);
+    await deployAndAssert(page, "nitro");
   });
 
   test("runs full token flow", async () => {
     const page = sharedPage;
-    await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await runTokenFlowAndAssert(page, "tee");
+    await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
+    await runTokenFlowAndAssert(page, "nitro");
   });
 
-  test("TEE -> local deploys successfully", async () => {
+  test("Nitro -> local deploys successfully", async () => {
     const page = sharedPage;
-    await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
+    await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 
-  test("TEE -> remote deploys successfully", async () => {
+  test("Nitro -> remote deploys successfully", async () => {
     const page = sharedPage;
-    // Restore TEE mode (previous test left us in local)
-    await page.click("#mode-tee");
-    await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
+    // Restore Nitro mode (previous test left us in local)
+    await page.click("#mode-nitro");
+    await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
     // Switch to remote
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 });
 
@@ -87,7 +86,7 @@ test.describe("remote", () => {
     await expect(page.locator("#mode-remote")).toBeEnabled();
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 
   test("runs full token flow", async () => {
@@ -102,20 +101,20 @@ test.describe("remote", () => {
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 
-  test("remote -> TEE deploys successfully", async () => {
+  test("remote -> Nitro deploys successfully", async () => {
     test.skip(!TEE_URL, "TEE_URL env var not set");
     const page = sharedPage;
     // Restore remote mode (previous test left us in local)
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    // Switch to TEE
-    await page.click("#mode-tee");
-    await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await assertTeeAttested(page);
-    await deployAndAssert(page, "tee", deployCount);
+    // Switch to Nitro
+    await page.click("#mode-nitro");
+    await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
+    await assertNitroAttested(page);
+    await deployAndAssert(page, "nitro");
   });
 });
 
@@ -126,7 +125,7 @@ test.describe("local", () => {
     const page = sharedPage;
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 
   test("runs full token flow", async () => {
@@ -141,19 +140,19 @@ test.describe("local", () => {
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 
-  test("local -> TEE deploys successfully", async () => {
+  test("local -> Nitro deploys successfully", async () => {
     test.skip(!TEE_URL, "TEE_URL env var not set");
     const page = sharedPage;
     // Restore local mode (previous test left us in remote)
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    // Switch to TEE
-    await page.click("#mode-tee");
-    await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    await assertTeeAttested(page);
-    await deployAndAssert(page, "tee", deployCount);
+    // Switch to Nitro
+    await page.click("#mode-nitro");
+    await expect(page.locator("#mode-nitro")).toHaveClass(/mode-active/);
+    await assertNitroAttested(page);
+    await deployAndAssert(page, "nitro");
   });
 });

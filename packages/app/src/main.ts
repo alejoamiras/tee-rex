@@ -13,6 +13,8 @@ import {
   PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
   runTokenFlow,
+  SGX_CONFIGURED,
+  SGX_DISPLAY_URL,
   type StepTiming,
   setUiMode,
   state,
@@ -23,7 +25,6 @@ import {
 import { $, $btn, appendLog, formatDuration, setStatus, startClock } from "./ui";
 
 let deploying = false;
-const runCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 
 // ── Clock ──
 startClock();
@@ -73,7 +74,8 @@ function updateModeUI(mode: UiMode): void {
   const buttons: Record<UiMode, HTMLElement> = {
     local: $("mode-local"),
     remote: $("mode-remote"),
-    tee: $("mode-tee"),
+    nitro: $("mode-nitro"),
+    sgx: $("mode-sgx"),
   };
 
   for (const [key, btn] of Object.entries(buttons)) {
@@ -95,11 +97,18 @@ $("mode-remote").addEventListener("click", () => {
   appendLog("Switched to remote proving mode");
 });
 
-$("mode-tee").addEventListener("click", () => {
-  if (deploying || $btn("mode-tee").disabled) return;
-  setUiMode("tee");
-  updateModeUI("tee");
-  appendLog("Switched to TEE proving mode");
+$("mode-nitro").addEventListener("click", () => {
+  if (deploying || $btn("mode-nitro").disabled) return;
+  setUiMode("nitro");
+  updateModeUI("nitro");
+  appendLog("Switched to Nitro proving mode");
+});
+
+$("mode-sgx").addEventListener("click", () => {
+  if (deploying || $btn("mode-sgx").disabled) return;
+  setUiMode("sgx");
+  updateModeUI("sgx");
+  appendLog("Switched to SGX proving mode");
 });
 
 // ── Shared helpers ──
@@ -255,11 +264,7 @@ function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepT
   const tagEl = $(`tag-${suffix}`);
   tagEl.textContent = tag;
   tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${
-    tag === "token flow"
-      ? "text-cyan-500/70"
-      : tag === "cold"
-        ? "text-amber-500/70"
-        : "text-cyan-500/70"
+    tag ? "text-cyan-500/70" : "text-gray-700"
   }`;
 
   $(`result-${suffix}`).classList.add("result-filled");
@@ -309,9 +314,7 @@ $("deploy-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    runCount[result.mode]++;
-    const isCold = runCount[result.mode] === 1;
-    showResult(result.mode, result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
+    showResult(result.mode, result.totalDurationMs, "", result.steps);
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
@@ -380,27 +383,50 @@ async function init(): Promise<void> {
     appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
   }
 
-  // Auto-configure TEE when env var is set (display URL + check attestation)
+  // Auto-configure Nitro when TEE_URL env var is set
   // Runs regardless of Aztec node status — service checks are independent.
   if (TEE_CONFIGURED) {
-    $("tee-url").textContent = TEE_DISPLAY_URL;
-    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
+    $("nitro-url").textContent = TEE_DISPLAY_URL;
+    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking Nitro attestation...`);
     const attestation = await checkTeeAttestation("/tee");
     if (attestation.reachable) {
-      setStatus("tee-status", attestation.mode === "nitro");
-      $("tee-attestation-label").textContent =
+      setStatus("nitro-status", attestation.mode === "nitro");
+      $("nitro-attestation-label").textContent =
         attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
       if (attestation.mode === "nitro") {
-        $btn("mode-tee").disabled = false;
+        $btn("mode-nitro").disabled = false;
       }
       appendLog(
-        `TEE attestation: ${attestation.mode ?? "unknown"}`,
+        `Nitro attestation: ${attestation.mode ?? "unknown"}`,
         attestation.mode === "nitro" ? "success" : "warn",
       );
     } else {
-      setStatus("tee-status", false);
-      $("tee-attestation-label").textContent = "unreachable";
-      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+      setStatus("nitro-status", false);
+      $("nitro-attestation-label").textContent = "unreachable";
+      appendLog(`Nitro server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+    }
+  }
+
+  // Auto-configure SGX when SGX_URL env var is set
+  if (SGX_CONFIGURED) {
+    $("sgx-url").textContent = SGX_DISPLAY_URL;
+    appendLog(`SGX_URL configured (${SGX_DISPLAY_URL}) — checking SGX attestation...`);
+    const attestation = await checkTeeAttestation("/sgx");
+    if (attestation.reachable) {
+      setStatus("sgx-status", attestation.mode === "sgx");
+      $("sgx-attestation-label").textContent =
+        attestation.mode === "sgx" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
+      if (attestation.mode === "sgx") {
+        $btn("mode-sgx").disabled = false;
+      }
+      appendLog(
+        `SGX attestation: ${attestation.mode ?? "unknown"}`,
+        attestation.mode === "sgx" ? "success" : "warn",
+      );
+    } else {
+      setStatus("sgx-status", false);
+      $("sgx-attestation-label").textContent = "unreachable";
+      appendLog(`SGX server unreachable at ${SGX_DISPLAY_URL}`, "warn");
     }
   }
 

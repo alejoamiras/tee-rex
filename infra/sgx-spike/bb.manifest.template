@@ -1,0 +1,47 @@
+# Gramine manifest for standalone bb (Barretenberg) proof generation.
+# Runs bb in its own SGX enclave, invoked from the host by the Express server.
+# Avoids the Gramine fork() bug (#1156) that crashes multi-threaded Node.js.
+#
+# Build: gramine-manifest -Dlog_level=error -Darch_libdir=/lib/x86_64-linux-gnu -Dra_type=dcap bb.manifest.template bb.manifest
+# Sign:  gramine-sgx-sign --manifest bb.manifest --output bb.manifest.sgx
+# Run:   gramine-sgx bb prove --scheme chonk --ivc_inputs_path /tmp/prove-xxx/ivc-inputs.msgpack -o /tmp/prove-xxx
+
+libos.entrypoint = "/app/bb"
+
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdir }}"
+loader.env.CRS_PATH = "/crs"
+loader.env.HARDWARE_CONCURRENCY = "1"
+loader.env.MALLOC_ARENA_MAX = "1"
+
+# Allow command-line args (bb prove --scheme chonk ...)
+loader.insecure__use_cmdline_argv = true
+
+fs.mounts = [
+  { path = "/lib",                uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "{{ arch_libdir }}",   uri = "file:{{ arch_libdir }}" },
+  { path = "/usr",                uri = "file:/usr" },
+  { path = "/app",                uri = "file:/app" },
+  { path = "/crs",                uri = "file:/crs" },
+  { path = "/tmp",                uri = "file:/tmp" },
+]
+
+# SGX configuration — bb uses ~283MB peak memory, 2G is plenty
+sgx.debug = false
+sgx.enclave_size = "2G"
+sgx.max_threads = 4
+sgx.remote_attestation = "{{ ra_type }}"
+
+sgx.trusted_files = [
+  "file:{{ gramine.libos }}",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/",
+  "file:/usr/{{ arch_libdir }}/",
+  "file:/app/bb",
+]
+
+sgx.allowed_files = [
+  "file:/tmp/",
+  "file:/crs/",
+]
