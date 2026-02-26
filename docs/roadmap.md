@@ -226,21 +226,21 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 
 ## Phase 23: Devnet Support — DONE
 
-**Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`nightlies`). Long-lived `devnet` branch, `workflow_dispatch`-triggered deploy, own infrastructure. No auto-update — Aztec devnet versions are managed manually (cherry-pick from main or direct commits to `devnet` branch).
+**Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`nightlies`). Long-lived `devnet` branch, own infrastructure. Auto-update via `aztec-devnet.yml` (weekly, Phase 28A+C), push-triggered deploy.
 
 **Architecture:**
 
 ```
 main branch (nightlies/nextnet) → deploy-prod.yml (on push)     → prod EC2s + S3 + CF
-devnet branch (devnet Aztec)  → deploy-devnet.yml (manual)    → devnet EC2s + S3 + CF
+devnet branch (devnet Aztec)  → deploy-devnet.yml (on push)   → devnet EC2s + S3 + CF
 
 deploy-devnet.yml flow:
-  workflow_dispatch
+  push to devnet (or workflow_dispatch)
     → ensure-base
     → deploy-tee + deploy-prover (devnet EC2s)
-    → e2e-sdk + e2e-app (against deployed devnet infra)  ← quality gate
+    → validate-devnet (SDK + app e2e against deployed infra)  ← quality gate
     → deploy-app (devnet S3/CF)
-    → publish-sdk (npm --tag devnet)  ← only if e2e green
+    → publish-sdk (npm --tag devnet)  ← only if validate green
 ```
 
 No branch protection ruleset on `devnet` — the workflow itself is the quality gate. E2e must pass before app deploys and SDK publishes.

@@ -1,16 +1,16 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-02-21.
+How the tee-rex CI/CD system works. Last updated: 2026-02-26.
 
 ---
 
 ## Overview
 
 ```
-16 workflow files total:
-  9 main workflows   (sdk, app, server, tee, remote, infra, aztec-nightlies, deploy-prod, deploy-devnet)
-  5 reusable         (_build-base, _deploy-tee, _deploy-prover, _publish-sdk, _e2e-sdk, _e2e-app)
-  2 composite actions (setup-aztec, start-services)
+18 workflow files total:
+  10 main workflows   (sdk, app, server, tee, remote, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet)
+   6 reusable         (_build-base, _deploy-tee, _deploy-prover, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
+   2 composite actions (setup-aztec, start-services)
 ```
 
 All workflows use **OIDC auth** (no stored AWS keys), **SSM tunnels** (no public EC2 ports), and **ECR registry cache** for Docker builds.
@@ -163,7 +163,11 @@ graph TD
 
 ## 4. Aztec Auto-Update
 
-Daily cron checks for new Aztec nightly versions, creates a PR, and auto-merges when CI passes.
+Automated version bumps for Aztec dependencies, using a shared reusable workflow (`_aztec-update.yml`) that handles check → update → PR creation. Each environment is a thin wrapper with environment-specific config.
+
+### Nightlies → main (`aztec-nightlies.yml`)
+
+Daily cron checks for new Aztec nightly versions, creates a PR targeting `main`, and auto-merges when CI passes.
 
 ```mermaid
 graph LR
@@ -177,6 +181,31 @@ graph LR
 
 The `test-infra` label triggers `infra.yml` which does a full TEE + prover deployment and e2e on CI instances, ensuring the new Aztec version works end-to-end before merging.
 
+### Devnet → devnet (`aztec-devnet.yml`)
+
+Weekly cron (Monday 09:00 UTC) checks for new devnet versions, creates a PR targeting the `devnet` branch, and merges immediately (no auto-merge wait). Pushing to `devnet` triggers `deploy-devnet.yml`.
+
+```mermaid
+graph LR
+    cron["Weekly Monday 09:00 UTC\n(aztec-devnet.yml)"] --> check["Check npm for\nnew devnet version"]
+    check -->|new version| update["Update @aztec/*\nin all package.json"]
+    update --> pr["Create PR\ntarget: devnet"]
+    pr --> merge["Immediate merge\nto devnet"]
+    merge --> deploy["deploy-devnet.yml\ntriggers (push)"]
+```
+
+### Shared workflow: `_aztec-update.yml`
+
+Both wrappers call `_aztec-update.yml` with these inputs:
+
+| Input | Nightlies | Devnet |
+|-------|-----------|--------|
+| `dist_tag` | `nightly` | `devnet` |
+| `target_branch` | `main` | `devnet` |
+| `branch_prefix` | `chore/aztec-nightlies` | `chore/aztec-devnet` |
+| `add_label` | `test-infra` | *(none)* |
+| `auto_merge` | `true` (waits for CI) | `false` (immediate) |
+
 ---
 
 ## 5. Reusable Workflows
@@ -187,6 +216,7 @@ The `test-infra` label triggers `infra.yml` which does a full TEE + prover deplo
 | `_deploy-tee.yml` | Build Nitro Docker image, push to ECR, start EC2, deploy enclave via SSM | `environment`, `image_tag`, `base_tag` |
 | `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM | `environment`, `image_tag`, `base_tag` |
 | `_publish-sdk.yml` | Set SDK version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
+| `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
 | `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnels. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url` |
 
@@ -245,3 +275,5 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 | Separate CI and prod EC2 instances | CI deploys don't affect production; different instance types (CI: `t3.xlarge`, Prod: `m5.xlarge` TEE + `t3.xlarge` prover) |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
+| Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |
+| `deploy-devnet.yml` push trigger | Pushes to `devnet` branch (from auto-update merges) automatically trigger deployment. Dual-trigger conditions: `github.event_name == 'push' \|\| inputs.<flag>`. |
