@@ -1,8 +1,8 @@
-name: Aztec Nightlies Update
+name: Aztec Devnet Update
 
 on:
   schedule:
-    - cron: "0 8 * * *" # 08:00 UTC daily
+    - cron: "0 9 * * 1" # Weekly Monday 09:00 UTC
   workflow_dispatch:
     inputs:
       version:
@@ -15,9 +15,8 @@ jobs:
     uses: ./.github/workflows/_aztec-update.yml
     secrets: inherit
     with:
-      dist_tag: nightly
-      target_branch: main
-      branch_prefix: chore/aztec-nightlies
-      add_label: test-infra
-      auto_merge: true
+      dist_tag: devnet
+      target_branch: devnet
+      branch_prefix: chore/aztec-devnet
+      auto_merge: false
       version: ${{ inputs.version || '' }}
