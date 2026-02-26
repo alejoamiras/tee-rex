@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A+C)
 
 | Phase | Summary |
 |---|---|
@@ -362,6 +362,34 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **27C** | Code quality cleanup — extract `executeStep()` helper in `aztec.ts` (deduplicates simulate→send→confirm pattern, -58 lines), consolidate magic constants, add `$btn()` typed helper in `ui.ts` (eliminates 8 casts), add CORS comment in server. (PR #109) |
 | **27D** | Split app e2e into fast + slow suites. `demo.fullstack.spec.ts` → `demo.local-network.spec.ts` (12 tests, simulated proofs, ~5 min) + `demo.smoke.spec.ts` (3 deploy-only tests, real proofs). Shared helpers extracted to `fullstack.helpers.ts`. Per-PR pipeline (`app.yml`) now runs local-network tests instead of real-proof fullstack (~5 min vs 30-60 min). (PR #110) |
 | **27E** | App links cleanup — visible "GitHub" text label in header, replace raw CloudFront URLs (`d3d1wk4leq65j7.cloudfront.net`) with custom domain (`nextnet.tee-rex.dev`) in dev scripts. (PR #114) |
+
+---
+
+## Phase 28: Auto-Update & SDK Versioning for All Environments
+
+**Goal**: Extend the nightly auto-update pipeline to devnet (and eventually testnet/mainnet), and solve SDK re-publishing when the Aztec version hasn't changed but SDK code has.
+
+**28A+C — Generalized auto-update pipeline:** DONE
+- Extracted `_aztec-update.yml` reusable workflow — parameterized check→update→PR flow (inputs: `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge`, `version`)
+- `aztec-nightlies.yml` → thin wrapper calling `_aztec-update.yml` with `nightly`/`main` params
+- New `aztec-devnet.yml` — thin wrapper for devnet (weekly Monday 09:00 UTC, targets `devnet` branch, immediate merge)
+- Generalized `check-aztec-nightlies.ts` → `check-aztec-update.ts` — takes dist-tag as positional arg
+- Broadened `update-aztec-version.ts` — `VERSION_PATTERN` and `AZTEC_VERSION_PATTERN` now accept `devnet.N[-patch.N]` formats
+- Added push trigger to `deploy-devnet.yml` (on push to `devnet` branch, paths-ignore for docs/tests)
+- IAM trust policy: added `chore/aztec-devnet-*` branch pattern
+
+**28B — SDK revision versioning:**
+- Problem: npm won't let you re-publish the same version. If the Aztec devnet version is `4.0.0-devnet.2-patch.1` and we need to publish an SDK-only fix, we need a revision suffix.
+- Solution: append a dot-separated SDK revision number:
+  ```
+  4.0.0-devnet.2-patch.1      ← first publish (matches Aztec version)
+  4.0.0-devnet.2-patch.1.1    ← SDK-only fix (revision 1)
+  4.0.0-devnet.2-patch.1.2    ← another fix (revision 2)
+  ```
+- Valid semver, sorts correctly (more prerelease identifiers = higher precedence per spec 11.4.4)
+- Resets to no suffix when a new Aztec version drops
+- Applies to both devnet and nightlies (`5.0.0-nightly.20260224.1`)
+- Implementation: `_publish-sdk.yml` checks npm for existing versions with the same Aztec prefix, finds highest revision suffix, increments. If none exists, publishes without suffix.
 
 ---
 

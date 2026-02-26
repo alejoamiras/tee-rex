@@ -8,6 +8,12 @@ describe("validateVersion", () => {
     expect(validateVersion("6.1.3-nightly.20270101")).toBe(true);
   });
 
+  test("accepts valid devnet versions", () => {
+    expect(validateVersion("4.0.0-devnet.2")).toBe(true);
+    expect(validateVersion("4.0.0-devnet.2-patch.1")).toBe(true);
+    expect(validateVersion("4.0.0-devnet.2-patch.12")).toBe(true);
+  });
+
   test("rejects invalid formats", () => {
     expect(validateVersion("garbage")).toBe(false);
     expect(validateVersion("5.0.0")).toBe(false);
@@ -92,5 +98,49 @@ describe("updatePackageJson", () => {
 
     expect(parsed.dependencies["@aztec/bb-prover"]).toBe("5.0.0-nightly.20260220");
     expect(parsed.devDependencies["@aztec/aztec.js"]).toBe("5.0.0-nightly.20260220");
+  });
+
+  test("updates devnet deps to nightly version", () => {
+    const devnetPkg = JSON.stringify(
+      {
+        name: "test-pkg",
+        dependencies: {
+          "@aztec/bb-prover": "4.0.0-devnet.2-patch.1",
+        },
+        devDependencies: {
+          "@aztec/aztec.js": "4.0.0-devnet.2-patch.1",
+        },
+      },
+      null,
+      2,
+    );
+
+    const result = updatePackageJson(devnetPkg, "5.0.0-nightly.20260220");
+    const parsed = JSON.parse(result);
+
+    expect(parsed.dependencies["@aztec/bb-prover"]).toBe("5.0.0-nightly.20260220");
+    expect(parsed.devDependencies["@aztec/aztec.js"]).toBe("5.0.0-nightly.20260220");
+  });
+
+  test("updates devnet deps to new devnet version", () => {
+    const devnetPkg = JSON.stringify(
+      {
+        name: "test-pkg",
+        dependencies: {
+          "@aztec/bb-prover": "4.0.0-devnet.2",
+        },
+        devDependencies: {
+          "@aztec/aztec.js": "4.0.0-devnet.2",
+        },
+      },
+      null,
+      2,
+    );
+
+    const result = updatePackageJson(devnetPkg, "4.0.0-devnet.3");
+    const parsed = JSON.parse(result);
+
+    expect(parsed.dependencies["@aztec/bb-prover"]).toBe("4.0.0-devnet.3");
+    expect(parsed.devDependencies["@aztec/aztec.js"]).toBe("4.0.0-devnet.3");
   });
 });
