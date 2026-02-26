@@ -10,6 +10,14 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: aztec-devnet
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   update:
     uses: ./.github/workflows/_aztec-update.yml
