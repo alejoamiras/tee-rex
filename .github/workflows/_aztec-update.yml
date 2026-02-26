@@ -31,14 +31,6 @@ on:
         default: ""
         type: string
 
-concurrency:
-  group: aztec-update-${{ inputs.dist_tag }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   # ── Job 1: Check if a newer version exists ─────────────────────────
   check-update:
