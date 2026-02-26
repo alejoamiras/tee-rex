@@ -1,6 +1,14 @@
 name: Deploy Devnet
 
 on:
+  push:
+    branches: [devnet]
+    paths-ignore:
+      - "**.md"
+      - "lessons/**"
+      - "**/e2e/**"
+      - "**/*.test.ts"
+      - "**/playwright.config.ts"
   workflow_dispatch:
     inputs:
       deploy_servers:
@@ -28,7 +36,7 @@ jobs:
   # ── Build base image (idempotent — skips if already in ECR) ─────
   ensure-base:
     name: Build Base Image
-    if: inputs.deploy_servers
+    if: github.event_name == 'push' || inputs.deploy_servers
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
@@ -36,7 +44,7 @@ jobs:
   deploy-tee:
     name: Deploy TEE (devnet)
     needs: ensure-base
-    if: inputs.deploy_servers
+    if: github.event_name == 'push' || inputs.deploy_servers
     uses: ./.github/workflows/_deploy-tee.yml
     secrets: inherit
     with:
@@ -48,7 +56,7 @@ jobs:
   deploy-prover:
     name: Deploy Prover (devnet)
     needs: ensure-base
-    if: inputs.deploy_servers
+    if: github.event_name == 'push' || inputs.deploy_servers
     uses: ./.github/workflows/_deploy-prover.yml
     secrets: inherit
     with:
@@ -60,7 +68,7 @@ jobs:
   validate-devnet:
     name: Validate Devnet
     needs: [deploy-tee, deploy-prover]
-    if: inputs.deploy_servers
+    if: github.event_name == 'push' || inputs.deploy_servers
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -159,7 +167,7 @@ jobs:
     needs: validate-devnet
     if: |
       !cancelled()
-      && inputs.deploy_app
+      && (github.event_name == 'push' || inputs.deploy_app)
       && (needs.validate-devnet.result == 'success' || needs.validate-devnet.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -207,7 +215,7 @@ jobs:
     needs: validate-devnet
     if: |
       !cancelled()
-      && inputs.publish_sdk
+      && (github.event_name == 'push' || inputs.publish_sdk)
       && (needs.validate-devnet.result == 'success' || needs.validate-devnet.result == 'skipped')
     uses: ./.github/workflows/_publish-sdk.yml
     secrets: inherit

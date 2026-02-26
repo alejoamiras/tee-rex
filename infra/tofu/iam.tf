@@ -33,6 +33,7 @@ resource "aws_iam_role" "ci" {
               "repo:alejoamiras/tee-rex:ref:refs/heads/main",
               "repo:alejoamiras/tee-rex:ref:refs/heads/devnet",
               "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-nightlies-*",
+              "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-devnet-*",
               "repo:alejoamiras/tee-rex:pull_request",
             ]
           }

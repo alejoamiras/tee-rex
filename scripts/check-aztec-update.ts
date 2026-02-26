@@ -1,9 +1,21 @@
 /**
- * Check npm for the latest Aztec nightlies and compare with current.
+ * Check npm for the latest Aztec version at a given dist-tag and compare with current.
  *
- * Usage: bun scripts/check-aztec-nightlies.ts
+ * Usage: bun scripts/check-aztec-update.ts <dist-tag>
+ * Examples:
+ *   bun scripts/check-aztec-update.ts nightly
+ *   bun scripts/check-aztec-update.ts devnet
  * Output: JSON with { current, latest, needsUpdate }
  */
+
+const distTag = process.argv[2];
+if (!distTag) {
+  console.error("Usage: bun scripts/check-aztec-update.ts <dist-tag>");
+  console.error("Examples:");
+  console.error("  bun scripts/check-aztec-update.ts nightly");
+  console.error("  bun scripts/check-aztec-update.ts devnet");
+  process.exit(1);
+}
 
 const AZTEC_PACKAGES = [
   "@aztec/accounts",
@@ -26,7 +38,7 @@ async function getCurrentVersion(): Promise<string> {
   return version;
 }
 
-async function getLatestNightlies(): Promise<string> {
+async function getLatestVersion(tag: string): Promise<string> {
   const proc = Bun.spawn(["npm", "view", "@aztec/aztec.js", "dist-tags", "--json"], {
     stdout: "pipe",
     stderr: "pipe",
@@ -38,9 +50,9 @@ async function getLatestNightlies(): Promise<string> {
     throw new Error(`npm view failed: ${stderr}`);
   }
   const tags = JSON.parse(output);
-  const nightly = tags.nightly;
-  if (!nightly) throw new Error("No 'nightly' dist-tag found for @aztec/aztec.js");
-  return nightly;
+  const version = tags[tag];
+  if (!version) throw new Error(`No '${tag}' dist-tag found for @aztec/aztec.js`);
+  return version;
 }
 
 async function verifyAllPackagesExist(version: string): Promise<{ allExist: boolean; missing: string[] }> {
@@ -64,7 +76,7 @@ async function verifyAllPackagesExist(version: string): Promise<{ allExist: bool
 
 async function main() {
   const current = await getCurrentVersion();
-  const latest = await getLatestNightlies();
+  const latest = await getLatestVersion(distTag);
 
   if (current === latest) {
     console.log(JSON.stringify({ current, latest, needsUpdate: false }));
