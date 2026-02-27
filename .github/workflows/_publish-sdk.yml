@@ -71,9 +71,16 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Aztec version: $VERSION"
 
+      - name: Determine SDK publish version
+        id: sdk-version
+        run: |
+          VERSION=$(bun scripts/get-sdk-publish-version.ts "${{ steps.aztec-version.outputs.version }}")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "SDK publish version: $VERSION"
+
       - name: Set SDK version
         working-directory: packages/sdk
-        run: node -e "const p=require('./package.json');p.version='${{ steps.aztec-version.outputs.version }}';require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+        run: node -e "const p=require('./package.json');p.version='${{ steps.sdk-version.outputs.version }}';require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
       - name: Publish to npm
         working-directory: packages/sdk
@@ -85,7 +92,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.aztec-version.outputs.version }}"
+          VERSION="${{ steps.sdk-version.outputs.version }}"
+          AZTEC_VERSION="${{ steps.aztec-version.outputs.version }}"
           TAG="@alejoamiras/tee-rex@${VERSION}"
 
           git config user.name "github-actions[bot]"
@@ -93,7 +101,13 @@ jobs:
           git tag "$TAG" || true
           git push origin "$TAG" || true
 
+          if [ "$VERSION" = "$AZTEC_VERSION" ]; then
+            NOTES="Aligned with Aztec ${{ inputs.dist_tag }} version \`${AZTEC_VERSION}\`."
+          else
+            NOTES="SDK revision for Aztec ${{ inputs.dist_tag }} version \`${AZTEC_VERSION}\`."
+          fi
+
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes "Aligned with Aztec ${{ inputs.dist_tag }} version \`${VERSION}\`." \
+            --notes "$NOTES" \
             ${{ inputs.latest && '--latest' || '--latest=false' }}
