@@ -56,9 +56,9 @@ resource "aws_cloudfront_distribution" "prod" {
     origin_access_control_id = aws_cloudfront_origin_access_control.app.id
   }
 
-  # Prover EC2 origin (HTTP, port 80)
+  # Prover EC2 origin (HTTP, port 80) — same instance as TEE (consolidated)
   origin {
-    domain_name = aws_eip.prod_prover.public_dns
+    domain_name = aws_eip.prod_tee.public_dns
     origin_id   = "prover-ec2"
 
     custom_origin_config {
@@ -185,9 +185,9 @@ resource "aws_cloudfront_distribution" "devnet" {
     origin_access_control_id = aws_cloudfront_origin_access_control.app.id
   }
 
-  # Prover EC2 origin (HTTP, port 80)
+  # Prover EC2 origin (HTTP, port 80) — same instance as TEE (consolidated)
   origin {
-    domain_name = aws_eip.devnet_prover.public_dns
+    domain_name = aws_eip.devnet_tee.public_dns
     origin_id   = "prover-ec2"
 
     custom_origin_config {
