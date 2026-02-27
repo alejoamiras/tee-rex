@@ -43,21 +43,12 @@ jobs:
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
-  # ── Deploy TEE enclave + prover container in parallel ───────────
-  deploy-tee:
-    name: Deploy TEE
+  # ── Deploy TEE enclave + prover on single instance ──────────────
+  deploy-server:
+    name: Deploy Server
     needs: [check, ensure-base]
     if: needs.check.outputs.triggered == 'true'
-    uses: ./.github/workflows/_deploy-tee.yml
-    secrets: inherit
-    with:
-      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
-
-  deploy-prover:
-    name: Deploy Prover
-    needs: [check, ensure-base]
-    if: needs.check.outputs.triggered == 'true'
-    uses: ./.github/workflows/_deploy-prover.yml
+    uses: ./.github/workflows/_deploy-unified.yml
     secrets: inherit
     with:
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
@@ -67,33 +58,33 @@ jobs:
   # that deployed TEE/prover work against the real Aztec network.
   e2e-sdk:
     name: SDK E2E (TEE + Remote + nextnet)
-    needs: [deploy-tee, deploy-prover]
-    if: ${{ !cancelled() && (needs.deploy-tee.outputs.deployed == 'true' || needs.deploy-prover.outputs.deployed == 'true') }}
+    needs: deploy-server
+    if: ${{ !cancelled() && needs.deploy-server.outputs.deployed == 'true' }}
     uses: ./.github/workflows/_e2e-sdk.yml
     secrets: inherit
     with:
       aztec_node_url: https://nextnet.aztec-labs.com
-      tee_url: ${{ needs.deploy-tee.outputs.deployed == 'true' && 'http://localhost:4001' || '' }}
-      prover_url: ${{ needs.deploy-prover.outputs.deployed == 'true' && 'http://localhost:4002' || 'http://localhost:4000' }}
-      setup_prover_tunnel: ${{ needs.deploy-prover.outputs.deployed == 'true' }}
+      tee_url: http://localhost:4001
+      prover_url: http://localhost:4002
+      setup_prover_tunnel: true
 
   # ── App Smoke E2E with both TEE + Remote against nextnet ───────
   e2e-app:
     name: App Smoke E2E (TEE + Remote + nextnet)
-    needs: [deploy-tee, deploy-prover]
-    if: ${{ !cancelled() && (needs.deploy-tee.outputs.deployed == 'true' || needs.deploy-prover.outputs.deployed == 'true') }}
+    needs: deploy-server
+    if: ${{ !cancelled() && needs.deploy-server.outputs.deployed == 'true' }}
     uses: ./.github/workflows/_e2e-app.yml
     secrets: inherit
     with:
       aztec_node_url: https://nextnet.aztec-labs.com
-      tee_url: ${{ needs.deploy-tee.outputs.deployed == 'true' && 'http://localhost:4001' || '' }}
-      prover_url: ${{ needs.deploy-prover.outputs.deployed == 'true' && 'http://localhost:4002' || 'http://localhost:4000' }}
-      setup_prover_tunnel: ${{ needs.deploy-prover.outputs.deployed == 'true' }}
+      tee_url: http://localhost:4001
+      prover_url: http://localhost:4002
+      setup_prover_tunnel: true
 
-  # ── Teardown: Always stop both EC2 instances ────────────────────
+  # ── Teardown: Always stop the EC2 instance ──────────────────────
   teardown:
     name: Teardown
-    needs: [check, deploy-tee, deploy-prover, e2e-sdk, e2e-app]
+    needs: [check, deploy-server, e2e-sdk, e2e-app]
     if: always() && needs.check.outputs.triggered == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -104,24 +95,17 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Stop TEE EC2 instance
+      - name: Stop EC2 instance
         run: |
           if [ -n "${{ secrets.TEE_INSTANCE_ID }}" ]; then
             aws ec2 stop-instances --instance-ids "${{ secrets.TEE_INSTANCE_ID }}" || true
-            echo "TEE EC2 instance stop requested"
-          fi
-
-      - name: Stop Prover EC2 instance
-        run: |
-          if [ -n "${{ secrets.PROVER_INSTANCE_ID }}" ]; then
-            aws ec2 stop-instances --instance-ids "${{ secrets.PROVER_INSTANCE_ID }}" || true
-            echo "Prover EC2 instance stop requested"
+            echo "EC2 instance stop requested"
           fi
 
   # ── Gate job for branch protection ─────────────────────────────
   infra-status:
     name: Infra Status
-    needs: [check, ensure-base, deploy-tee, deploy-prover, e2e-sdk, e2e-app, teardown]
+    needs: [check, ensure-base, deploy-server, e2e-sdk, e2e-app, teardown]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -137,8 +121,8 @@ jobs:
             echo "E2E tests failed"
             exit 1
           fi
-          if [ "${{ needs.deploy-tee.result }}" = "failure" ] || [ "${{ needs.deploy-prover.result }}" = "failure" ]; then
-            echo "Deploy jobs failed"
+          if [ "${{ needs.deploy-server.result }}" = "failure" ]; then
+            echo "Deploy job failed"
             exit 1
           fi
           if [ "${{ needs.e2e-sdk.result }}" = "cancelled" ] || [ "${{ needs.e2e-app.result }}" = "cancelled" ]; then
