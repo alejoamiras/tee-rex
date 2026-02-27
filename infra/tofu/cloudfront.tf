@@ -41,7 +41,7 @@ resource "aws_cloudfront_function" "strip_prefix" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "prod" {
-  comment             = "tee-rex production — app (S3) + prover/TEE (EC2) + SGX (Azure)"
+  comment             = "tee-rex production — app (S3) + prover/TEE (EC2) + SGX (Alibaba)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -86,10 +86,10 @@ resource "aws_cloudfront_distribution" "prod" {
     }
   }
 
-  # SGX Azure origin (HTTP, port 4000)
+  # SGX Alibaba origin (HTTP, port 4000)
   origin {
-    domain_name = azurerm_public_ip.sgx["prod"].fqdn
-    origin_id   = "sgx-azure"
+    domain_name = alicloud_eip_address.sgx["prod"].ip_address
+    origin_id   = "sgx-alibaba"
 
     custom_origin_config {
       http_port                = 4000
@@ -148,10 +148,10 @@ resource "aws_cloudfront_distribution" "prod" {
     }
   }
 
-  # /sgx/* -> SGX Azure VM
+  # /sgx/* -> SGX Alibaba VM
   ordered_cache_behavior {
     path_pattern               = "/sgx/*"
-    target_origin_id           = "sgx-azure"
+    target_origin_id           = "sgx-alibaba"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
@@ -203,7 +203,7 @@ resource "aws_cloudfront_distribution" "prod" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "devnet" {
-  comment             = "tee-rex devnet — app (S3) + prover/TEE/SGX (EC2/Azure)"
+  comment             = "tee-rex devnet — app (S3) + prover/TEE/SGX (EC2/Alibaba)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -248,10 +248,10 @@ resource "aws_cloudfront_distribution" "devnet" {
     }
   }
 
-  # SGX Azure origin (HTTP, port 4000) — shares prod VM for now
+  # SGX Alibaba origin (HTTP, port 4000)
   origin {
-    domain_name = azurerm_public_ip.sgx["prod"].fqdn
-    origin_id   = "sgx-azure"
+    domain_name = alicloud_eip_address.sgx["devnet"].ip_address
+    origin_id   = "sgx-alibaba"
 
     custom_origin_config {
       http_port                = 4000
@@ -310,10 +310,10 @@ resource "aws_cloudfront_distribution" "devnet" {
     }
   }
 
-  # /sgx/* -> SGX Azure VM
+  # /sgx/* -> SGX Alibaba VM
   ordered_cache_behavior {
     path_pattern               = "/sgx/*"
-    target_origin_id           = "sgx-azure"
+    target_origin_id           = "sgx-alibaba"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id

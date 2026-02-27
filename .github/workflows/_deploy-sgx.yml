@@ -28,8 +28,8 @@ jobs:
       deployed: ${{ steps.health.outputs.deployed }}
       sgx_url: ${{ steps.health.outputs.sgx_url }}
     env:
-      RESOURCE_GROUP: tee-rex-sgx-${{ inputs.environment }}
-      VM_NAME: tee-rex-sgx-${{ inputs.environment }}
+      INSTANCE_ID: ${{ secrets[format('SGX_{0}_INSTANCE_ID', inputs.environment)] }}
+      REGION_ID: cn-hongkong
     steps:
       # ── Checkout ──────────────────────────────────────────────────
       - uses: actions/checkout@v4
@@ -38,90 +38,115 @@ jobs:
       - name: Validate secrets
         run: |
           missing=()
-          [[ -z "${{ secrets.AZURE_CLIENT_ID }}" ]] && missing+=("AZURE_CLIENT_ID")
-          [[ -z "${{ secrets.AZURE_TENANT_ID }}" ]] && missing+=("AZURE_TENANT_ID")
-          [[ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]] && missing+=("AZURE_SUBSCRIPTION_ID")
+          [[ -z "${{ secrets.ALICLOUD_ROLE_ARN }}" ]] && missing+=("ALICLOUD_ROLE_ARN")
+          [[ -z "${{ secrets.ALICLOUD_OIDC_PROVIDER_ARN }}" ]] && missing+=("ALICLOUD_OIDC_PROVIDER_ARN")
+          [[ -z "${INSTANCE_ID}" ]] && missing+=("SGX_${{ inputs.environment }}_INSTANCE_ID")
           if [[ ${#missing[@]} -gt 0 ]]; then
             echo "::error::Missing required secrets: ${missing[*]}"
             exit 1
           fi
 
-      # ── Azure login via OIDC ─────────────────────────────────────
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
+      # ── Alibaba Cloud login via OIDC ───────────────────────────
+      - name: Alibaba Cloud login (OIDC)
+        uses: aliyun/configure-aliyun-credentials-action@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          role-to-assume: ${{ secrets.ALICLOUD_ROLE_ARN }}
+          oidc-provider-arn: ${{ secrets.ALICLOUD_OIDC_PROVIDER_ARN }}
+          audience: "actions.github.com"
 
-      # ── Start Azure VM ───────────────────────────────────────────
-      - name: Start Azure VM
-        run: |
-          echo "Starting VM ${VM_NAME} in ${RESOURCE_GROUP}..."
-          az vm start -g "$RESOURCE_GROUP" -n "$VM_NAME"
-          echo "VM started"
+      # ── Install Alibaba Cloud CLI ──────────────────────────────
+      - name: Install aliyun CLI
+        uses: aliyun/setup-aliyun-cli-action@v1
 
-          # Wait for Azure agent to be ready (poll with run-command)
-          echo "Waiting for Azure agent..."
-          for i in $(seq 1 30); do
-            if az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM_NAME" \
-              --command-id RunShellScript --scripts "echo ready" \
-              --query 'value[0].message' -o tsv 2>/dev/null | grep -q "ready"; then
-              echo "Agent ready (attempt $i)"
-              break
-            fi
-            if [ "$i" = "30" ]; then
-              echo "Agent not ready after 5 minutes"
-              exit 1
-            fi
-            sleep 10
-          done
-
-      # ── Deploy SGX worker ────────────────────────────────────────
+      # ── Deploy SGX worker via Cloud Assistant ──────────────────
       - name: Deploy SGX worker
         run: |
-          # Base64-encode deploy files (same pattern as _deploy-tee.yml SSM)
+          # Base64-encode deploy files
           WORKER_B64=$(base64 -w0 infra/sgx-spike/worker.js)
           MANIFEST_B64=$(base64 -w0 infra/sgx-spike/worker.manifest.template)
           SERVICE_B64=$(base64 -w0 infra/sgx-spike/tee-rex-sgx-worker.service)
           SCRIPT_B64=$(base64 -w0 infra/sgx-spike/ci-deploy-sgx-remote.sh)
 
-          RESULT=$(az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM_NAME" \
-            --command-id RunShellScript \
-            --scripts "
-              echo '${WORKER_B64}' | base64 -d > /tmp/worker.js
-              echo '${MANIFEST_B64}' | base64 -d > /tmp/worker.manifest.template
-              echo '${SERVICE_B64}' | base64 -d > /tmp/tee-rex-sgx-worker.service
-              echo '${SCRIPT_B64}' | base64 -d > /tmp/deploy.sh
-              chmod +x /tmp/deploy.sh
-              /tmp/deploy.sh
-            " \
-            --query 'value[0].message' -o tsv)
+          # Build the deploy command (decode files + run deploy script)
+          DEPLOY_CMD="echo '${WORKER_B64}' | base64 -d > /tmp/worker.js && echo '${MANIFEST_B64}' | base64 -d > /tmp/worker.manifest.template && echo '${SERVICE_B64}' | base64 -d > /tmp/tee-rex-sgx-worker.service && echo '${SCRIPT_B64}' | base64 -d > /tmp/deploy.sh && chmod +x /tmp/deploy.sh && /tmp/deploy.sh"
 
-          echo "$RESULT"
-          if echo "$RESULT" | grep -q "deployed successfully"; then
-            echo "SGX worker deployed"
-          else
-            echo "::error::SGX worker deployment may have failed — check output above"
-            exit 1
-          fi
+          INVOKE_ID=$(aliyun ecs RunCommand \
+            --RegionId "${REGION_ID}" \
+            --Type "RunShellScript" \
+            --CommandContent "$(echo "$DEPLOY_CMD" | base64 -w0)" \
+            --ContentEncoding "Base64" \
+            --Timeout "300" \
+            --RepeatMode "Once" \
+            --InstanceId.1 "${INSTANCE_ID}" \
+            --output cols=InvokeId rows=InvokeId 2>&1 | tail -1)
+
+          echo "Cloud Assistant InvokeId: ${INVOKE_ID}"
+
+          # Poll for completion (5 min timeout)
+          attempt=0
+          while [ $((attempt+=1)) -le 60 ]; do
+            RESULT=$(aliyun ecs DescribeInvocationResults \
+              --RegionId "${REGION_ID}" \
+              --InvokeId "${INVOKE_ID}" \
+              --output cols=InvocationStatus,Output rows=InvocationResults.InvocationResult[] 2>&1 || echo "")
+
+            if echo "$RESULT" | grep -q "Finished"; then
+              echo "Deploy command finished (attempt ${attempt})"
+              OUTPUT=$(aliyun ecs DescribeInvocationResults \
+                --RegionId "${REGION_ID}" \
+                --InvokeId "${INVOKE_ID}" 2>&1)
+              echo "$OUTPUT"
+
+              if echo "$OUTPUT" | grep -q "deployed successfully"; then
+                echo "SGX worker deployed"
+                break
+              else
+                echo "::error::SGX worker deployment may have failed"
+                exit 1
+              fi
+            fi
+
+            if echo "$RESULT" | grep -q "Failed"; then
+              echo "::error::Cloud Assistant command failed (attempt ${attempt})"
+              echo "$RESULT"
+              exit 1
+            fi
+
+            sleep 5
+          done
 
       # ── Health Check ─────────────────────────────────────────────
       - name: Health check
         id: health
         run: |
-          # Get the VM's public IP for the sgx_url output
-          PUBLIC_IP=$(az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -d \
-            --query publicIps -o tsv 2>/dev/null || echo "")
+          # Get the instance's public IP
+          PUBLIC_IP=$(aliyun ecs DescribeInstances \
+            --RegionId "${REGION_ID}" \
+            --InstanceIds '["'"${INSTANCE_ID}"'"]' \
+            --output cols=PublicIpAddress rows=Instances.Instance[].PublicIpAddress.IpAddress[] 2>&1 | tail -1)
 
-          for i in $(seq 1 30); do
-            RESULT=$(az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM_NAME" \
-              --command-id RunShellScript \
-              --scripts "curl -sf http://localhost:4000/attestation | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[\"mode\"])'" \
-              --query 'value[0].message' -o tsv 2>/dev/null || echo "")
+          HEALTH_CMD='curl -sf http://localhost:4000/attestation | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[\"mode\"])"'
+
+          attempt=0
+          while [ $((attempt+=1)) -le 30 ]; do
+            INVOKE_ID=$(aliyun ecs RunCommand \
+              --RegionId "${REGION_ID}" \
+              --Type "RunShellScript" \
+              --CommandContent "$(echo "$HEALTH_CMD" | base64 -w0)" \
+              --ContentEncoding "Base64" \
+              --Timeout "10" \
+              --RepeatMode "Once" \
+              --InstanceId.1 "${INSTANCE_ID}" \
+              --output cols=InvokeId rows=InvokeId 2>&1 | tail -1)
+
+            sleep 5
+
+            RESULT=$(aliyun ecs DescribeInvocationResults \
+              --RegionId "${REGION_ID}" \
+              --InvokeId "${INVOKE_ID}" 2>&1 || echo "")
 
             if echo "$RESULT" | grep -q "sgx"; then
-              echo "SGX enclave healthy (attempt $i)"
+              echo "SGX enclave healthy (attempt ${attempt})"
               echo "deployed=true" >> "$GITHUB_OUTPUT"
               if [ -n "$PUBLIC_IP" ]; then
                 echo "sgx_url=http://${PUBLIC_IP}:4000" >> "$GITHUB_OUTPUT"
@@ -131,6 +156,6 @@ jobs:
             sleep 5
           done
 
-          echo "Health check failed after 2.5 minutes"
+          echo "Health check failed after 5 minutes"
           echo "deployed=false" >> "$GITHUB_OUTPUT"
           exit 1

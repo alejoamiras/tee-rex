@@ -12,8 +12,8 @@
 - **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`; shell & workflow lint: `actionlint.yml`; nightlies: `aztec-nightlies.yml`; infra: `infra.yml` (combined TEE+Remote), `tee.yml`, `remote.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; reusable: `_build-base.yml`, `_deploy-tee.yml`, `_deploy-prover.yml`, `_publish-sdk.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Infrastructure** (`/infra/tofu`): OpenTofu (IaC) managing AWS (EC2, EIPs, SG, IAM, ECR, S3, ACM, CloudFront) + Azure (SGX VM). Single state file for ci/prod/devnet. Remote state in S3.
-- **SGX Enclave** (`/infra/sgx-spike`): Gramine SGX worker (Node.js + bb binary) on Azure DC4ds_v3. Express proxy outside SGX, worker inside SGX. DCAP attestation via Azure MAA.
+- **Infrastructure** (`/infra/tofu`): OpenTofu (IaC) managing AWS (EC2, EIPs, SG, IAM, ECR, S3, ACM, CloudFront) + Alibaba Cloud (SGX VMs). Single state file for ci/prod/devnet. Remote state in S3.
+- **SGX Enclave** (`/infra/sgx-spike`): Gramine SGX worker (Node.js + bb binary) on Alibaba Cloud g7t.xlarge (Intel SGX, Ice Lake). Express proxy outside SGX, worker inside SGX. DCAP attestation via Intel Trust Authority (ITA).
 - **Aztec version**: 5.0.0-nightly.20260220
 
 **Reference docs** (read on demand, not on every task):

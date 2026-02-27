@@ -1,20 +1,27 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { logger } from "./logger.js";
 
-/** Default Azure MAA shared endpoint (East US). */
-const DEFAULT_MAA_ENDPOINT = "https://sharedeus.eus.attest.azure.net";
+/** Default Intel Trust Authority (ITA) endpoint (US/Global). */
+const DEFAULT_ITA_ENDPOINT = "https://api.trustauthority.intel.com";
 
-/** Azure MAA API version for SGX attestation. */
-const MAA_API_VERSION = "2022-08-01";
+/** ITA attestation API path for standalone SGX quotes. */
+const ITA_ATTEST_PATH = "/appraisal/v1/attest";
+
+/** ITA JWKS endpoint for verifying attestation JWT signatures. */
+const DEFAULT_ITA_JWKS_URL = "https://portal.trustauthority.intel.com/certs";
 
 export interface SgxAttestationVerifyOptions {
-  /** Azure MAA endpoint. Default: https://sharedeus.eus.attest.azure.net */
-  maaEndpoint?: string;
+  /** ITA endpoint. Default: https://api.trustauthority.intel.com */
+  itaEndpoint?: string;
+  /** ITA API key (required for production use). */
+  itaApiKey?: string;
+  /** ITA JWKS URL for verifying JWT signatures. Default: https://portal.trustauthority.intel.com/certs */
+  itaJwksUrl?: string;
   /** Maximum quote age in milliseconds. Default: 5 minutes. */
   maxAgeMs?: number;
-  /** Expected MRENCLAVE (hex). If set, verified against the MAA JWT claims. */
+  /** Expected MRENCLAVE (hex). If set, verified against the ITA JWT claims. */
   expectedMrEnclave?: string;
-  /** Expected MRSIGNER (hex). If set, verified against the MAA JWT claims. */
+  /** Expected MRSIGNER (hex). If set, verified against the ITA JWT claims. */
   expectedMrSigner?: string;
 }
 
@@ -33,7 +40,7 @@ export class SgxAttestationError extends Error {
 
 export const SgxAttestationErrorCode = {
   INVALID_QUOTE: "INVALID_QUOTE",
-  MAA_VERIFICATION_FAILED: "MAA_VERIFICATION_FAILED",
+  ITA_VERIFICATION_FAILED: "ITA_VERIFICATION_FAILED",
   JWT_VERIFICATION_FAILED: "JWT_VERIFICATION_FAILED",
   MRENCLAVE_MISMATCH: "MRENCLAVE_MISMATCH",
   MRSIGNER_MISMATCH: "MRSIGNER_MISMATCH",
@@ -43,7 +50,7 @@ export const SgxAttestationErrorCode = {
 export type SgxAttestationErrorCode =
   (typeof SgxAttestationErrorCode)[keyof typeof SgxAttestationErrorCode];
 
-/** Claims extracted from the MAA-verified JWT. */
+/** Claims extracted from the ITA-verified JWT. */
 export interface SgxAttestationResult {
   /** The public key (verified via user_report_data hash binding). */
   publicKey: string;
@@ -54,19 +61,19 @@ export interface SgxAttestationResult {
 }
 
 /**
- * Verify an SGX DCAP attestation quote via Azure MAA (Microsoft Azure Attestation).
+ * Verify an SGX DCAP attestation quote via Intel Trust Authority (ITA).
  *
  * Verification steps:
- * 1. POST the raw quote to Azure MAA's `/attest/SgxEnclave` endpoint
- * 2. MAA verifies the DCAP quote (PCK cert chain, TCB, QE identity) and returns a signed JWT
- * 3. Verify the JWT signature against MAA's JWKS signing keys
+ * 1. POST the raw quote to ITA's `/appraisal/v1/attest` endpoint
+ * 2. ITA verifies the DCAP quote (PCK cert chain, TCB, QE identity) and returns a signed JWT
+ * 3. Verify the JWT signature against ITA's JWKS signing keys
  * 4. Extract MRENCLAVE, MRSIGNER, and report data from JWT claims
  * 5. Optionally check MRENCLAVE/MRSIGNER against expected values
  * 6. Verify that the quote's user_report_data contains the SHA-256 hash of the provided public key
  *
  * @param quoteBase64 - Base64-encoded SGX DCAP quote
  * @param publicKey - The armored OpenPGP public key claimed by the enclave
- * @param options - Verification options (MAA endpoint, expected measurements, freshness)
+ * @param options - Verification options (ITA endpoint, expected measurements, freshness)
  */
 export async function verifySgxAttestation(
   quoteBase64: string,
@@ -74,55 +81,60 @@ export async function verifySgxAttestation(
   options: SgxAttestationVerifyOptions = {},
 ): Promise<SgxAttestationResult> {
   const {
-    maaEndpoint = DEFAULT_MAA_ENDPOINT,
+    itaEndpoint = DEFAULT_ITA_ENDPOINT,
+    itaApiKey,
+    itaJwksUrl = DEFAULT_ITA_JWKS_URL,
     maxAgeMs = 5 * 60 * 1000,
     expectedMrEnclave,
     expectedMrSigner,
   } = options;
 
-  // 1. Submit quote to Azure MAA for verification
-  const attestUrl = `${maaEndpoint}/attest/SgxEnclave?api-version=${MAA_API_VERSION}`;
-  const maaResponse = await fetch(attestUrl, {
+  // 1. Submit quote to Intel Trust Authority for verification
+  const attestUrl = `${itaEndpoint}${ITA_ATTEST_PATH}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (itaApiKey) {
+    headers["x-api-key"] = itaApiKey;
+  }
+
+  const itaResponse = await fetch(attestUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ quote: quoteBase64 }),
   });
 
-  if (!maaResponse.ok) {
-    const errorBody = await maaResponse.text();
+  if (!itaResponse.ok) {
+    const errorBody = await itaResponse.text();
     throw new SgxAttestationError(
-      `Azure MAA attestation failed (${maaResponse.status}): ${errorBody}`,
-      SgxAttestationErrorCode.MAA_VERIFICATION_FAILED,
+      `ITA attestation failed (${itaResponse.status}): ${errorBody}`,
+      SgxAttestationErrorCode.ITA_VERIFICATION_FAILED,
     );
   }
 
-  const maaResult = (await maaResponse.json()) as { token: string };
-  if (!maaResult.token) {
+  // ITA returns the JWT token directly as the response body
+  const token = await itaResponse.text();
+  if (!token || !token.includes(".")) {
     throw new SgxAttestationError(
-      "Azure MAA returned no token",
-      SgxAttestationErrorCode.MAA_VERIFICATION_FAILED,
+      "ITA returned no valid token",
+      SgxAttestationErrorCode.ITA_VERIFICATION_FAILED,
     );
   }
 
-  // 2. Verify the MAA JWT signature against MAA's JWKS endpoint.
-  // maaEndpoint can be absolute (https://...) or a relative proxy path (/maa).
-  // new URL() requires an absolute base, so resolve relative paths against the current origin.
-  const certsPath = `${maaEndpoint}/certs`;
-  const jwksUrl = certsPath.startsWith("http")
-    ? new URL(certsPath)
-    : new URL(certsPath, globalThis.location?.origin);
+  // 2. Verify the ITA JWT signature against ITA's JWKS endpoint.
+  // itaJwksUrl can be absolute (https://...) or a relative proxy path (/ita-certs).
+  const jwksUrl = itaJwksUrl.startsWith("http")
+    ? new URL(itaJwksUrl)
+    : new URL(itaJwksUrl, globalThis.location?.origin);
   const jwks = createRemoteJWKSet(jwksUrl);
 
   let payload: Record<string, unknown>;
   try {
-    const result = await jwtVerify(maaResult.token, jwks, {
-      // MAA tokens use the real endpoint URL as issuer, even when proxied.
-      issuer: maaEndpoint.startsWith("http") ? maaEndpoint : DEFAULT_MAA_ENDPOINT,
+    const result = await jwtVerify(token, jwks, {
+      issuer: itaEndpoint.startsWith("http") ? itaEndpoint : DEFAULT_ITA_ENDPOINT,
     });
     payload = result.payload as Record<string, unknown>;
   } catch (err) {
     throw new SgxAttestationError(
-      `MAA JWT verification failed: ${err instanceof Error ? err.message : String(err)}`,
+      `ITA JWT verification failed: ${err instanceof Error ? err.message : String(err)}`,
       SgxAttestationErrorCode.JWT_VERIFICATION_FAILED,
     );
   }
@@ -139,9 +151,9 @@ export async function verifySgxAttestation(
     }
   }
 
-  // 4. Extract SGX-specific claims from the MAA JWT
-  const mrEnclave = (payload["x-ms-sgx-mrenclave"] as string) ?? "";
-  const mrSigner = (payload["x-ms-sgx-mrsigner"] as string) ?? "";
+  // 4. Extract SGX-specific claims from the ITA JWT
+  const mrEnclave = (payload.sgx_mrenclave as string) ?? "";
+  const mrSigner = (payload.sgx_mrsigner as string) ?? "";
 
   // 5. Verify MRENCLAVE if expected
   if (expectedMrEnclave) {
@@ -165,8 +177,8 @@ export async function verifySgxAttestation(
 
   // 7. Verify public key binding via user_report_data
   // The enclave embeds SHA-256(publicKey) in the quote's user_report_data field.
-  // MAA exposes this as x-ms-sgx-report-data (hex-encoded, 64 bytes = 128 hex chars).
-  const reportData = (payload["x-ms-sgx-report-data"] as string) ?? "";
+  // ITA exposes this as sgx_report_data (hex-encoded, 64 bytes = 128 hex chars).
+  const reportData = (payload.sgx_report_data as string) ?? "";
   if (reportData) {
     const reportDataBytes = Buffer.from(reportData, "hex");
     // user_report_data is 64 bytes; the SHA-256 hash occupies the first 32 bytes

@@ -8,8 +8,9 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# Azure — SGX spike (Phase 15E)
-provider "azurerm" {
-  features {}
-  subscription_id = var.azure_subscription_id
+# Alibaba Cloud — SGX VMs (g7t instances with Intel SGX)
+provider "alicloud" {
+  access_key = var.alicloud_access_key
+  secret_key = var.alicloud_secret_key
+  region     = var.alicloud_region
 }

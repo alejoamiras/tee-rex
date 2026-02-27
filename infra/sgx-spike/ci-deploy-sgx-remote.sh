@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # ci-deploy-sgx-remote.sh — Deploy the SGX worker on the VM itself.
 #
-# Runs on the Azure VM (files already in /tmp from base64 decode via
-# az vm run-command invoke). No SCP needed.
+# Runs on the SGX VM (files already in /tmp). No SCP needed.
 #
-# Usage: called by _deploy-sgx.yml via az vm run-command
+# Usage: called by _deploy-sgx.yml or manually on the VM
 
 set -euo pipefail
 

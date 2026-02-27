@@ -30,7 +30,7 @@ The SDK encrypts proving inputs so that only the enclave can read them, the encl
               ┌───────────────────┘          │          └───────────────────┐
               ▼                              ▼                              ▼
 ┌──────────────────────┐  ┌────────────────────────────────┐  ┌────────────────────────────────┐
-│   Prover EC2 (AWS)   │  │     TEE EC2 (AWS Nitro)        │  │     SGX VM (Azure DCdsv3)      │
+│   Prover EC2 (AWS)   │  │     TEE EC2 (AWS Nitro)        │  │     SGX VM (Alibaba g7t)      │
 │                      │  │                                │  │                                │
 │  Express + bb (WASM) │  │  socat TCP:4000↔vsock:16:5K    │  │  Express (outside SGX)         │
 │  No attestation      │  │  ┌──────────────────────────┐  │  │  ┌──────────────────────────┐  │
@@ -52,7 +52,7 @@ The SDK encrypts proving inputs so that only the enclave can read them, the encl
 | **Local** | Browser (WASM) | None | Client trusts itself |
 | **Remote** | Prover EC2 | None | Client trusts server operator |
 | **Nitro** | AWS Nitro Enclave | COSE_Sign1 → AWS Root CA | Client trusts AWS hardware |
-| **SGX** | Intel SGX via Gramine | DCAP → Azure MAA JWT | Client trusts Intel hardware |
+| **SGX** | Intel SGX via Gramine | DCAP → ITA JWT | Client trusts Intel hardware |
 
 ## Nitro Enclave Architecture
 
@@ -83,7 +83,7 @@ EC2 Host (m5.xlarge)
 Intel SGX uses a fundamentally different approach. Instead of a full VM, SGX creates an encrypted memory region (enclave) within a regular process. [Gramine](https://gramineproject.io/) provides a library OS that runs unmodified Linux applications inside SGX enclaves.
 
 ```
-Azure VM (Standard_DC4ds_v3 — 4 vCPU, 32GB RAM, 16GB EPC)
+Alibaba ECS (ecs.g7t.xlarge — 4 vCPU, 16GB RAM, 8GB EPC)
 │
 ├── Express server (Bun, port 4000)          ← runs OUTSIDE SGX
 │   TEE_MODE=sgx, routes to SGX worker
@@ -113,12 +113,12 @@ Azure VM (Standard_DC4ds_v3 — 4 vCPU, 32GB RAM, 16GB EPC)
 | Property | Nitro Enclave | SGX Enclave |
 |----------|--------------|-------------|
 | **Isolation** | Full VM (no network, no disk, no SSH) | Encrypted memory region within a process |
-| **Attestation** | COSE_Sign1 → AWS Root CA (local verification) | DCAP quote → Azure MAA JWT (remote verification) |
+| **Attestation** | COSE_Sign1 → AWS Root CA (local verification) | DCAP quote → Intel Trust Authority (ITA) JWT (remote verification) |
 | **Communication** | vsock (hypervisor-controlled) | TCP over loopback (same VM) |
 | **Key type** | curve25519 (OpenPGP) | P-256 (OpenPGP) — Gramine's OpenSSL lacks curve25519 |
 | **Prover** | Barretenberg WASM (inside enclave) | bb native binary (inside enclave via execFileSync) |
-| **Cloud** | AWS (m5.xlarge, ~$0.19/hr) | Azure (DC4ds_v3, ~$0.45/hr) |
-| **Memory** | 8GB hugepages (configurable) | 16GB EPC (hardware, non-configurable) |
+| **Cloud** | AWS (m5.xlarge, ~$0.19/hr) | Alibaba (g7t.xlarge) |
+| **Memory** | 8GB hugepages (configurable) | 8GB EPC (hardware, non-configurable) |
 | **Proof time** | ~11s | ~52s (Gramine overhead) |
 
 ### SGX: Why MALLOC_ARENA_MAX=1 Matters
@@ -149,26 +149,26 @@ Two manifest templates define what runs inside SGX:
 ### SGX: Attestation Protocol
 
 ```
-Client (SDK)                Azure MAA               SGX Enclave
+Client (SDK)                Intel Trust Authority (ITA)               SGX Enclave
 ────────────                ─────────               ───────────
 
 1. GET /attestation ──────────────────────────────► get_public_key
                                                     get_quote(SHA256(pubkey))
    ◄────────────────────────────────────────────── { quote, publicKey }
 
-2. POST quote to MAA ────► Verify DCAP quote
+2. POST quote to ITA ────► Verify DCAP quote
                             Check PCK cert chain
                             Check TCB level
                             Check QE identity
                             Sign JWT with claims
-   ◄────────────────────── { token: "eyJ..." }
+   ◄────────────────────── JWT token
 
 3. Verify JWT signature
-   against MAA JWKS keys
+   against ITA JWKS keys
 
-4. Check x-ms-sgx-mrenclave
-   Check x-ms-sgx-mrsigner
-   Check x-ms-sgx-report-data
+4. Check sgx_mrenclave
+   Check sgx_mrsigner
+   Check sgx_report_data
    == SHA256(publicKey)
 
 5. Encrypt payload with
@@ -176,7 +176,7 @@ Client (SDK)                Azure MAA               SGX Enclave
    POST /prove ──────────────────────────────────► Decrypt, prove, return
 ```
 
-**Why Azure MAA instead of raw DCAP?** DCAP verification requires maintaining the PCK certificate cache, checking TCB levels against Intel's PCS, and verifying the Quoting Enclave identity. Azure MAA handles all of this and returns a simple JWT that the SDK can verify with standard `jose` libraries.
+**Why Intel Trust Authority (ITA) instead of raw DCAP?** DCAP verification requires maintaining the PCK certificate cache, checking TCB levels against Intel's PCS, and verifying the Quoting Enclave identity. Intel Trust Authority (ITA) handles all of this and returns a simple JWT that the SDK can verify with standard `jose` libraries.
 
 ## Package Structure
 
@@ -185,13 +185,13 @@ tee-rex/
 ├── packages/
 │   ├── sdk/         → @alejoamiras/tee-rex (npm)
 │   │                  Drop-in Aztec prover: local/remote/nitro/sgx
-│   │                  Verifies Nitro (COSE_Sign1) and SGX (DCAP via MAA)
+│   │                  Verifies Nitro (COSE_Sign1) and SGX (DCAP via ITA)
 │   ├── server/      → Express server
 │   │                  TEE_MODE=standard|nitro|sgx
 │   │                  SGX mode: dumb proxy to Gramine worker
 │   └── app/         → Vite frontend (4-mode toggle: local/remote/nitro/sgx)
 ├── infra/
-│   ├── tofu/        → OpenTofu IaC (AWS + Azure, single state file)
+│   ├── tofu/        → OpenTofu IaC (AWS + Alibaba Cloud, single state file)
 │   ├── sgx-spike/   → SGX Gramine worker, manifests, deploy script, systemd
 │   ├── cloudfront/  → CloudFront + S3 configuration docs
 │   ├── iam/         → IAM policy templates
@@ -214,7 +214,7 @@ Single state file in S3 (`tee-rex-tofu-state`, eu-west-2) manages all environmen
 | CloudFront distribution | - | 1 | 1 |
 | ECR repository | 1 (shared) |||
 | IAM (OIDC + roles) | 1 (shared) |||
-| **Azure SGX VM** (DC4ds_v3) | **1 (spike)** |||
+| **Alibaba SGX VM** (g7t.xlarge) | 1 | 1 | 1 |
 
 ### CloudFront Routing
 
@@ -237,12 +237,12 @@ Dockerfile.base (Bun + system deps + bun install)    ~2.4 GB, tagged per Aztec v
                       FROM base: copy source + build) Converted to EIF by nitro-cli
 ```
 
-### SGX Deployment (Azure)
+### SGX Deployment (Alibaba Cloud)
 
 No Docker — the SGX worker runs directly on the VM inside Gramine:
 
 ```
-Azure VM (DC4ds_v3)
+Alibaba ECS (g7t.xlarge)
 ├── /app/worker.js               ← SGX worker source
 ├── /app/worker.manifest.sgx     ← Signed Gramine manifest
 ├── /app/bb                      ← Barretenberg native binary (must match @aztec/bb.js version)
@@ -259,7 +259,7 @@ For step-by-step provisioning, see [SGX Deployment Guide](./sgx-deployment.md).
 | Property | Nitro | SGX | Standard |
 |----------|:-----:|:---:|:--------:|
 | **Confidentiality** (inputs encrypted) | OpenPGP curve25519 | OpenPGP P-256 | OpenPGP curve25519 |
-| **Hardware attestation** | COSE_Sign1 → AWS Root CA | DCAP → Azure MAA | None |
+| **Hardware attestation** | COSE_Sign1 → AWS Root CA | DCAP → Intel Trust Authority (ITA) | None |
 | **Code integrity** (measured boot) | PCR0/1/2 | MRENCLAVE/MRSIGNER | None |
 | **Key non-extractability** | Key in enclave memory only | Key in enclave memory only | Key in process memory |
 | **Network isolation** | No network (vsock only) | Loopback TCP (same VM) | Standard networking |

@@ -6,9 +6,9 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+    alicloud = {
+      source  = "aliyun/alicloud"
+      version = "~> 1.235"
     }
   }
 }

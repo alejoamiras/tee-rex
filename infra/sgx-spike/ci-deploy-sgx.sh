@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# ci-deploy-sgx.sh — Deploy the SGX enclave worker to the Azure VM.
+# ci-deploy-sgx.sh — Deploy the SGX enclave worker to an Alibaba Cloud ECS VM.
 #
 # Prerequisites:
-#   - SSH access to the Azure VM (SGX_VM_IP or tofu output)
-#   - SGX_VM_USER (default: azureuser)
+#   - SSH access to the SGX VM (SGX_VM_IP or tofu output)
+#   - SGX_VM_USER (default: ecs-user)
 #   - SSH_KEY_PATH or ssh-agent configured
 #
 # Usage: ./ci-deploy-sgx.sh
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VM_USER="${SGX_VM_USER:-azureuser}"
+VM_USER="${SGX_VM_USER:-ecs-user}"
 VM_IP="${SGX_VM_IP:?SGX_VM_IP must be set}"
 SSH_KEY="${SSH_KEY_PATH:-}"
 APP_DIR="/app"

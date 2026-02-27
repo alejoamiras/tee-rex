@@ -38,8 +38,10 @@ export interface TeeRexAttestationConfig {
   expectedMrEnclave?: string;
   /** Expected MRSIGNER value (hex) for SGX attestation. */
   expectedMrSigner?: string;
-  /** Azure MAA endpoint for SGX DCAP verification. */
-  maaEndpoint?: SgxAttestationVerifyOptions["maaEndpoint"];
+  /** Intel Trust Authority endpoint for SGX DCAP verification. */
+  itaEndpoint?: SgxAttestationVerifyOptions["itaEndpoint"];
+  /** Intel Trust Authority API key for SGX DCAP verification. */
+  itaApiKey?: SgxAttestationVerifyOptions["itaApiKey"];
   /** Maximum age of attestation documents in milliseconds. Default: 5 minutes. */
   maxAgeMs?: number;
 }
@@ -225,12 +227,13 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
           const { publicKey } = await verifySgxAttestation(data.quote, data.publicKey, {
             expectedMrEnclave: this.#attestationConfig.expectedMrEnclave,
             expectedMrSigner: this.#attestationConfig.expectedMrSigner,
-            maaEndpoint: this.#attestationConfig.maaEndpoint,
+            itaEndpoint: this.#attestationConfig.itaEndpoint,
+            itaApiKey: this.#attestationConfig.itaApiKey,
             maxAgeMs: this.#attestationConfig.maxAgeMs,
           });
           return { publicKey, mode: data.mode };
         } catch (err) {
-          // In browser environments, fetch to Azure MAA may fail due to CORS.
+          // In browser environments, fetch to Intel Trust Authority may fail due to CORS.
           // Fall back to the server-provided public key over HTTPS.
           if (err instanceof TypeError && err.message.includes("fetch")) {
             logger.warn(

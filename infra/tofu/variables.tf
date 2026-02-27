@@ -114,18 +114,54 @@ variable "devnet_cloudfront_aliases" {
 }
 
 # -----------------------------------------------------------------------------
-# Azure — SGX VMs (prod, devnet, ci)
+# Alibaba Cloud — SGX VMs (g7t instances)
 # -----------------------------------------------------------------------------
 
-variable "azure_subscription_id" {
-  description = "Azure subscription ID for SGX resources"
+variable "alicloud_access_key" {
+  description = "Alibaba Cloud access key ID"
   type        = string
   sensitive   = true
 }
 
-variable "azure_ssh_public_key" {
-  description = "SSH public key for Azure SGX VM access"
+variable "alicloud_secret_key" {
+  description = "Alibaba Cloud secret access key"
   type        = string
   sensitive   = true
+}
+
+variable "alicloud_region" {
+  description = "Alibaba Cloud region for SGX VMs"
+  type        = string
+  default     = "cn-hongkong"
+}
+
+variable "alicloud_zone" {
+  description = "Alibaba Cloud availability zone (must support g7t instances)"
+  type        = string
+  default     = "cn-hongkong-b"
+}
+
+variable "alicloud_ssh_key_name" {
+  description = "ECS key pair name for SGX VM SSH access"
+  type        = string
+  default     = "tee-rex-sgx-key"
+}
+
+variable "alicloud_ssh_public_key" {
+  description = "SSH public key material for Alibaba Cloud SGX VMs"
+  type        = string
+  sensitive   = true
+}
+
+variable "alicloud_admin_cidr_blocks" {
+  description = "CIDR blocks allowed SSH access to SGX VMs"
+  type        = list(string)
+  default     = []
+}
+
+variable "cloudfront_cidr_blocks" {
+  description = "AWS CloudFront IP ranges allowed to reach port 4000 (fetch from https://ip-ranges.amazonaws.com/ip-ranges.json)"
+  type        = list(string)
+  default     = []
 }
 

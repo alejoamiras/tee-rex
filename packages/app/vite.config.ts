@@ -131,11 +131,16 @@ export default defineConfig(({ mode, command }) => {
             changeOrigin: true,
             rewrite: (path: string) => path.replace(/^\/sgx/, ""),
           },
-          // Proxy Azure MAA requests to avoid CORS in the browser
-          "/maa": {
-            target: "https://sharedeus.eus.attest.azure.net",
+          // Proxy Intel Trust Authority requests to avoid CORS in the browser
+          "/ita": {
+            target: "https://api.trustauthority.intel.com",
             changeOrigin: true,
-            rewrite: (path: string) => path.replace(/^\/maa/, ""),
+            rewrite: (path: string) => path.replace(/^\/ita/, ""),
+          },
+          "/ita-certs": {
+            target: "https://portal.trustauthority.intel.com",
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/ita-certs/, "/certs"),
           },
         }),
       },

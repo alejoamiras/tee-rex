@@ -139,7 +139,7 @@ TEE-Rex runs the SGX enclave via [Gramine](https://gramineproject.io/), a librar
 Key properties:
 - **Encrypted memory** — the CPU transparently encrypts/decrypts enclave pages. The OS, hypervisor, and hardware attacks cannot read enclave memory.
 - **Code measurement** — MRENCLAVE (hash of enclave code) and MRSIGNER (hash of signing key) uniquely identify what's running.
-- **DCAP attestation** — the enclave generates a quote signed by the CPU, verified via Intel's DCAP infrastructure (or Azure MAA as a convenience proxy).
+- **DCAP attestation** — the enclave generates a quote signed by the CPU, verified via Intel Trust Authority (ITA).
 - **No VM overhead** — the enclave runs as a process on the host, not a separate VM. But Gramine adds its own overhead (~5x for memory-intensive workloads).
 
 TEE-Rex's SGX architecture splits the work:
@@ -197,16 +197,16 @@ The `Dockerfile.nitro` uses three stages:
 
 The `libnsm.so` library is what lets the server talk to the NSM hardware device. It must be compiled from source — there is no pre-built package.
 
-The SGX backend doesn't use Docker — it runs directly on the Azure VM inside Gramine. See the [SGX Deployment Guide](./sgx-deployment.md) for details.
+The SGX backend doesn't use Docker — it runs directly on the Alibaba Cloud ECS VM inside Gramine. See the [SGX Deployment Guide](./sgx-deployment.md) for details.
 
 ## Security Properties
 
 | Property | Nitro | SGX |
 |----------|-------|-----|
 | **Confidentiality** | OpenPGP curve25519 encryption | OpenPGP P-256 encryption |
-| **Authenticity** | COSE_Sign1 → AWS Nitro Root CA | DCAP quote → Azure MAA JWT |
+| **Authenticity** | COSE_Sign1 → AWS Nitro Root CA | DCAP quote → Intel ITA JWT |
 | **Integrity** | PCR0/1/2 hash all enclave code | MRENCLAVE hashes all enclave code |
-| **Freshness** | Attestation timestamp < 5 min | MAA JWT `iat` claim < 5 min |
+| **Freshness** | Attestation timestamp < 5 min | ITA JWT `iat` claim < 5 min |
 | **Isolation** | No network, no disk (vsock only) | Encrypted memory (loopback TCP) |
 | **Non-extractability** | Key in enclave memory only | Key in enclave memory only |
 
@@ -226,7 +226,7 @@ The SGX backend doesn't use Docker — it runs directly on the Azure VM inside G
 | **Gramine** | Library OS that runs unmodified Linux apps inside SGX enclaves |
 | **NSM** | Nitro Security Module — hardware device inside the enclave that generates attestation |
 | **DCAP** | Data Center Attestation Primitives — Intel's attestation framework for SGX |
-| **Azure MAA** | Microsoft Azure Attestation — cloud service that verifies SGX DCAP quotes and returns JWTs |
+| **ITA** | Intel Trust Authority — cloud-agnostic service that verifies SGX DCAP quotes and returns JWTs |
 | **PCR** | Platform Configuration Register — hash measurement of Nitro enclave contents |
 | **MRENCLAVE** | Measurement of SGX enclave code (analogous to Nitro PCR0) |
 | **MRSIGNER** | Hash of the SGX enclave signing key |
