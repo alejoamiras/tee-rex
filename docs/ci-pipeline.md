@@ -148,7 +148,7 @@ graph TD
 | `deploy-prover` | Build prover image, push to ECR, start EC2, deploy container via SSM | ~25 min |
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
-| `publish-sdk` | Set version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
+| `publish-sdk` | Resolve version (query npm for existing revisions, append `.N` suffix if needed), set SDK version, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
 | `validate-prod` | SSM tunnels to prod servers, smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet | ~7 min |
 
 ### Conditional behavior
@@ -215,7 +215,7 @@ Both wrappers call `_aztec-update.yml` with these inputs:
 | `_build-base.yml` | Idempotent base image build (Bun + system deps + `bun install`). Checks ECR first, builds only if missing. | None. Outputs: `base_tag` |
 | `_deploy-tee.yml` | Build Nitro Docker image, push to ECR, start EC2, deploy enclave via SSM | `environment`, `image_tag`, `base_tag` |
 | `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM | `environment`, `image_tag`, `base_tag` |
-| `_publish-sdk.yml` | Set SDK version from Aztec dep, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
+| `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
 | `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnels. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url` |

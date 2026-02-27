@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A+C)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C)
 
 | Phase | Summary |
 |---|---|
@@ -378,18 +378,17 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - Added push trigger to `deploy-devnet.yml` (on push to `devnet` branch, paths-ignore for docs/tests)
 - IAM trust policy: added `chore/aztec-devnet-*` branch pattern
 
-**28B — SDK revision versioning:**
+**28B — SDK revision versioning:** DONE
 - Problem: npm won't let you re-publish the same version. If the Aztec devnet version is `4.0.0-devnet.2-patch.1` and we need to publish an SDK-only fix, we need a revision suffix.
-- Solution: append a dot-separated SDK revision number:
+- Solution: `scripts/get-sdk-publish-version.ts` queries npm for existing versions and appends a dot-separated revision number:
   ```
   4.0.0-devnet.2-patch.1      ← first publish (matches Aztec version)
   4.0.0-devnet.2-patch.1.1    ← SDK-only fix (revision 1)
   4.0.0-devnet.2-patch.1.2    ← another fix (revision 2)
   ```
-- Valid semver, sorts correctly (more prerelease identifiers = higher precedence per spec 11.4.4)
+- `_publish-sdk.yml` calls the script between "Read Aztec version" and "Set SDK version"
+- Git tag and release notes adjust automatically for revisions vs first publishes
 - Resets to no suffix when a new Aztec version drops
-- Applies to both devnet and nightlies (`5.0.0-nightly.20260224.1`)
-- Implementation: `_publish-sdk.yml` checks npm for existing versions with the same Aztec prefix, finds highest revision suffix, increments. If none exists, publishes without suffix.
 
 ---
 
