@@ -40,7 +40,6 @@ import {
 } from "./wallet-selection";
 
 let deploying = false;
-const runCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 let disconnectUnsub: (() => void) | null = null;
 let currentExternalProvider: WalletProvider | null = null;
 
@@ -179,9 +178,7 @@ $("deploy-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    runCount[result.mode]++;
-    const isCold = runCount[result.mode] === 1;
-    showResult("", result.mode, result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
+    showResult("", result.mode, result.totalDurationMs, undefined, result.steps);
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {

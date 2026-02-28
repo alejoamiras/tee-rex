@@ -107,11 +107,11 @@ describe("showResult", () => {
   });
 
   test("shows embedded result with empty prefix", () => {
-    showResult("", "local", 5000, "cold");
+    showResult("", "local", 5000);
 
     expect(document.getElementById("results")!.classList.contains("hidden")).toBe(false);
     expect(document.getElementById("time-local")!.textContent).toBe("5.0s");
-    expect(document.getElementById("tag-local")!.textContent).toBe("cold");
+    expect(document.getElementById("tag-local")!.textContent).toBe("");
     expect(document.getElementById("result-local")!.classList.contains("result-filled")).toBe(true);
   });
 

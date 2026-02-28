@@ -147,7 +147,7 @@ export function showResult(
   prefix: string,
   mode: string,
   durationMs: number,
-  tag: string,
+  tag?: string,
   steps?: StepTiming[],
 ): void {
   $(`${prefix}results`).classList.remove("hidden");
@@ -157,14 +157,13 @@ export function showResult(
   timeEl.className = "text-3xl font-bold tabular-nums text-emerald-400";
 
   const tagEl = $(`${prefix}tag-${mode}`);
-  tagEl.textContent = tag;
-  tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${
-    tag === "token flow"
-      ? "text-cyan-500/70"
-      : tag === "cold"
-        ? "text-amber-500/70"
-        : "text-cyan-500/70"
-  }`;
+  if (tag) {
+    tagEl.textContent = tag;
+    tagEl.className = "mt-1.5 text-[10px] uppercase tracking-widest text-cyan-500/70";
+  } else {
+    tagEl.textContent = "";
+    tagEl.className = "";
+  }
 
   $(`${prefix}result-${mode}`).classList.add("result-filled");
 

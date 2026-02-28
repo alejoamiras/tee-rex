@@ -4,7 +4,6 @@ import { showResult, stepToPhase } from "./results";
 import { $, $btn, type appendLog, formatDuration } from "./ui";
 
 let deploying = false;
-const runCount = { wallet: 0 };
 
 export interface AccountEntry {
   address: string;
@@ -57,9 +56,7 @@ export function initExternalWalletUI(opts: {
       }
       opts.log(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-      runCount.wallet++;
-      const isCold = runCount.wallet === 1;
-      showResult("ext-", "wallet", result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
+      showResult("ext-", "wallet", result.totalDurationMs, undefined, result.steps);
     } catch (err) {
       opts.log(`Deploy failed: ${err}`, "error");
     } finally {
