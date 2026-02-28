@@ -169,7 +169,16 @@ const lazyAccountContracts = {
   },
 };
 
-async function doInitializeWallet(log: LogFn): Promise<boolean> {
+/**
+ * Connect to the Aztec node and set up the TeeRexProver.
+ * Shared by both embedded and external wallet paths.
+ */
+export async function initializeNode(log: LogFn): Promise<{
+  rollupAddress: import("@aztec/aztec.js/eth-address").EthAddress;
+  l1Contracts: Awaited<
+    ReturnType<ReturnType<typeof createAztecNodeClient>["getL1ContractAddresses"]>
+  >;
+}> {
   log("Creating TeeRexProver...");
   state.prover = new TeeRexProver(PROVER_PROXY_PATH, new WASMSimulator());
   state.prover.setProvingMode(state.provingMode);
@@ -195,6 +204,27 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
     `Connected — chain ${nodeInfo.l1ChainId} (proofs ${state.proofsRequired ? "required" : "simulated"})`,
     "success",
   );
+
+  return { rollupAddress, l1Contracts };
+}
+
+/**
+ * Derive the canonical Sponsored FPC address and register it in the PXE.
+ * Shared by both embedded and external wallet paths.
+ */
+export async function initializeFPC(wallet: Wallet, log: LogFn): Promise<void> {
+  log("Setting up Sponsored FPC...");
+  const fpcInstance = await getContractInstanceFromInstantiationParams(
+    SponsoredFPCContract.artifact,
+    { salt: new Fr(0) },
+  );
+  await wallet.registerContract(fpcInstance, SponsoredFPCContract.artifact);
+  state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
+  log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
+}
+
+async function doInitializeWallet(log: LogFn): Promise<boolean> {
+  const { rollupAddress, l1Contracts } = await initializeNode(log);
 
   log("Creating wallet (may take a moment)...");
   // Mirrors BrowserEmbeddedWallet.create() but injects our TeeRexProver.
@@ -224,15 +254,7 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   state.walletType = "embedded";
   log("Wallet created", "success");
 
-  // Derive the canonical Sponsored FPC address and register it in the PXE.
-  log("Setting up Sponsored FPC...");
-  const fpcInstance = await getContractInstanceFromInstantiationParams(
-    SponsoredFPCContract.artifact,
-    { salt: new Fr(0) },
-  );
-  await state.wallet.registerContract(fpcInstance, SponsoredFPCContract.artifact);
-  state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
-  log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
+  await initializeFPC(state.wallet!, log);
 
   if (!state.proofsRequired) {
     log("Registering sandbox accounts...");
@@ -564,6 +586,54 @@ export async function deployTestAccount(
   }
 }
 
+export async function deployToken(
+  log: LogFn,
+  onTick: (elapsedMs: number) => void,
+  onStep: (stepName: string) => void,
+  onPhase?: (phase: ProverPhase) => void,
+): Promise<DeployResult> {
+  if (!state.wallet || state.registeredAddresses.length < 1) {
+    throw new Error("Wallet not initialized — no registered addresses");
+  }
+
+  const mode = state.uiMode;
+  const modeLabel = state.walletType === "external" ? "wallet" : mode;
+  const alice = state.registeredAddresses[state.selectedAccountIndex];
+  const steps: StepTiming[] = [];
+  const totalStart = Date.now();
+  state.prover?.setOnPhase(onPhase ?? null);
+
+  const interval = setInterval(() => {
+    onTick(Date.now() - totalStart);
+  }, 100);
+
+  try {
+    onStep(`deploying token [${modeLabel}]`);
+    log(`Deploying TokenContract (admin=Alice) [${modeLabel}]...`);
+    const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
+    const tokenStep = await executeStep({
+      step: "deploy token",
+      method: tokenDeploy,
+      sendOpts: { from: alice, fee: { paymentMethod: state.feePaymentMethod! } },
+      log,
+      onConfirming: () => onStep(`confirming token deploy [${modeLabel}]`),
+    });
+    steps.push(tokenStep);
+
+    const address = tokenDeploy.address!.toString();
+    const totalDurationMs = Date.now() - totalStart;
+    log(
+      `Token deployed in ${(totalDurationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`,
+      "success",
+    );
+
+    return { address, steps, totalDurationMs, mode };
+  } finally {
+    state.prover?.setOnPhase(null);
+    clearInterval(interval);
+  }
+}
+
 export async function runTokenFlow(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
@@ -592,6 +662,8 @@ export async function runTokenFlow(
     const bobCandidate = state.registeredAddresses.find((_, i) => i !== state.selectedAccountIndex);
     if (bobCandidate) {
       bob = bobCandidate;
+    } else if (state.walletType === "external") {
+      throw new Error("External wallet must provide at least 2 accounts for transfer");
     } else {
       onStep(`deploying bob account [${modeLabel}]`);
       log(`Deploying second account (Bob) for transfer [${modeLabel}]...`);
