@@ -13,7 +13,7 @@ resource "aws_key_pair" "tee_rex" {
 }
 
 # -----------------------------------------------------------------------------
-# CI Instances (stopped by default, started/stopped by GitHub Actions)
+# CI Instance (stopped by default, started/stopped by GitHub Actions)
 # -----------------------------------------------------------------------------
 
 resource "aws_instance" "ci_tee" {
@@ -33,31 +33,8 @@ resource "aws_instance" "ci_tee" {
   }
 
   tags = {
-    Name        = "tee-rex-nitro"
+    Name        = "tee-rex-ci"
     Environment = "ci"
-  }
-
-  lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
-  }
-}
-
-resource "aws_instance" "ci_prover" {
-  ami                    = var.instance_amis.ci_prover
-  instance_type          = "t3.xlarge"
-  key_name               = aws_key_pair.tee_rex.key_name
-  subnet_id              = var.default_subnet_id
-  vpc_security_group_ids = [aws_security_group.tee_rex.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2.name
-
-  root_block_device {
-    encrypted = true
-  }
-
-  tags = {
-    Name        = "tee-rex-prover-ci"
-    Environment = "ci"
-    Service     = "prover"
   }
 
   lifecycle {
@@ -66,7 +43,7 @@ resource "aws_instance" "ci_prover" {
 }
 
 # -----------------------------------------------------------------------------
-# Production Instances
+# Production Instance
 # -----------------------------------------------------------------------------
 
 resource "aws_instance" "prod_tee" {
@@ -86,32 +63,8 @@ resource "aws_instance" "prod_tee" {
   }
 
   tags = {
-    Name        = "tee-rex-prod-tee"
+    Name        = "tee-rex-prod"
     Environment = "prod"
-    Service     = "tee"
-  }
-
-  lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
-  }
-}
-
-resource "aws_instance" "prod_prover" {
-  ami                    = var.instance_amis.prod_prover
-  instance_type          = "t3.xlarge"
-  key_name               = aws_key_pair.tee_rex.key_name
-  subnet_id              = var.default_subnet_id
-  vpc_security_group_ids = [aws_security_group.tee_rex.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2.name
-
-  root_block_device {
-    encrypted = true
-  }
-
-  tags = {
-    Name        = "tee-rex-prod-prover"
-    Environment = "prod"
-    Service     = "prover"
   }
 
   lifecycle {
@@ -120,7 +73,7 @@ resource "aws_instance" "prod_prover" {
 }
 
 # -----------------------------------------------------------------------------
-# Devnet Instances
+# Devnet Instance
 # -----------------------------------------------------------------------------
 
 resource "aws_instance" "devnet_tee" {
@@ -140,32 +93,8 @@ resource "aws_instance" "devnet_tee" {
   }
 
   tags = {
-    Name        = "tee-rex-devnet-tee"
+    Name        = "tee-rex-devnet"
     Environment = "devnet"
-    Service     = "tee"
-  }
-
-  lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
-  }
-}
-
-resource "aws_instance" "devnet_prover" {
-  ami                    = var.instance_amis.devnet_prover
-  instance_type          = "t3.xlarge"
-  key_name               = aws_key_pair.tee_rex.key_name
-  subnet_id              = var.default_subnet_id
-  vpc_security_group_ids = [aws_security_group.tee_rex.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2.name
-
-  root_block_device {
-    encrypted = true
-  }
-
-  tags = {
-    Name        = "tee-rex-devnet-prover"
-    Environment = "devnet"
-    Service     = "prover"
   }
 
   lifecycle {

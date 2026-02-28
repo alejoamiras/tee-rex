@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29)
 
 | Phase | Summary |
 |---|---|
@@ -86,13 +86,14 @@ aztec-nightlies.yml detects new version
     ┌────┬────┬────┐
     │    │    │    │
     ▼    ▼    ▼    ▼
-  TEE   Prover  App   SDK
-  EC2   EC2     S3    npm
+  Server  App   SDK
+  EC2     S3    npm
+  (enclave + prover)
 
-    CloudFront (https://d1234abcd.cloudfront.net)
+    CloudFront (https://nextnet.tee-rex.dev)
       ├── /*           → S3 bucket (static Vite build)
-      ├── /prover/*    → Prover EC2 (http, port 80)
-      └── /tee/*       → TEE EC2 (http, port 4000)
+      ├── /prover/*    → EC2 (http, port 80)
+      └── /tee/*       → EC2 (http, port 4000)  ← same instance
 ```
 
 **Completed parts:**
@@ -102,7 +103,7 @@ aztec-nightlies.yml detects new version
 | **17A** | Fixed non-TEE `Dockerfile` (missing `packages/app/package.json` COPY, added healthcheck + curl) |
 | **17B** | `remote.yml` + `_deploy-prover.yml` — CI prover deploy on `test-remote` label. `infra/ci-deploy-prover.sh`. CI EC2: `t3.xlarge` |
 | **17C** | Nightlies workflow adds `test-infra` label to auto PRs (combined TEE + Remote deploy + e2e via `infra.yml`). Individual `tee.yml` / `remote.yml` kept for isolated debugging via `test-tee` / `test-remote` labels. |
-| **17D** | `deploy-prod.yml` (push to main → deploy TEE + prover to prod). `_deploy-tee.yml` / `_deploy-prover.yml` parameterized with `environment` + `image_tag` inputs. IAM: `Environment: ["ci", "prod"]`. Prod EC2: TEE `m5.xlarge` + prover `t3.xlarge` with Elastic IPs. Secrets: `PROD_TEE_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID` |
+| **17D** | `deploy-prod.yml` (push to main → deploy to prod). Originally separate TEE + prover EC2s, now consolidated to single EC2 per env (Phase 29). IAM: `Environment: ["ci", "prod"]`. Prod EC2: `m5.xlarge` with Elastic IP. Secrets: `PROD_TEE_INSTANCE_ID` |
 | **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
 | **17F** | Nextnet connectivity smoke test (`nextnet.test.ts`) + `nextnet-check` job in `deploy-prod.yml` as pre-publish gate. `validate-prod` job runs app fullstack e2e against nextnet after all deploys complete (SSM tunnels to prod TEE + prover). |
 | **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on nightlies auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag nightlies` + `--provenance`, creates git tag + GitHub release. Gated by `validate-prod` (full e2e) with `nextnet-check` fallback when validate-prod is skipped. Uses `NPM_TOKEN` automation token (OIDC only supports one workflow per package — doesn't work with deploy-prod + deploy-devnet). `_publish-sdk.yml` also supports `workflow_dispatch` for manual retries. |
@@ -212,7 +213,7 @@ Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 inc
 - Added `changes` job to `deploy-prod.yml` with two outputs: `servers` and `app`
 - `servers` filter: `packages/server/**`, `packages/sdk/**`, `Dockerfile*`, `infra/**`, `package.json`, `bun.lock`
 - `app` filter: `packages/app/**`, `packages/sdk/**`, `package.json`, `bun.lock`
-- `ensure-base`, `deploy-tee`, `deploy-prover` gated on `servers == 'true'`
+- `ensure-base`, `deploy-server` gated on `servers == 'true'`
 - `deploy-app` gated on `app == 'true'`
 - `validate-prod` runs when either changed (`!cancelled()` + OR condition)
 - `nextnet-check` and `publish-sdk` remain ungated (independent of what changed)
@@ -237,7 +238,7 @@ devnet branch (devnet Aztec)  → deploy-devnet.yml (on push)   → devnet EC2s 
 deploy-devnet.yml flow:
   push to devnet (or workflow_dispatch)
     → ensure-base
-    → deploy-tee + deploy-prover (devnet EC2s)
+    → deploy-server (enclave + prover on single EC2)
     → validate-devnet (SDK + app e2e against deployed infra)  ← quality gate
     → deploy-app (devnet S3/CF)
     → publish-sdk (npm --tag devnet)  ← only if validate green
@@ -389,6 +390,30 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - `_publish-sdk.yml` calls the script between "Read Aztec version" and "Set SDK version"
 - Git tag and release notes adjust automatically for revisions vs first publishes
 - Resets to no suffix when a new Aztec version drops
+
+---
+
+## Phase 29: EC2 Consolidation — DONE (PR #132)
+
+**Goal**: Consolidate 2 EC2 instances per environment (TEE m5.xlarge + prover t3.xlarge) into 1 m5.xlarge running both services. Saves ~$2,900/year (46% reduction).
+
+**Architecture**: Single m5.xlarge per env runs Nitro enclave on port 4000 (2 CPU + 8GB hugepages) and prover Docker container on port 80 (2 CPU + 8GB). CloudFront routes `/tee/*` and `/prover/*` to the same origin IP on different ports.
+
+**Changes:**
+
+| Item | Summary |
+|------|---------|
+| **Unified deploy script** | `infra/ci-deploy-unified.sh` — takes two image URIs (nitro + prover), deploys enclave first, then prover container on same host |
+| **Unified deploy workflow** | `_deploy-unified.yml` — builds both Docker images in parallel, deploys to single instance via SSM |
+| **Caller workflows** | `deploy-prod.yml`, `deploy-devnet.yml`, `infra.yml` — replaced parallel `deploy-tee` + `deploy-prover` with single `deploy-server` calling `_deploy-unified.yml` |
+| **CloudFront** | Prover origins (`/prover/*`) now point to TEE instance EIPs (same machine, port 80) |
+| **GitHub secrets** | `PROVER_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID`, `DEVNET_PROVER_INSTANCE_ID` set to TEE instance IDs (e2e tunnel code unchanged) |
+| **Prover instances** | Stopped (not terminated) — easy restart if rollback needed. Cleanup (Tofu removal) planned separately. |
+
+**Key decisions:**
+- Enclave takes 2 CPU + 8GB hugepages, leaving 2 CPU + 8GB for prover container. Tight but workable. Upgrade path: m5.2xlarge (8 vCPU, 32GB, $0.384/hr).
+- Prover deployed AFTER enclave is healthy — Docker wipe during enclave build can't affect running enclave.
+- Old `_deploy-tee.yml`, `_deploy-prover.yml`, `ci-deploy-prover.sh` preserved for rollback.
 
 ---
 

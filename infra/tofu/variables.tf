@@ -32,12 +32,9 @@ variable "default_subnet_id" {
 variable "instance_amis" {
   description = "AMI ID per EC2 instance (used at import time, ignored after via lifecycle)"
   type = object({
-    ci_tee        = string
-    ci_prover     = string
-    prod_tee      = string
-    prod_prover   = string
-    devnet_tee    = string
-    devnet_prover = string
+    ci_tee     = string
+    prod_tee   = string
+    devnet_tee = string
   })
 }
 

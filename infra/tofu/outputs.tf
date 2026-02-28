@@ -8,33 +8,15 @@ output "ci_tee_instance_id" {
   sensitive   = true
 }
 
-output "ci_prover_instance_id" {
-  description = "CI Prover EC2 instance ID"
-  value       = aws_instance.ci_prover.id
-  sensitive   = true
-}
-
 output "prod_tee_instance_id" {
   description = "Production TEE EC2 instance ID"
   value       = aws_instance.prod_tee.id
   sensitive   = true
 }
 
-output "prod_prover_instance_id" {
-  description = "Production Prover EC2 instance ID"
-  value       = aws_instance.prod_prover.id
-  sensitive   = true
-}
-
 output "devnet_tee_instance_id" {
   description = "Devnet TEE EC2 instance ID"
   value       = aws_instance.devnet_tee.id
-  sensitive   = true
-}
-
-output "devnet_prover_instance_id" {
-  description = "Devnet Prover EC2 instance ID"
-  value       = aws_instance.devnet_prover.id
   sensitive   = true
 }
 
@@ -48,21 +30,9 @@ output "prod_tee_eip" {
   sensitive   = true
 }
 
-output "prod_prover_eip" {
-  description = "Production Prover Elastic IP"
-  value       = aws_eip.prod_prover.public_ip
-  sensitive   = true
-}
-
 output "devnet_tee_eip" {
   description = "Devnet TEE Elastic IP"
   value       = aws_eip.devnet_tee.public_ip
-  sensitive   = true
-}
-
-output "devnet_prover_eip" {
-  description = "Devnet Prover Elastic IP"
-  value       = aws_eip.devnet_prover.public_ip
   sensitive   = true
 }
 

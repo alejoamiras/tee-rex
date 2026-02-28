@@ -68,28 +68,17 @@ jobs:
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
-  # ── Deploy TEE enclave to production ─────────────────────────────
-  deploy-tee:
-    name: Deploy TEE (prod)
+  # ── Deploy TEE enclave + prover to single production instance ────
+  deploy-server:
+    name: Deploy Server (prod)
     needs: [changes, ensure-base]
     if: needs.changes.outputs.servers == 'true'
-    uses: ./.github/workflows/_deploy-tee.yml
+    uses: ./.github/workflows/_deploy-unified.yml
     secrets: inherit
     with:
       environment: prod
-      image_tag: prod-tee
-      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
-
-  # ── Deploy prover container to production ────────────────────────
-  deploy-prover:
-    name: Deploy Prover (prod)
-    needs: [changes, ensure-base]
-    if: needs.changes.outputs.servers == 'true'
-    uses: ./.github/workflows/_deploy-prover.yml
-    secrets: inherit
-    with:
-      environment: prod
-      image_tag: prod-prover
+      nitro_image_tag: prod-tee
+      prover_image_tag: prod-prover
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
@@ -184,7 +173,7 @@ jobs:
   # ── Post-deploy validation against nextnet ───────────────────────
   validate-prod:
     name: Validate Prod (nextnet)
-    needs: [changes, deploy-tee, deploy-prover, deploy-app]
+    needs: [changes, deploy-server, deploy-app]
     if: "!cancelled() && (needs.changes.outputs.servers == 'true' || needs.changes.outputs.app == 'true')"
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -216,42 +205,34 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Start SSM tunnel to prod prover
+      - name: Start SSM tunnels to prod instance
         run: |
+          # Both services run on the same instance (TEE on 4000, prover on 80)
           aws ssm start-session \
-            --target "${{ secrets.PROD_PROVER_INSTANCE_ID }}" \
+            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
           echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
-          echo "Waiting for prover SSM tunnel..."
-          for i in $(seq 1 30); do
-            if curl -sf --max-time 5 http://localhost:4002/attestation > /dev/null 2>&1; then
-              echo "Prover SSM tunnel ready (attempt $i)"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Prover SSM tunnel failed to connect after 60s"
-          exit 1
-
-      - name: Start SSM tunnel to prod TEE
-        run: |
           aws ssm start-session \
             --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
           echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
-          echo "Waiting for TEE SSM tunnel..."
+          echo "Waiting for SSM tunnels..."
           for i in $(seq 1 30); do
-            if curl -sf --max-time 5 http://localhost:4001/attestation > /dev/null 2>&1; then
-              echo "TEE SSM tunnel ready (attempt $i)"
+            PROVER_OK=false
+            TEE_OK=false
+            curl -sf --max-time 5 http://localhost:4002/attestation > /dev/null 2>&1 && PROVER_OK=true
+            curl -sf --max-time 5 http://localhost:4001/attestation > /dev/null 2>&1 && TEE_OK=true
+            if [ "$PROVER_OK" = "true" ] && [ "$TEE_OK" = "true" ]; then
+              echo "Both SSM tunnels ready (attempt $i)"
               exit 0
             fi
             sleep 2
           done
-          echo "TEE SSM tunnel failed to connect after 60s"
+          echo "SSM tunnels failed to connect after 60s"
           exit 1
 
       - name: Install Playwright browsers

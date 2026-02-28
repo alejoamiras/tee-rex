@@ -6,12 +6,9 @@ ec2_public_key    = "ssh-ed25519 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 default_subnet_id = "subnet-XXXXXXXXXXXXXXXXX"
 
 instance_amis = {
-  ci_tee        = "ami-XXXXXXXXXXXXXXXXX"
-  ci_prover     = "ami-XXXXXXXXXXXXXXXXX"
-  prod_tee      = "ami-XXXXXXXXXXXXXXXXX"
-  prod_prover   = "ami-XXXXXXXXXXXXXXXXX"
-  devnet_tee    = "ami-XXXXXXXXXXXXXXXXX"
-  devnet_prover = "ami-XXXXXXXXXXXXXXXXX"
+  ci_tee     = "ami-XXXXXXXXXXXXXXXXX"
+  prod_tee   = "ami-XXXXXXXXXXXXXXXXX"
+  devnet_tee = "ami-XXXXXXXXXXXXXXXXX"
 }
 
 # SSH access (default: 0.0.0.0/0 — restrict if needed)

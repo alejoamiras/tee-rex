@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# ci-deploy.sh — Deploy tee-rex enclave from a fresh Docker image.
-# Intended to be executed via AWS SSM on the CI/prod EC2 instance.
+# ci-deploy-unified.sh — Deploy tee-rex enclave + prover on a single instance.
+# Intended to be executed via AWS SSM on the EC2 instance.
 #
-# Usage: ci-deploy.sh <ecr-image-uri>
-# Example: ci-deploy.sh <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:nightly
+# Usage: ci-deploy-unified.sh <nitro-image-uri> <prover-image-uri>
+# Example: ci-deploy-unified.sh \
+#   <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:prod-tee \
+#   <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:prod-prover
 #
-# The enclave survives reboots via two systemd services:
-#   tee-rex-enclave.service — runs the enclave from a persisted EIF
-#   tee-rex-proxy.service   — socat proxy (TCP:4000 → vsock enclave)
-# The EIF is stored in /opt/tee-rex/ (not /tmp) so it persists across reboots.
+# Runs the enclave on port 4000 (via socat proxy) and the prover Docker
+# container on port 80. Both services survive reboots (systemd + --restart).
 
 set -euo pipefail
 
-IMAGE_URI="${1:?Usage: ci-deploy.sh <ecr-image-uri>}"
+NITRO_IMAGE_URI="${1:?Usage: ci-deploy-unified.sh <nitro-image-uri> <prover-image-uri>}"
+PROVER_IMAGE_URI="${2:?Usage: ci-deploy-unified.sh <nitro-image-uri> <prover-image-uri>}"
 REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
 EIF_DIR="/opt/tee-rex"
 EIF_PATH="${EIF_DIR}/tee-rex.eif"
@@ -20,22 +21,27 @@ BUILD_ARTIFACTS="${EIF_DIR}/build-artifacts"
 CPU_COUNT=2
 MEMORY_MB=8192
 ENCLAVE_CID=16
+PROVER_CONTAINER_NAME="tee-rex-prover"
 
-echo "=== TEE-Rex CI Deploy ==="
-echo "Image: ${IMAGE_URI}"
+echo "=== TEE-Rex Unified CI Deploy ==="
+echo "Nitro image: ${NITRO_IMAGE_URI}"
+echo "Prover image: ${PROVER_IMAGE_URI}"
 echo "Region: ${REGION}"
 
-# ── 0. Tear down existing enclave + proxy + reclaim disk ──────────
+# ── 0. Tear down existing enclave + proxy + prover + reclaim disk ──
 # Must happen before disk check. nitro-cli build-enclave creates overlay2
 # layers that Docker's metadata doesn't track, so `docker system prune`
 # can't remove them. Wipe all of /var/lib/docker so Docker reinitializes
 # cleanly — partial wipes (overlay2 only) corrupt Docker's internal state.
-echo "=== Tearing down existing enclave ==="
+echo "=== Tearing down existing services ==="
 systemctl stop tee-rex-proxy 2>/dev/null || true
 systemctl stop tee-rex-enclave 2>/dev/null || true
 nitro-cli terminate-enclave --all 2>/dev/null || true
 # Kill any stale socat processes that might survive service stop
 pkill -f "socat.*TCP-LISTEN:4000" 2>/dev/null || true
+# Stop prover container (if running from previous deploy)
+docker stop "${PROVER_CONTAINER_NAME}" 2>/dev/null || true
+docker rm "${PROVER_CONTAINER_NAME}" 2>/dev/null || true
 rm -f "${EIF_PATH}"
 rm -rf "${BUILD_ARTIFACTS}" 2>/dev/null || true
 # Linuxkit leaves large temp files in /tmp (which is tmpfs on Amazon Linux 2023,
@@ -64,13 +70,13 @@ if [[ "${AVAIL_MB}" -lt 4096 ]]; then
   exit 1
 fi
 
-# ── 2. Pull Docker image (reuses cached layers from previous deploy)
-echo "=== Pulling image ==="
+# ── 2. ECR login + pull nitro image ──────────────────────────────
+echo "=== Pulling nitro image ==="
 aws ecr get-login-password --region "${REGION}" \
-  | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
-docker pull "${IMAGE_URI}"
+  | docker login --username AWS --password-stdin "${NITRO_IMAGE_URI%%/*}"
+docker pull "${NITRO_IMAGE_URI}"
 
-# ── 3. Build EIF ──────────────────────────────────────────────────
+# ── 3. Build EIF ─────────────────────────────────────────────────
 # Must happen before prune: nitro-cli reads the Docker image directly,
 # so the image must still be on disk.
 # Store EIF in /opt/tee-rex/ so it survives reboots (unlike /tmp).
@@ -79,7 +85,7 @@ docker pull "${IMAGE_URI}"
 echo "=== Building EIF ==="
 mkdir -p "${EIF_DIR}" "${BUILD_ARTIFACTS}"
 NITRO_CLI_ARTIFACTS="${BUILD_ARTIFACTS}" nitro-cli build-enclave \
-  --docker-uri "${IMAGE_URI}" \
+  --docker-uri "${NITRO_IMAGE_URI}" \
   --output-file "${EIF_PATH}"
 
 # ── 4. Clean up + reserve hugepages ──────────────────────────────
@@ -125,7 +131,7 @@ if [[ "${ALLOC_OK}" != "true" ]]; then
   exit 1
 fi
 
-# ── 5. Install systemd services + config ──────────────────────────
+# ── 5. Install systemd services + config ─────────────────────────
 # Two services make the enclave survive reboots:
 #   tee-rex-enclave — runs the enclave from the persisted EIF
 #   tee-rex-proxy   — socat proxy (TCP:4000 → vsock enclave)
@@ -174,36 +180,81 @@ UNIT
 systemctl daemon-reload
 systemctl enable tee-rex-enclave tee-rex-proxy
 
-# ── 6. Start enclave + proxy ─────────────────────────────────────
+# ── 6. Start enclave + proxy ────────────────────────────────────
 echo "=== Starting enclave ==="
 systemctl start tee-rex-enclave
 echo "=== Starting proxy ==="
 systemctl restart tee-rex-proxy
 
-# ── 7. Health check ─────────────────────────────────────────────
-echo "=== Health check ==="
+# ── 7. Enclave health check ─────────────────────────────────────
+echo "=== Enclave health check ==="
 for i in $(seq 1 120); do
   if RESPONSE=$(curl -sf http://localhost:4000/attestation 2>/dev/null) && \
      echo "${RESPONSE}" | jq -e '.mode' > /dev/null 2>&1; then
     echo "Enclave healthy (attempt ${i})"
     echo "${RESPONSE}" | jq '{mode, hasDoc: (.attestationDocument != null)}'
-    echo "=== Deploy complete ==="
-    exit 0
+    break
+  fi
+  if [[ "${i}" -eq 120 ]]; then
+    echo "ERROR: Enclave health check failed after 10 minutes"
+    echo "=== Diagnostics ==="
+    echo "--- Enclave status ---"
+    nitro-cli describe-enclaves 2>/dev/null || echo "nitro-cli not available"
+    echo "--- Service status ---"
+    systemctl status tee-rex-enclave --no-pager -l 2>/dev/null || true
+    systemctl status tee-rex-proxy --no-pager -l 2>/dev/null || true
+    echo "--- Hugepages ---"
+    grep Huge /proc/meminfo
+    echo "--- Memory ---"
+    free -m
+    echo "--- Disk ---"
+    df -h /
+    exit 1
   fi
   sleep 5
 done
 
-echo "ERROR: Health check failed after 10 minutes"
-echo "=== Diagnostics ==="
-echo "--- Enclave status ---"
-nitro-cli describe-enclaves 2>/dev/null || echo "nitro-cli not available"
-echo "--- Service status ---"
-systemctl status tee-rex-enclave --no-pager -l 2>/dev/null || true
-systemctl status tee-rex-proxy --no-pager -l 2>/dev/null || true
-echo "--- Hugepages ---"
-grep Huge /proc/meminfo
-echo "--- Memory ---"
-free -m
-echo "--- Disk ---"
-df -h /
-exit 1
+# ── 8. Pull + run prover container ──────────────────────────────
+# Deployed AFTER enclave is healthy — Docker wipe in step 0 would kill
+# a pre-existing prover container, and we need Docker available for pull.
+echo "=== Deploying prover container ==="
+echo "Pulling prover image: ${PROVER_IMAGE_URI}"
+# ECR login already done in step 2 (same registry)
+docker pull "${PROVER_IMAGE_URI}"
+
+echo "=== Starting prover container ==="
+docker run -d \
+  --name "${PROVER_CONTAINER_NAME}" \
+  -p 80:80 \
+  -e NODE_ENV=production \
+  --restart unless-stopped \
+  "${PROVER_IMAGE_URI}"
+
+# Clean up unused images (prover pull may have brought new layers)
+docker image prune -af
+
+# ── 9. Prover health check ──────────────────────────────────────
+echo "=== Prover health check ==="
+for i in $(seq 1 120); do
+  if RESPONSE=$(curl -sf http://localhost:80/attestation 2>/dev/null) && \
+     echo "${RESPONSE}" | jq -e '.mode' > /dev/null 2>&1; then
+    echo "Prover healthy (attempt ${i})"
+    echo "${RESPONSE}" | jq '{mode}'
+    break
+  fi
+  if [[ "${i}" -eq 120 ]]; then
+    echo "ERROR: Prover health check failed after 10 minutes"
+    echo "--- Container status ---"
+    docker ps -a --filter "name=${PROVER_CONTAINER_NAME}" 2>/dev/null || true
+    echo "--- Container logs ---"
+    docker logs "${PROVER_CONTAINER_NAME}" --tail 30 2>/dev/null || true
+    echo "--- Memory ---"
+    free -m
+    exit 1
+  fi
+  sleep 5
+done
+
+echo "=== Unified deploy complete ==="
+echo "Enclave: port 4000 (nitro)"
+echo "Prover:  port 80   (standard)"

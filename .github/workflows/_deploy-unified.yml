@@ -1,4 +1,4 @@
-name: _Deploy Prover (reusable)
+name: _Deploy Unified (reusable)
 
 on:
   workflow_call:
@@ -9,12 +9,17 @@ on:
         type: string
         default: ""
       environment:
-        description: Deployment environment (ci or prod)
+        description: Deployment environment (ci, prod, or devnet)
         required: false
         type: string
         default: "ci"
-      image_tag:
-        description: Docker image tag to build and deploy
+      nitro_image_tag:
+        description: Docker image tag for the nitro/TEE image
+        required: false
+        type: string
+        default: "nightly"
+      prover_image_tag:
+        description: Docker image tag for the prover image
         required: false
         type: string
         default: "prover"
@@ -24,12 +29,85 @@ on:
         type: string
     outputs:
       deployed:
-        description: Whether the prover was deployed successfully
+        description: Whether both services were deployed successfully
         value: ${{ jobs.deploy.outputs.deployed }}
 
 jobs:
+  # ── Build both Docker images in parallel ──────────────────────────
+  build-nitro:
+    name: Build Nitro Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push nitro image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.nitro
+          push: true
+          tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.nitro_image_tag }}
+          build-args: BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
+          cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-nitro
+          cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-nitro,mode=max
+
+  build-prover:
+    name: Build Prover Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push prover image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.prover_image_tag }}
+          build-args: BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
+          cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover
+          cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover,mode=max
+
+  # ── Deploy both services to a single EC2 instance ─────────────────
   deploy:
-    name: Deploy Prover
+    name: Deploy Unified
+    needs: [build-nitro, build-prover]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -39,11 +117,9 @@ jobs:
       deployed: ${{ steps.health.outputs.deployed }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_PROVER_INSTANCE_ID || inputs.environment == 'devnet' && secrets.DEVNET_PROVER_INSTANCE_ID || secrets.PROVER_INSTANCE_ID }}
+      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_TEE_INSTANCE_ID || inputs.environment == 'devnet' && secrets.DEVNET_TEE_INSTANCE_ID || secrets.TEE_INSTANCE_ID }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-      IMAGE_TAG: ${{ inputs.image_tag }}
     steps:
-      # ── Checkout ──────────────────────────────────────────────────
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
@@ -52,7 +128,7 @@ jobs:
       - name: Validate secrets
         run: |
           missing=()
-          [[ -z "$INSTANCE_ID" ]] && missing+=("INSTANCE_ID (from *_PROVER_INSTANCE_ID)")
+          [[ -z "$INSTANCE_ID" ]] && missing+=("INSTANCE_ID (from *_TEE_INSTANCE_ID)")
           [[ -z "$ECR_REGISTRY" ]] && missing+=("ECR_REGISTRY")
           [[ -z "${{ secrets.AWS_ROLE_ARN }}" ]] && missing+=("AWS_ROLE_ARN")
           [[ -z "${{ secrets.AWS_REGION }}" ]] && missing+=("AWS_REGION")
@@ -67,24 +143,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-
-      # ── Build & Push Docker Image (with layer caching) ──────────
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ env.IMAGE_TAG }}
-          build-args: BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
-          cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover
-          cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover,mode=max
 
       # ── Start EC2 Instance ───────────────────────────────────────
       - name: Start EC2 instance
@@ -116,28 +174,29 @@ jobs:
             sleep 10
           done
 
-      # ── Deploy Container via SSM ─────────────────────────────────
-      - name: Deploy container
+      # ── Deploy via SSM ───────────────────────────────────────────
+      - name: Deploy enclave + prover
         run: |
-          IMAGE_URI="${ECR_REGISTRY}/tee-rex:${IMAGE_TAG}"
+          NITRO_IMAGE_URI="${ECR_REGISTRY}/tee-rex:${{ inputs.nitro_image_tag }}"
+          PROVER_IMAGE_URI="${ECR_REGISTRY}/tee-rex:${{ inputs.prover_image_tag }}"
 
-          # Upload ci-deploy-prover.sh via base64 to avoid SSM escaping issues
-          SCRIPT_B64=$(base64 -w0 infra/ci-deploy-prover.sh)
+          # Upload ci-deploy-unified.sh via base64 to avoid SSM escaping issues
+          SCRIPT_B64=$(base64 -w0 infra/ci-deploy-unified.sh)
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 900 \
             --parameters "commands=[
-              \"echo '${SCRIPT_B64}' | base64 -d > /tmp/ci-deploy-prover.sh\",
-              \"chmod +x /tmp/ci-deploy-prover.sh\",
-              \"/tmp/ci-deploy-prover.sh ${IMAGE_URI}\"
+              \"echo '${SCRIPT_B64}' | base64 -d > /tmp/ci-deploy-unified.sh\",
+              \"chmod +x /tmp/ci-deploy-unified.sh\",
+              \"/tmp/ci-deploy-unified.sh ${NITRO_IMAGE_URI} ${PROVER_IMAGE_URI}\"
             ]" \
             --query 'Command.CommandId' \
             --output text)
 
           echo "SSM Command: ${COMMAND_ID}"
-          echo "Waiting for container deployment..."
+          echo "Waiting for unified deployment..."
 
           for i in $(seq 1 120); do
             STATUS=$(aws ssm get-command-invocation \
@@ -148,7 +207,7 @@ jobs:
 
             case "${STATUS}" in
               Success)
-                echo "Container deployed successfully"
+                echo "Unified deploy succeeded"
                 aws ssm get-command-invocation \
                   --command-id "${COMMAND_ID}" \
                   --instance-id "${INSTANCE_ID}" \
@@ -157,7 +216,7 @@ jobs:
                 break
                 ;;
               Failed|TimedOut|Cancelled)
-                echo "Container deployment ${STATUS}"
+                echo "Unified deployment ${STATUS}"
                 echo "=== stdout ==="
                 aws ssm get-command-invocation \
                   --command-id "${COMMAND_ID}" \
@@ -182,7 +241,7 @@ jobs:
             esac
           done
 
-      # ── Health Check via SSM Tunnel ──────────────────────────────
+      # ── Health Check via SSM Tunnels ─────────────────────────────
       - name: Health check
         id: health
         run: |
@@ -190,13 +249,40 @@ jobs:
             -o /tmp/session-manager-plugin.deb
           sudo dpkg -i /tmp/session-manager-plugin.deb
 
+          # Tunnel to enclave (port 4000 → local 4001)
+          aws ssm start-session \
+            --target "${INSTANCE_ID}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+          TEE_TUNNEL_PID=$!
+
+          # Tunnel to prover (port 80 → local 4002)
           aws ssm start-session \
             --target "${INSTANCE_ID}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
-          TUNNEL_PID=$!
-          trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
+          PROVER_TUNNEL_PID=$!
 
+          trap 'kill $TEE_TUNNEL_PID $PROVER_TUNNEL_PID 2>/dev/null' EXIT
+
+          # Check enclave health
+          echo "Checking enclave health..."
+          for i in $(seq 1 90); do
+            if curl -sf --max-time 5 http://localhost:4001/attestation > /dev/null 2>&1; then
+              echo "Enclave healthy (attempt $i)"
+              curl -s http://localhost:4001/attestation | jq '{mode, hasDoc: (.attestationDocument != null)}'
+              break
+            fi
+            if [ "$i" = "90" ]; then
+              echo "Enclave health check failed after 3 minutes"
+              echo "deployed=false" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          # Check prover health
+          echo "Checking prover health..."
           for i in $(seq 1 90); do
             if curl -sf --max-time 5 http://localhost:4002/attestation > /dev/null 2>&1; then
               echo "Prover healthy (attempt $i)"
@@ -204,8 +290,10 @@ jobs:
               echo "deployed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            if [ "$i" = "90" ]; then
+              echo "Prover health check failed after 3 minutes"
+              echo "deployed=false" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
             sleep 2
           done
-          echo "Health check failed after 3 minutes"
-          echo "deployed=false" >> "$GITHUB_OUTPUT"
-          exit 1
