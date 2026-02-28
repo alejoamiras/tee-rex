@@ -18,7 +18,9 @@ export function setupDOM(): void {
     <span id="tee-url"></span>
     <button id="deploy-btn" disabled></button>
     <button id="token-flow-btn" disabled></button>
-    <button id="switch-to-external-btn" class="hidden"></button>
+    <div id="switch-to-external-wrapper" class="hidden">
+      <button id="switch-to-external-btn"></button>
+    </div>
     <div id="progress" class="hidden">
       <pre id="ascii-art" class="ascii-art"></pre>
     </div>
@@ -57,6 +59,7 @@ export function setupDOM(): void {
     <span id="ext-network-dot" class="status-dot status-unknown"></span>
     <span id="ext-network-label"></span>
     <img id="ext-wallet-icon" class="hidden" alt="" />
+    <span id="ext-wallet-icon-placeholder" class="status-dot bg-cyan-700"></span>
     <span id="ext-wallet-name"></span>
     <select id="ext-account-selector" class="hidden"></select>
     <span id="ext-wallet-address"></span>

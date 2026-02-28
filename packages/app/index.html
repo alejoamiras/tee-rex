@@ -123,6 +123,9 @@
               <span class="text-gray-400 w-28">Wallet</span>
               <span id="wallet-state" class="text-gray-600 ml-auto font-light">not initialized</span>
             </div>
+            <div class="hidden flex justify-end pt-1" id="switch-to-external-wrapper">
+              <button id="switch-to-external-btn" class="text-[10px] text-gray-600 hover:text-cyan-400 transition-colors uppercase tracking-wider">Switch Wallet</button>
+            </div>
           </div>
         </section>
 
@@ -179,13 +182,6 @@
             >
               Run Token Flow
             </button>
-            <button
-              id="switch-to-external-btn"
-              class="hidden w-full py-1.5 text-[10px] uppercase tracking-wider text-gray-600 hover:text-cyan-400 transition-colors"
-            >
-              Connect External Wallet
-            </button>
-
             <div id="progress" class="hidden">
               <pre id="ascii-art" class="ascii-art"></pre>
             </div>
@@ -226,14 +222,30 @@
 
         <!-- Wallet info bar -->
         <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
-          <div class="px-4 py-3 flex items-center gap-3 text-xs">
-            <span id="ext-network-dot" class="status-dot status-unknown"></span>
-            <span id="ext-network-label" class="text-gray-400"></span>
-            <img id="ext-wallet-icon" class="hidden w-4 h-4" alt="" />
-            <span id="ext-wallet-name" class="text-cyan-500/80 font-medium"></span>
-            <select id="ext-account-selector" class="hidden bg-gray-900 text-cyan-500/80 text-[10px] border border-gray-700 rounded px-1 py-0.5 outline-none cursor-pointer"></select>
-            <span id="ext-wallet-address" class="text-gray-600 font-light truncate max-w-[180px]"></span>
-            <button id="ext-disconnect-btn" class="ml-auto text-[10px] text-gray-600 hover:text-cyan-400 transition-colors uppercase tracking-wider">Switch Wallet</button>
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">wallet</span>
+          </div>
+          <div class="px-4 py-3 space-y-2">
+            <div class="flex items-center gap-3 text-xs">
+              <span id="ext-network-dot" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">Network</span>
+              <span id="ext-network-label" class="text-gray-600 ml-auto font-light"></span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <img id="ext-wallet-icon" class="w-3.5 h-3.5 hidden" alt="" />
+              <span id="ext-wallet-icon-placeholder" class="status-dot bg-cyan-700"></span>
+              <span class="text-gray-400 w-28">Wallet</span>
+              <span id="ext-wallet-name" class="text-gray-600 ml-auto font-light"></span>
+            </div>
+            <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
+              <span class="status-dot bg-gray-700"></span>
+              <span class="text-gray-400 w-28">Account</span>
+              <select id="ext-account-selector" class="hidden bg-gray-900 text-gray-400 text-xs border border-gray-700 rounded px-1.5 py-0.5 ml-auto outline-none cursor-pointer font-light"></select>
+              <span id="ext-wallet-address" class="text-gray-600 ml-auto font-light truncate max-w-[200px]"></span>
+            </div>
+            <div class="flex justify-end pt-1">
+              <button id="ext-disconnect-btn" class="text-[10px] text-gray-600 hover:text-cyan-400 transition-colors uppercase tracking-wider">Switch Wallet</button>
+            </div>
           </div>
         </section>
 
