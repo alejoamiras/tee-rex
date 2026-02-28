@@ -23,7 +23,6 @@ import {
 import { $, $btn, appendLog, formatDuration, setStatus, startClock } from "./ui";
 
 let deploying = false;
-const runCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 
 // ── Clock ──
 startClock();
@@ -244,7 +243,7 @@ function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
   container.classList.remove("hidden");
 }
 
-function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepTiming[]): void {
+function showResult(mode: UiMode, durationMs: number, steps?: StepTiming[], tag?: string): void {
   $("results").classList.remove("hidden");
   const suffix = mode;
 
@@ -253,14 +252,13 @@ function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepT
   timeEl.className = "text-3xl font-bold tabular-nums text-emerald-400";
 
   const tagEl = $(`tag-${suffix}`);
-  tagEl.textContent = tag;
-  tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${
-    tag === "token flow"
-      ? "text-cyan-500/70"
-      : tag === "cold"
-        ? "text-amber-500/70"
-        : "text-cyan-500/70"
-  }`;
+  if (tag) {
+    tagEl.textContent = tag;
+    tagEl.className = "mt-1.5 text-[10px] uppercase tracking-widest text-cyan-500/70";
+  } else {
+    tagEl.textContent = "";
+    tagEl.className = "";
+  }
 
   $(`result-${suffix}`).classList.add("result-filled");
 
@@ -309,9 +307,7 @@ $("deploy-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    runCount[result.mode]++;
-    const isCold = runCount[result.mode] === 1;
-    showResult(result.mode, result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
+    showResult(result.mode, result.totalDurationMs, result.steps);
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
@@ -354,7 +350,7 @@ $("token-flow-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    showResult(result.mode, result.totalDurationMs, "token flow", result.steps);
+    showResult(result.mode, result.totalDurationMs, result.steps, "token flow");
   } catch (err) {
     appendLog(`Token flow failed: ${err}`, "error");
   } finally {
