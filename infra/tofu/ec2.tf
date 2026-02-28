@@ -13,7 +13,7 @@ resource "aws_key_pair" "tee_rex" {
 }
 
 # -----------------------------------------------------------------------------
-# CI Instances (stopped by default, started/stopped by GitHub Actions)
+# CI Instance (stopped by default, started/stopped by GitHub Actions)
 # -----------------------------------------------------------------------------
 
 resource "aws_instance" "ci_tee" {
@@ -33,7 +33,7 @@ resource "aws_instance" "ci_tee" {
   }
 
   tags = {
-    Name        = "tee-rex-nitro"
+    Name        = "tee-rex-ci"
     Environment = "ci"
   }
 
@@ -43,7 +43,7 @@ resource "aws_instance" "ci_tee" {
 }
 
 # -----------------------------------------------------------------------------
-# Production Instances
+# Production Instance
 # -----------------------------------------------------------------------------
 
 resource "aws_instance" "prod_tee" {
@@ -63,9 +63,8 @@ resource "aws_instance" "prod_tee" {
   }
 
   tags = {
-    Name        = "tee-rex-prod-tee"
+    Name        = "tee-rex-prod"
     Environment = "prod"
-    Service     = "tee"
   }
 
   lifecycle {
@@ -74,7 +73,7 @@ resource "aws_instance" "prod_tee" {
 }
 
 # -----------------------------------------------------------------------------
-# Devnet Instances
+# Devnet Instance
 # -----------------------------------------------------------------------------
 
 resource "aws_instance" "devnet_tee" {
@@ -94,9 +93,8 @@ resource "aws_instance" "devnet_tee" {
   }
 
   tags = {
-    Name        = "tee-rex-devnet-tee"
+    Name        = "tee-rex-devnet"
     Environment = "devnet"
-    Service     = "tee"
   }
 
   lifecycle {
