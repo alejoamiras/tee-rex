@@ -204,4 +204,12 @@ test("external UI elements exist in DOM", async ({ page }) => {
   await expect(page.locator("#ext-deploy-token-btn")).toHaveCount(1);
   await expect(page.locator("#ext-token-flow-btn")).toHaveCount(1);
   await expect(page.locator("#ext-results")).toHaveCount(1);
+
+  // Wallet info bar has structured rows
+  await expect(page.locator("#ext-network-dot")).toHaveCount(1);
+  await expect(page.locator("#ext-network-label")).toHaveCount(1);
+  await expect(page.locator("#ext-wallet-icon-placeholder")).toHaveCount(1);
+  await expect(page.locator("#ext-wallet-name")).toHaveCount(1);
+  await expect(page.locator("#ext-account-selector")).toHaveCount(1);
+  await expect(page.locator("#ext-wallet-address")).toHaveCount(1);
 });

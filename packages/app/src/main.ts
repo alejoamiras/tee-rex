@@ -326,7 +326,7 @@ async function initEmbeddedWallet(): Promise<void> {
     $("wallet-state").className = "text-emerald-500/80 ml-auto font-light";
     setStatus("wallet-dot", true);
     setActionButtonsDisabled(false);
-    $("switch-to-external-btn").classList.remove("hidden");
+    $("switch-to-external-wrapper").classList.remove("hidden");
 
     const networkLabel = $("network-label");
     if (state.proofsRequired) {

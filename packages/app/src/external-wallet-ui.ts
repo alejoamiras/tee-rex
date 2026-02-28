@@ -129,15 +129,20 @@ export function populateExternalWalletUI(
 ): void {
   // Network label
   const networkLabel = ENV_NAME || "local sandbox";
-  $("ext-network-label").textContent = `Connected to ${networkLabel}`;
+  $("ext-network-label").textContent = networkLabel;
   $("ext-network-dot").className = "status-dot status-online";
 
   // Wallet name + icon
   $("ext-wallet-name").textContent = walletName;
+  const iconEl = $("ext-wallet-icon") as HTMLImageElement;
+  const placeholder = $("ext-wallet-icon-placeholder");
   if (icon) {
-    const iconEl = $("ext-wallet-icon") as HTMLImageElement;
     iconEl.src = icon;
     iconEl.classList.remove("hidden");
+    placeholder.classList.add("hidden");
+  } else {
+    iconEl.classList.add("hidden");
+    placeholder.classList.remove("hidden");
   }
 
   // Account selector or static address
