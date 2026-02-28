@@ -24,11 +24,16 @@ async function mockServicesOnline(page: import("@playwright/test").Page) {
   );
 }
 
-// ── Tests ──
+// ── Tests (embedded bypass: ?wallet=embedded) ──
 
-test("page loads with correct initial state", async ({ page }) => {
+test("page loads with correct initial state (embedded bypass)", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/?wallet=embedded");
+
+  // Embedded UI is visible, wallet selection is hidden
+  await expect(page.locator("#embedded-ui")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#wallet-selection")).toHaveClass(/hidden/);
+  await expect(page.locator("#external-ui")).toHaveClass(/hidden/);
 
   // Local mode button is active by default
   const localBtn = page.locator("#mode-local");
@@ -79,7 +84,6 @@ test("TEE button is disabled when TEE_URL is not configured", async ({ page }) =
   await page.goto("/?wallet=embedded");
   await expect(page.locator("#log")).toContainText("services");
 
-  // TEE button stays disabled (force-click guards tested in mocked-unconfigured)
   await expect(page.locator("#mode-tee")).toBeDisabled();
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
 });
@@ -89,10 +93,8 @@ test("TEE service row elements are present in the UI", async ({ page }) => {
   await page.goto("/?wallet=embedded");
   await expect(page.locator("#log")).toContainText("services");
 
-  // TEE service row exists with status dot and attestation label
   await expect(page.locator("#tee-status")).toBeVisible();
   await expect(page.locator("#tee-attestation-label")).toBeVisible();
-  // URL span is empty (hidden) when TEE_URL is not set — just check it exists
   await expect(page.locator("#tee-url")).toHaveCount(1);
 });
 
@@ -101,7 +103,6 @@ test("TEE service row shows not configured when TEE_URL is not set", async ({ pa
   await page.goto("/?wallet=embedded");
   await expect(page.locator("#log")).toContainText("services");
 
-  // Without TEE_URL, the service row shows "not configured"
   await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
   await expect(page.locator("#tee-url")).toHaveText("");
 });
@@ -113,7 +114,6 @@ test("service dots show online and teerex label shows available when services re
 
   // Block all further RPC calls so wallet init fails gracefully
   await page.route("**/aztec", (route) => {
-    // If it's an RPC-style POST request, let it fail
     if (route.request().method() === "POST") {
       return route.fulfill({ status: 500, body: "not a real node" });
     }
@@ -148,56 +148,60 @@ test("log panel shows checking services message on load", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/?wallet=embedded");
 
-  // The init function logs "Checking services..."
   await expect(page.locator("#log")).toContainText("Checking services");
 });
 
-// ── Wallet connection UI tests ──
+// ── Wallet selection screen tests ──
 
-test("Connect External button is hidden with ?wallet=embedded", async ({ page }) => {
+test("wallet selection screen appears on load (no query param)", async ({ page }) => {
   await mockServicesOffline(page);
-  await page.goto("/?wallet=embedded");
-  await expect(page.locator("#log")).toContainText("services");
-
-  // Button exists but is hidden
-  await expect(page.locator("#connect-external-btn")).toBeHidden();
-});
-
-test("Connect External button is visible without ?wallet=embedded (when wallet ready)", async ({
-  page,
-}) => {
-  await mockServicesOnline(page);
-
-  // Block RPC but let wallet init succeed enough to show the button
-  await page.route("**/aztec", (route) => {
-    if (route.request().method() === "POST") {
-      return route.fulfill({ status: 500, body: "not a real node" });
-    }
-    return route.continue();
-  });
-
-  // Navigate WITHOUT ?wallet=embedded
   await page.goto("/");
 
-  // Wait for init to proceed past service checks
-  await expect(page.locator("#aztec-status")).toHaveClass(/status-online/);
+  // Wait for init to settle
+  await expect(page.locator("#log")).toContainText("services");
 
-  // The button will only show once wallet is "ready" — which won't happen
-  // with a mocked node. But the wallet-connect section elements should exist.
-  await expect(page.locator("#connect-external-btn")).toHaveCount(1);
-  await expect(page.locator("#wallet-connect-section")).toBeHidden();
-  await expect(page.locator("#proving-mode-overlay")).toBeHidden();
+  // Wallet selection is visible, embedded/external UI are hidden
+  await expect(page.locator("#wallet-selection")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#embedded-ui")).toHaveClass(/hidden/);
+  await expect(page.locator("#external-ui")).toHaveClass(/hidden/);
 });
 
-test("wallet connection section elements exist in DOM", async ({ page }) => {
+test("?wallet=embedded bypasses wallet selection and shows embedded UI", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/?wallet=embedded");
 
-  // All wallet connection elements should be in the DOM (but hidden)
-  await expect(page.locator("#wallet-connect-section")).toBeHidden();
-  await expect(page.locator("#wallet-discovery")).toBeHidden();
-  await expect(page.locator("#wallet-verify")).toBeHidden();
-  await expect(page.locator("#wallet-connected")).toBeHidden();
-  await expect(page.locator("#emoji-grid")).toHaveCount(1);
-  await expect(page.locator("#proving-mode-overlay")).toBeHidden();
+  await expect(page.locator("#log")).toContainText("services");
+
+  // Embedded UI is visible, wallet selection is hidden
+  await expect(page.locator("#embedded-ui")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#wallet-selection")).toHaveClass(/hidden/);
+});
+
+test("embedded choice button is disabled when Aztec node is offline", async ({ page }) => {
+  await mockServicesOffline(page);
+  await page.goto("/");
+
+  await expect(page.locator("#log")).toContainText("services");
+  await expect(page.locator("#choose-embedded-btn")).toBeDisabled();
+});
+
+test("wallet selection shows connect external button and hides discovery", async ({ page }) => {
+  await mockServicesOffline(page);
+  await page.goto("/");
+
+  await expect(page.locator("#log")).toContainText("services");
+  await expect(page.locator("#choose-external-btn")).toBeVisible();
+  await expect(page.locator("#ext-discovery-section")).toHaveClass(/hidden/);
+});
+
+test("external UI elements exist in DOM", async ({ page }) => {
+  await mockServicesOffline(page);
+  await page.goto("/?wallet=embedded");
+
+  // External UI elements should exist (but hidden)
+  await expect(page.locator("#external-ui")).toHaveClass(/hidden/);
+  await expect(page.locator("#ext-disconnect-btn")).toHaveCount(1);
+  await expect(page.locator("#ext-deploy-token-btn")).toHaveCount(1);
+  await expect(page.locator("#ext-token-flow-btn")).toHaveCount(1);
+  await expect(page.locator("#ext-results")).toHaveCount(1);
 });
