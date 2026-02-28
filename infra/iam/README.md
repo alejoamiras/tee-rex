@@ -66,28 +66,18 @@ Production instances stay running after deployment (no teardown). They are start
 # Reuses existing IAM instance profile, key pair, subnet
 ```
 
-### Prod Prover Instance
+### Elastic IP
 
-```bash
-# t3.xlarge — standard Docker, no enclave
-# User-data: Docker + jq
-# Tags: Name=tee-rex-prod-prover, Environment=prod, Service=prover
-# Same security group, IAM profile, key pair, subnet
-```
-
-### Elastic IPs
-
-Allocate 2 Elastic IPs and associate with prod instances. These provide stable addresses for CloudFront origins (Phase 17E).
+Allocate an Elastic IP and associate with the prod instance. Provides a stable address for CloudFront origins (Phase 17E).
 
 ```bash
 aws ec2 allocate-address --domain vpc --tag-specifications 'ResourceType=elastic-ip,Tags=[{Key=Name,Value=tee-rex-prod-tee},{Key=Environment,Value=prod}]'
-aws ec2 allocate-address --domain vpc --tag-specifications 'ResourceType=elastic-ip,Tags=[{Key=Name,Value=tee-rex-prod-prover},{Key=Environment,Value=prod}]'
-# Associate each with its instance:
 aws ec2 associate-address --instance-id <PROD_TEE_INSTANCE_ID> --allocation-id <EIP_ALLOC_ID>
-aws ec2 associate-address --instance-id <PROD_PROVER_INSTANCE_ID> --allocation-id <EIP_ALLOC_ID>
 ```
 
-After creation, **stop both instances**. `deploy-prod.yml` will start them on deploy.
+After creation, **stop the instance**. `deploy-prod.yml` will start it on deploy.
+
+> **Note (Phase 29):** Both the Nitro enclave (port 4000) and the prover Docker container (port 80) run on the same m5.xlarge instance. No separate prover instance needed.
 
 ## 6. GitHub Repository Secrets
 
@@ -96,10 +86,8 @@ Add these in Settings > Secrets and variables > Actions > Secrets:
 | Variable | Value |
 |---|---|
 | `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/tee-rex-ci-github` |
-| `TEE_INSTANCE_ID` | CI TEE instance ID (step 4) |
-| `PROVER_INSTANCE_ID` | CI prover instance ID |
-| `PROD_TEE_INSTANCE_ID` | Production TEE instance ID (step 5) |
-| `PROD_PROVER_INSTANCE_ID` | Production prover instance ID (step 5) |
+| `TEE_INSTANCE_ID` | CI TEE instance ID (step 4) — runs both enclave + prover |
+| `PROD_TEE_INSTANCE_ID` | Production TEE instance ID (step 5) — runs both enclave + prover |
 | `AWS_REGION` | `eu-west-2` |
 | `ECR_REGISTRY` | `<ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com` |
 | `PROD_S3_BUCKET` | `tee-rex-app-prod` |

@@ -7,9 +7,9 @@ How the tee-rex CI/CD system works. Last updated: 2026-02-27.
 ## Overview
 
 ```
-19 workflow files total:
-  10 main workflows   (sdk, app, server, tee, remote, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet)
-   7 reusable         (_build-base, _deploy-unified, _deploy-tee, _deploy-prover, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
+13 workflow files total:
+   8 main workflows   (sdk, app, server, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet)
+   5 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
 
@@ -87,21 +87,7 @@ graph TD
     teardown --> gate_check["Infra Status\n(check results)"]
 ```
 
-### Individual: `tee.yml` / `remote.yml` (labels: `test-tee` / `test-remote`)
-
-For isolated debugging. Same structure but deploy only one server.
-
-```mermaid
-graph TD
-    subgraph "tee.yml (test-tee)"
-        t_base["Build Base"] --> t_deploy["Deploy TEE"] --> t_e2e["SDK + App E2E"] --> t_teardown["Teardown"]
-    end
-    subgraph "remote.yml (test-remote)"
-        r_base["Build Base"] --> r_deploy["Deploy Prover"] --> r_e2e["SDK + App E2E"] --> r_teardown["Teardown"]
-    end
-```
-
-All infra workflows use concurrency groups to cancel in-progress runs when new commits are pushed.
+Infra workflows use concurrency groups to cancel in-progress runs when new commits are pushed.
 
 ---
 
@@ -211,8 +197,6 @@ Both wrappers call `_aztec-update.yml` with these inputs:
 |----------|---------|-----------|
 | `_build-base.yml` | Idempotent base image build (Bun + system deps + `bun install`). Checks ECR first, builds only if missing. | None. Outputs: `base_tag` |
 | `_deploy-unified.yml` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM | `environment`, `nitro_image_tag`, `prover_image_tag`, `base_tag` |
-| `_deploy-tee.yml` | Build Nitro Docker image, push to ECR, start EC2, deploy enclave via SSM (legacy, kept for rollback) | `environment`, `image_tag`, `base_tag` |
-| `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM (legacy, kept for rollback) | `environment`, `image_tag`, `base_tag` |
 | `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
@@ -255,8 +239,6 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 ### Deploy scripts
 
 - **Unified** (`ci-deploy-unified.sh`): teardown enclave + prover → Docker wipe → pull nitro image → build EIF → hugepages → start enclave → health check → pull prover image → run prover container (port 80) → health check. Both services on same host.
-- **Prover** (`ci-deploy-prover.sh`): stop container → pull image → run container → prune (legacy, kept for rollback)
-- **TEE** (`ci-deploy.sh`): teardown enclave → pull image → build EIF → prune → run enclave (legacy, kept for rollback)
 
 ---
 

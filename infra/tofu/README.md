@@ -102,11 +102,8 @@ tofu import aws_ecr_repository.tee_rex tee-rex
 ```bash
 tofu import aws_key_pair.tee_rex tee-rex-key
 tofu import aws_instance.ci_tee <CI_TEE_INSTANCE_ID>
-tofu import aws_instance.ci_prover <CI_PROVER_INSTANCE_ID>
 tofu import aws_instance.prod_tee <PROD_TEE_INSTANCE_ID>
-tofu import aws_instance.prod_prover <PROD_PROVER_INSTANCE_ID>
 tofu import aws_instance.devnet_tee <DEVNET_TEE_INSTANCE_ID>
-tofu import aws_instance.devnet_prover <DEVNET_PROVER_INSTANCE_ID>
 ```
 
 ### Phase 6: Elastic IPs
@@ -114,12 +111,8 @@ tofu import aws_instance.devnet_prover <DEVNET_PROVER_INSTANCE_ID>
 ```bash
 tofu import aws_eip.prod_tee <PROD_TEE_EIP_ALLOC_ID>
 tofu import aws_eip_association.prod_tee <PROD_TEE_EIP_ASSOC_ID>
-tofu import aws_eip.prod_prover <PROD_PROVER_EIP_ALLOC_ID>
-tofu import aws_eip_association.prod_prover <PROD_PROVER_EIP_ASSOC_ID>
 tofu import aws_eip.devnet_tee <DEVNET_TEE_EIP_ALLOC_ID>
 tofu import aws_eip_association.devnet_tee <DEVNET_TEE_EIP_ASSOC_ID>
-tofu import aws_eip.devnet_prover <DEVNET_PROVER_EIP_ALLOC_ID>
-tofu import aws_eip_association.devnet_prover <DEVNET_PROVER_EIP_ASSOC_ID>
 ```
 
 ### Phase 7: S3

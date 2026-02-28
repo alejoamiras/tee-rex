@@ -83,7 +83,7 @@ jobs:
         if: inputs.setup_prover_tunnel
         run: |
           aws ssm start-session \
-            --target "${{ secrets.PROVER_INSTANCE_ID }}" \
+            --target "${{ secrets.TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
           echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
