@@ -5,6 +5,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "dev:devnet": "AZTEC_NODE_URL=https://v4-devnet-2.aztec-labs.com PROVER_URL=https://devnet.tee-rex.dev/prover TEE_URL=https://devnet.tee-rex.dev/tee VITE_ENV_NAME=devnet vite",
     "dev:local-network:local": "PROVER_URL=http://localhost:4000 vite",
     "dev:local-network:prod": "PROVER_URL=https://nextnet.tee-rex.dev/prover TEE_URL=https://nextnet.tee-rex.dev/tee vite",
     "dev:nextnet:local": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=http://localhost:4000 vite",
