@@ -575,6 +575,7 @@ export async function runTokenFlow(
   }
 
   const mode = state.uiMode;
+  const modeLabel = state.walletType === "external" ? "wallet" : mode;
   const alice = state.registeredAddresses[state.selectedAccountIndex];
   const fee = { paymentMethod: state.feePaymentMethod! };
   const steps: StepTiming[] = [];
@@ -592,8 +593,8 @@ export async function runTokenFlow(
     if (bobCandidate) {
       bob = bobCandidate;
     } else {
-      onStep(`deploying bob account [${mode}]`);
-      log(`Deploying second account (Bob) for transfer [${mode}]...`);
+      onStep(`deploying bob account [${modeLabel}]`);
+      log(`Deploying second account (Bob) for transfer [${modeLabel}]...`);
       const bobManager = await state.embeddedWallet!.createSchnorrAccount(Fr.random(), Fr.random());
       const bobDeploy = await bobManager.getDeployMethod();
       const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
@@ -602,7 +603,7 @@ export async function runTokenFlow(
         method: bobDeploy,
         sendOpts: bobSendOpts,
         log,
-        onConfirming: () => onStep(`confirming bob [${mode}]`),
+        onConfirming: () => onStep(`confirming bob [${modeLabel}]`),
       });
       bob = bobManager.address;
       state.registeredAddresses.push(bob);
@@ -611,15 +612,15 @@ export async function runTokenFlow(
     }
 
     // Step 1: Deploy TokenContract
-    onStep(`deploying token [${mode}]`);
-    log(`Deploying TokenContract (admin=Alice) [${mode}]...`);
+    onStep(`deploying token [${modeLabel}]`);
+    log(`Deploying TokenContract (admin=Alice) [${modeLabel}]...`);
     const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
     const tokenStep = await executeStep({
       step: "deploy token",
       method: tokenDeploy,
       sendOpts: { from: alice, fee },
       log,
-      onConfirming: () => onStep(`confirming token deploy [${mode}]`),
+      onConfirming: () => onStep(`confirming token deploy [${modeLabel}]`),
     });
     const token = TokenContract.at(tokenDeploy.address!, state.wallet);
     steps.push(tokenStep);
@@ -629,27 +630,27 @@ export async function runTokenFlow(
     );
 
     // Step 2: Mint 1000 TREX to Alice (private)
-    onStep(`minting 1000 TREX [${mode}]`);
-    log(`Minting 1000 TREX to Alice [${mode}]...`);
+    onStep(`minting 1000 TREX [${modeLabel}]`);
+    log(`Minting 1000 TREX to Alice [${modeLabel}]...`);
     const mintStep = await executeStep({
       step: "mint to private",
       method: token.methods.mint_to_private(alice, 1000n),
       sendOpts: { from: alice, fee },
       log,
-      onConfirming: () => onStep(`confirming mint [${mode}]`),
+      onConfirming: () => onStep(`confirming mint [${modeLabel}]`),
     });
     steps.push(mintStep);
     log(`Minted in ${(mintStep.durationMs / 1000).toFixed(1)}s`, "success");
 
     // Step 3: Transfer 500 TREX Alice → Bob (private)
-    onStep(`transferring 500 TREX [${mode}]`);
-    log(`Transferring 500 TREX Alice → Bob [${mode}]...`);
+    onStep(`transferring 500 TREX [${modeLabel}]`);
+    log(`Transferring 500 TREX Alice → Bob [${modeLabel}]...`);
     const transferStep = await executeStep({
       step: "private transfer",
       method: token.methods.transfer(bob, 500n),
       sendOpts: { from: alice, fee },
       log,
-      onConfirming: () => onStep(`confirming transfer [${mode}]`),
+      onConfirming: () => onStep(`confirming transfer [${modeLabel}]`),
     });
     steps.push(transferStep);
     log(`Transferred in ${(transferStep.durationMs / 1000).toFixed(1)}s`, "success");
