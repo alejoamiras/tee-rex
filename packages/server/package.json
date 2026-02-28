@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aztec/bb-prover": "4.0.0-devnet.2-patch.2",
-    "@aztec/simulator": "4.0.0-devnet.2-patch.2",
-    "@aztec/stdlib": "4.0.0-devnet.2-patch.2",
+    "@aztec/bb-prover": "4.0.0-devnet.2-patch.3",
+    "@aztec/simulator": "4.0.0-devnet.2-patch.3",
+    "@aztec/stdlib": "4.0.0-devnet.2-patch.3",
     "@logtape/express": "^2.0",
     "@logtape/logtape": "^2.0",
     "cors": "^2.8.6",
