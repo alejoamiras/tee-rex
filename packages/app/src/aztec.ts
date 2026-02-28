@@ -72,6 +72,7 @@ export interface AztecState {
   walletType: WalletType | null;
   externalProvider: WalletProvider | null;
   registeredAddresses: AztecAddress[];
+  selectedAccountIndex: number;
   provingMode: ProvingMode;
   uiMode: UiMode;
   teeServerUrl: string;
@@ -93,6 +94,7 @@ export const state: AztecState = {
   walletType: null,
   externalProvider: null,
   registeredAddresses: [],
+  selectedAccountIndex: 0,
   provingMode: "local",
   uiMode: "local",
   teeServerUrl: "/tee",
@@ -286,6 +288,10 @@ export function setExternalWallet(
   state.registeredAddresses = accounts;
 }
 
+export function setSelectedAccount(index: number): void {
+  state.selectedAccountIndex = index;
+}
+
 /**
  * Revert to the embedded wallet after disconnecting an external wallet.
  */
@@ -294,8 +300,7 @@ export function revertToEmbedded(): void {
   state.wallet = state.embeddedWallet;
   state.walletType = "embedded";
   state.externalProvider = null;
-  // Re-populate sandbox accounts if on local network
-  // (they were already registered during init, addresses are still in embeddedWallet)
+  state.selectedAccountIndex = 0;
 }
 
 export function setUiMode(mode: UiMode, teeUrl?: string): void {
@@ -570,7 +575,7 @@ export async function runTokenFlow(
   }
 
   const mode = state.uiMode;
-  const alice = state.registeredAddresses[0];
+  const alice = state.registeredAddresses[state.selectedAccountIndex];
   const fee = { paymentMethod: state.feePaymentMethod! };
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
@@ -583,8 +588,9 @@ export async function runTokenFlow(
   try {
     // On live networks, we may need to deploy a second account (bob) for the transfer step
     let bob: AztecAddress;
-    if (state.registeredAddresses.length >= 2) {
-      bob = state.registeredAddresses[1];
+    const bobCandidate = state.registeredAddresses.find((_, i) => i !== state.selectedAccountIndex);
+    if (bobCandidate) {
+      bob = bobCandidate;
     } else {
       onStep(`deploying bob account [${mode}]`);
       log(`Deploying second account (Bob) for transfer [${mode}]...`);

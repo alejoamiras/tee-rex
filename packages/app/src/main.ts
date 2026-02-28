@@ -16,6 +16,7 @@ import {
   runTokenFlow,
   type StepTiming,
   setExternalWallet,
+  setSelectedAccount,
   setUiMode,
   state,
   TEE_CONFIGURED,
@@ -147,16 +148,51 @@ function resetWalletConnectUI(): void {
   $("wallet-list").replaceChildren();
   hideSection("no-wallets-msg");
   $("emoji-grid").replaceChildren();
+  ($("account-selector") as HTMLSelectElement).replaceChildren();
+  hideSection("account-selector");
+  $("external-wallet-address").classList.remove("hidden");
   pendingConn = null;
   selectedProvider = null;
 }
 
-function switchToExternalWalletUI(walletName: string, address: string, icon?: string): void {
+/** Extract a display hex string from a wallet-sdk account entry. */
+function accountToHex(account: any): string {
+  const raw = account?.item ?? account?.address ?? account;
+  if (typeof raw === "string") return raw;
+  if (typeof raw?.toHexString === "function") return raw.toHexString();
+  return String(raw);
+}
+
+function switchToExternalWalletUI(walletName: string, accounts: any[], icon?: string): void {
   resetWalletConnectUI();
   showSection("wallet-connect-section");
   showSection("wallet-connected");
   $("external-wallet-name").textContent = walletName;
-  $("external-wallet-address").textContent = `${address.slice(0, 20)}...`;
+
+  const selector = $("account-selector") as HTMLSelectElement;
+  const addressSpan = $("external-wallet-address");
+
+  if (accounts.length > 1) {
+    // Multiple accounts — show dropdown
+    selector.replaceChildren();
+    for (const acct of accounts) {
+      const hex = accountToHex(acct);
+      const alias = acct?.alias ?? "";
+      const opt = document.createElement("option");
+      opt.value = hex;
+      opt.textContent = alias ? `${alias} (${hex.slice(0, 10)}...)` : `${hex.slice(0, 20)}...`;
+      selector.appendChild(opt);
+    }
+    selector.classList.remove("hidden");
+    addressSpan.classList.add("hidden");
+  } else {
+    // Single account — static text
+    const hex = accountToHex(accounts[0]);
+    addressSpan.textContent = `${hex.slice(0, 20)}...`;
+    addressSpan.classList.remove("hidden");
+    selector.classList.add("hidden");
+  }
+
   if (icon) {
     const iconEl = $("external-wallet-icon") as HTMLImageElement;
     iconEl.src = icon;
@@ -339,20 +375,15 @@ $("emoji-confirm-btn").addEventListener("click", async () => {
       handleDisconnect();
     });
 
-    // Extract display address from the first account.
-    // Wallet SDK returns accounts as { alias, item } where `item` is an AztecAddress
-    // object (not a string). Use toHexString() to get the hex representation.
-    const firstAccount = accounts[0];
-    const raw = firstAccount?.item ?? firstAccount?.address ?? firstAccount;
-    const displayAddr =
-      typeof raw === "string"
-        ? raw
-        : typeof raw?.toHexString === "function"
-          ? raw.toHexString()
-          : String(raw);
+    // Extract AztecAddress from wallet SDK account entries ({ alias, item } or plain address)
+    const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+    const addresses = accounts.map((acct: any) => {
+      const raw = acct?.item ?? acct?.address ?? acct;
+      return raw instanceof AztecAddress ? raw : AztecAddress.fromString(accountToHex(acct));
+    });
 
-    setExternalWallet(wallet, selectedProvider, accounts);
-    switchToExternalWalletUI(providerName, displayAddr, selectedProvider.icon);
+    setExternalWallet(wallet, selectedProvider, addresses);
+    switchToExternalWalletUI(providerName, accounts, selectedProvider.icon);
     setActionButtonsDisabled(false);
     // Re-disable deploy for external (token flow still works)
     $btn("deploy-btn").disabled = true;
@@ -374,6 +405,13 @@ $("emoji-reject-btn").addEventListener("click", () => {
   resetWalletConnectUI();
   showSection("wallet-connect-section");
   showSection("wallet-discovery");
+});
+
+// Account selector change
+$("account-selector").addEventListener("change", () => {
+  const select = $("account-selector") as HTMLSelectElement;
+  setSelectedAccount(select.selectedIndex);
+  appendLog(`Switched to account ${select.selectedIndex + 1}: ${select.value.slice(0, 20)}...`);
 });
 
 // Disconnect button
