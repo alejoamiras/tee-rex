@@ -26,7 +26,7 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 
   const MAX_INIT_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
-    await page.goto("/");
+    await page.goto("/?wallet=embedded");
     if (attempt > 1) {
       await page.evaluate(async () => {
         const dbs = await indexedDB.databases();

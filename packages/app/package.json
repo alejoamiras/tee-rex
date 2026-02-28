@@ -32,6 +32,7 @@
     "@aztec/pxe": "4.0.0-devnet.2-patch.3",
     "@aztec/simulator": "4.0.0-devnet.2-patch.3",
     "@aztec/stdlib": "4.0.0-devnet.2-patch.3",
+    "@aztec/wallet-sdk": "4.0.0-devnet.2-patch.3",
     "@aztec/wallets": "4.0.0-devnet.2-patch.3"
   },
   "devDependencies": {
