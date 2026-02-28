@@ -143,9 +143,7 @@ jobs:
 
       - name: Set instance ID output
         id: set-instance-id
-        run: |
-          echo "::add-mask::$INSTANCE_ID"
-          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+        run: echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
 
       # ── AWS Credentials via OIDC ─────────────────────────────────
       - name: Configure AWS credentials
