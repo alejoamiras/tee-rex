@@ -28,6 +28,11 @@ on:
         required: false
         type: boolean
         default: false
+      instance_id:
+        description: EC2 instance ID for SSM tunnels (overrides secret)
+        required: false
+        type: string
+        default: ""
 
 jobs:
   e2e-sdk:
@@ -58,7 +63,7 @@ jobs:
         if: inputs.tee_url != ''
         run: |
           aws ssm start-session \
-            --target "${{ secrets.TEE_INSTANCE_ID }}" \
+            --target "${{ inputs.instance_id }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
           echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"
@@ -78,7 +83,7 @@ jobs:
         if: inputs.setup_prover_tunnel
         run: |
           aws ssm start-session \
-            --target "${{ secrets.TEE_INSTANCE_ID }}" \
+            --target "${{ inputs.instance_id }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
           echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"

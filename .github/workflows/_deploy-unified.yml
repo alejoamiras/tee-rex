@@ -31,6 +31,9 @@ on:
       deployed:
         description: Whether both services were deployed successfully
         value: ${{ jobs.deploy.outputs.deployed }}
+      instance_id:
+        description: EC2 instance ID used for deployment (masked)
+        value: ${{ jobs.deploy.outputs.instance_id }}
 
 jobs:
   # ── Build both Docker images in parallel ──────────────────────────
@@ -115,6 +118,7 @@ jobs:
       contents: read
     outputs:
       deployed: ${{ steps.health.outputs.deployed }}
+      instance_id: ${{ steps.set-instance-id.outputs.instance_id }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_TEE_INSTANCE_ID || inputs.environment == 'devnet' && secrets.DEVNET_TEE_INSTANCE_ID || secrets.TEE_INSTANCE_ID }}
@@ -136,6 +140,12 @@ jobs:
             echo "::error::Missing required secrets: ${missing[*]}"
             exit 1
           fi
+
+      - name: Set instance ID output
+        id: set-instance-id
+        run: |
+          echo "::add-mask::$INSTANCE_ID"
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
 
       # ── AWS Credentials via OIDC ─────────────────────────────────
       - name: Configure AWS credentials

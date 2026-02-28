@@ -67,6 +67,7 @@ jobs:
       tee_url: http://localhost:4001
       prover_url: http://localhost:4002
       setup_prover_tunnel: true
+      instance_id: ${{ needs.deploy-server.outputs.instance_id }}
 
   # ── App Smoke E2E with both TEE + Remote against nextnet ───────
   e2e-app:
@@ -80,6 +81,7 @@ jobs:
       tee_url: http://localhost:4001
       prover_url: http://localhost:4002
       setup_prover_tunnel: true
+      instance_id: ${{ needs.deploy-server.outputs.instance_id }}
 
   # ── Teardown: Always stop the EC2 instance ──────────────────────
   teardown:
@@ -97,8 +99,9 @@ jobs:
 
       - name: Stop EC2 instance
         run: |
-          if [ -n "${{ secrets.TEE_INSTANCE_ID }}" ]; then
-            aws ec2 stop-instances --instance-ids "${{ secrets.TEE_INSTANCE_ID }}" || true
+          INSTANCE_ID="${{ needs.deploy-server.outputs.instance_id }}"
+          if [ -n "$INSTANCE_ID" ]; then
+            aws ec2 stop-instances --instance-ids "$INSTANCE_ID" || true
             echo "EC2 instance stop requested"
           fi
 
