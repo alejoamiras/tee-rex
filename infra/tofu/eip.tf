@@ -1,16 +1,15 @@
-# Elastic IPs for prod and devnet instances (CI instances don't need static IPs)
+# Elastic IPs for prod and devnet instances (CI instance doesn't need a static IP)
 
 # -----------------------------------------------------------------------------
-# Production EIPs
+# Production EIP
 # -----------------------------------------------------------------------------
 
 resource "aws_eip" "prod_tee" {
   domain = "vpc"
 
   tags = {
-    Name        = "tee-rex-prod-tee"
+    Name        = "tee-rex-prod"
     Environment = "prod"
-    Service     = "tee"
   }
 }
 
@@ -20,14 +19,14 @@ resource "aws_eip_association" "prod_tee" {
 }
 
 # -----------------------------------------------------------------------------
-# Devnet EIPs
+# Devnet EIP
 # -----------------------------------------------------------------------------
 
 resource "aws_eip" "devnet_tee" {
   domain = "vpc"
 
   tags = {
-    Name        = "tee-rex-devnet-tee"
+    Name        = "tee-rex-devnet"
     Environment = "devnet"
   }
 }
