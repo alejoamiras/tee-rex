@@ -1,15 +1,15 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-02-26.
+How the tee-rex CI/CD system works. Last updated: 2026-02-27.
 
 ---
 
 ## Overview
 
 ```
-18 workflow files total:
+19 workflow files total:
   10 main workflows   (sdk, app, server, tee, remote, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet)
-   6 reusable         (_build-base, _deploy-tee, _deploy-prover, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
+   7 reusable         (_build-base, _deploy-unified, _deploy-tee, _deploy-prover, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
 
@@ -80,11 +80,10 @@ graph TD
     PR["Pull Request"] --> check{"test-infra\nlabel?"}
     check -->|no| gate_pass["Infra Status\n(auto-pass)"]
     check -->|yes| base["Build Base Image\n(_build-base.yml)"]
-    base --> tee["Deploy TEE\n(CI EC2 enclave)"]
-    base --> prover["Deploy Prover\n(CI EC2 container)"]
-    tee & prover --> sdk_e2e["SDK E2E\n(TEE + Remote modes)"]
-    tee & prover --> app_e2e["App Smoke E2E\n(3 deploys vs nextnet)"]
-    sdk_e2e & app_e2e --> teardown["Teardown\n(stop both EC2s)"]
+    base --> server["Deploy Server\n(_deploy-unified.yml)\n(enclave + prover on 1 EC2)"]
+    server --> sdk_e2e["SDK E2E\n(TEE + Remote modes)"]
+    server --> app_e2e["App Smoke E2E\n(3 deploys vs nextnet)"]
+    sdk_e2e & app_e2e --> teardown["Teardown\n(stop EC2)"]
     teardown --> gate_check["Infra Status\n(check results)"]
 ```
 
@@ -118,10 +117,9 @@ graph TD
     changes -->|app changed| app["deploy-app\n(S3 + CloudFront)"]
     push --> nextnet["nextnet-check\n(SDK smoke test)"]
 
-    base --> tee["deploy-tee\n(Prod EC2 enclave)"]
-    base --> prover["deploy-prover\n(Prod EC2 container)"]
+    base --> server["deploy-server\n(_deploy-unified.yml)\n(enclave + prover on 1 EC2)"]
 
-    tee & prover & app --> validate["validate-prod\n(smoke Playwright:\n3 deploys vs nextnet)"]
+    server & app --> validate["validate-prod\n(smoke Playwright:\n3 deploys vs nextnet)"]
 
     validate & nextnet -->|aztec auto-update only| publish["publish-sdk\n(npm + git tag + release)"]
 
@@ -133,7 +131,7 @@ graph TD
 
 | Output | Triggers on | Gates |
 |--------|------------|-------|
-| `servers` | `packages/server/**`, `packages/sdk/**`, `Dockerfile*`, `infra/**`, `package.json`, `bun.lock` | `ensure-base`, `deploy-tee`, `deploy-prover` |
+| `servers` | `packages/server/**`, `packages/sdk/**`, `Dockerfile*`, `infra/**`, `package.json`, `bun.lock` | `ensure-base`, `deploy-server` |
 | `app` | `packages/app/**`, `packages/sdk/**`, `package.json`, `bun.lock` | `deploy-app` |
 
 `workflow_dispatch` overrides both to `true` (deploys everything). `validate-prod` runs when either output is `true`.
@@ -144,12 +142,11 @@ graph TD
 |-----|-------------|----------|
 | `changes` | `dorny/paths-filter` to detect server vs app changes | ~5s |
 | `ensure-base` | Checks ECR for base image, builds + pushes only if missing | ~1-5 min |
-| `deploy-tee` | Build Nitro image, push to ECR, start EC2, deploy enclave via SSM | ~25 min |
-| `deploy-prover` | Build prover image, push to ECR, start EC2, deploy container via SSM | ~25 min |
+| `deploy-server` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM (`_deploy-unified.yml`) | ~25 min |
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
 | `publish-sdk` | Resolve version (query npm for existing revisions, append `.N` suffix if needed), set SDK version, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
-| `validate-prod` | SSM tunnels to prod servers, smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet | ~7 min |
+| `validate-prod` | SSM tunnels to prod server (both ports on same instance), smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet | ~7 min |
 
 ### Conditional behavior
 
@@ -213,8 +210,9 @@ Both wrappers call `_aztec-update.yml` with these inputs:
 | Workflow | Purpose | Key inputs |
 |----------|---------|-----------|
 | `_build-base.yml` | Idempotent base image build (Bun + system deps + `bun install`). Checks ECR first, builds only if missing. | None. Outputs: `base_tag` |
-| `_deploy-tee.yml` | Build Nitro Docker image, push to ECR, start EC2, deploy enclave via SSM | `environment`, `image_tag`, `base_tag` |
-| `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM | `environment`, `image_tag`, `base_tag` |
+| `_deploy-unified.yml` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM | `environment`, `nitro_image_tag`, `prover_image_tag`, `base_tag` |
+| `_deploy-tee.yml` | Build Nitro Docker image, push to ECR, start EC2, deploy enclave via SSM (legacy, kept for rollback) | `environment`, `image_tag`, `base_tag` |
+| `_deploy-prover.yml` | Build prover Docker image, push to ECR, start EC2, deploy container via SSM (legacy, kept for rollback) | `environment`, `image_tag`, `base_tag` |
 | `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
@@ -256,8 +254,9 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 
 ### Deploy scripts
 
-- **Prover** (`ci-deploy-prover.sh`): stop container → pull image → run container → prune (container protects image from prune)
-- **TEE** (`ci-deploy.sh`): teardown enclave → pull image → build EIF → prune → run enclave (prune must follow EIF build since `nitro-cli` reads image directly, no container)
+- **Unified** (`ci-deploy-unified.sh`): teardown enclave + prover → Docker wipe → pull nitro image → build EIF → hugepages → start enclave → health check → pull prover image → run prover container (port 80) → health check. Both services on same host.
+- **Prover** (`ci-deploy-prover.sh`): stop container → pull image → run container → prune (legacy, kept for rollback)
+- **TEE** (`ci-deploy.sh`): teardown enclave → pull image → build EIF → prune → run enclave (legacy, kept for rollback)
 
 ---
 
@@ -272,7 +271,7 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
 | `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows both `deploy-prod.yml` and `deploy-devnet.yml` to publish. AWS still uses OIDC (no stored keys). |
-| Separate CI and prod EC2 instances | CI deploys don't affect production; different instance types (CI: `t3.xlarge`, Prod: `m5.xlarge` TEE + `t3.xlarge` prover) |
+| Consolidated EC2 (1 per env) | Single m5.xlarge runs both Nitro enclave (port 4000) and prover container (port 80). Saves ~$2,900/yr. Prover instances stopped (not terminated) for rollback. |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
 | Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |
