@@ -6,6 +6,7 @@ import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import type { TxHash } from "@aztec/aztec.js/tx";
+import type { Wallet } from "@aztec/aztec.js/wallet";
 import { createStore } from "@aztec/kv-store/indexeddb";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
@@ -13,6 +14,7 @@ import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
 import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
+import type { WalletProvider } from "./wallet-connect";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
@@ -59,10 +61,16 @@ const ENV_URLS: Record<string, { other: string; otherName: string }> = {
 export const OTHER_ENV_URL = ENV_NAME ? ENV_URLS[ENV_NAME]?.other : undefined;
 export const OTHER_ENV_NAME = ENV_NAME ? ENV_URLS[ENV_NAME]?.otherName : undefined;
 
+export type WalletType = "embedded" | "external";
+
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;
-  wallet: EmbeddedWallet | null;
+  wallet: Wallet | null;
+  /** The embedded wallet instance, kept for revert-to-embedded after disconnect. */
+  embeddedWallet: EmbeddedWallet | null;
+  walletType: WalletType | null;
+  externalProvider: WalletProvider | null;
   registeredAddresses: AztecAddress[];
   provingMode: ProvingMode;
   uiMode: UiMode;
@@ -81,6 +89,9 @@ export const state: AztecState = {
   node: null,
   prover: null,
   wallet: null,
+  embeddedWallet: null,
+  walletType: null,
+  externalProvider: null,
   registeredAddresses: [],
   provingMode: "local",
   uiMode: "local",
@@ -206,7 +217,9 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   const walletDB = WalletDB.init(walletDBStore, (msg) => log(msg));
   log("Wallet DB created", "success");
 
-  state.wallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
+  state.embeddedWallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
+  state.wallet = state.embeddedWallet;
+  state.walletType = "embedded";
   log("Wallet created", "success");
 
   // Derive the canonical Sponsored FPC address and register it in the PXE.
@@ -225,7 +238,7 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
     const testAccounts = await getInitialTestAccountsData();
     state.registeredAddresses = [];
     for (const account of testAccounts) {
-      const mgr = await state.wallet.createSchnorrAccount(
+      const mgr = await state.embeddedWallet!.createSchnorrAccount(
         account.secret,
         account.salt,
         account.signingKey,
@@ -256,6 +269,33 @@ export async function initializeWallet(log: LogFn): Promise<boolean> {
     }
   }
   return false;
+}
+
+/**
+ * Switch to an external wallet (connected via Wallet SDK).
+ * Stores the provider for disconnect cleanup and replaces the active wallet.
+ */
+export function setExternalWallet(
+  wallet: Wallet,
+  provider: WalletProvider,
+  accounts: AztecAddress[],
+): void {
+  state.wallet = wallet;
+  state.walletType = "external";
+  state.externalProvider = provider;
+  state.registeredAddresses = accounts;
+}
+
+/**
+ * Revert to the embedded wallet after disconnecting an external wallet.
+ */
+export function revertToEmbedded(): void {
+  if (!state.embeddedWallet) return;
+  state.wallet = state.embeddedWallet;
+  state.walletType = "embedded";
+  state.externalProvider = null;
+  // Re-populate sandbox accounts if on local network
+  // (they were already registered during init, addresses are still in embeddedWallet)
 }
 
 export function setUiMode(mode: UiMode, teeUrl?: string): void {
@@ -424,8 +464,8 @@ export async function deployTestAccount(
   onStep: (stepName: string) => void,
   onPhase?: (phase: ProverPhase) => void,
 ): Promise<DeployResult> {
-  if (!state.wallet) {
-    throw new Error("Wallet not initialized");
+  if (!state.embeddedWallet) {
+    throw new Error("Embedded wallet not initialized");
   }
   if (!state.proofsRequired && !state.registeredAddresses.length) {
     throw new Error("Wallet not initialized — no registered addresses");
@@ -448,7 +488,7 @@ export async function deployTestAccount(
 
     const secret = Fr.random();
     const salt = Fr.random();
-    const accountManager = await state.wallet.createSchnorrAccount(secret, salt);
+    const accountManager = await state.embeddedWallet!.createSchnorrAccount(secret, salt);
     const deployMethod = await accountManager.getDeployMethod();
 
     steps.push({ step: "create account", durationMs: Date.now() - stepStart });
@@ -548,7 +588,7 @@ export async function runTokenFlow(
     } else {
       onStep(`deploying bob account [${mode}]`);
       log(`Deploying second account (Bob) for transfer [${mode}]...`);
-      const bobManager = await state.wallet.createSchnorrAccount(Fr.random(), Fr.random());
+      const bobManager = await state.embeddedWallet!.createSchnorrAccount(Fr.random(), Fr.random());
       const bobDeploy = await bobManager.getDeployMethod();
       const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
       const bobStep = await executeStep({

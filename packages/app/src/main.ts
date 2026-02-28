@@ -12,8 +12,10 @@ import {
   OTHER_ENV_URL,
   PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
+  revertToEmbedded,
   runTokenFlow,
   type StepTiming,
+  setExternalWallet,
   setUiMode,
   state,
   TEE_CONFIGURED,
@@ -21,6 +23,16 @@ import {
   type UiMode,
 } from "./aztec";
 import { $, $btn, appendLog, formatDuration, setStatus, startClock } from "./ui";
+import {
+  cancelConnection,
+  confirmConnection,
+  disconnectWallet,
+  discoverWallets,
+  initiateConnection,
+  onDisconnect,
+  type PendingConnection,
+  type WalletProvider,
+} from "./wallet-connect";
 
 let deploying = false;
 
@@ -99,6 +111,274 @@ $("mode-tee").addEventListener("click", () => {
   setUiMode("tee");
   updateModeUI("tee");
   appendLog("Switched to TEE proving mode");
+});
+
+// ── External wallet connection ──
+let discoveryHandle: ReturnType<typeof discoverWallets> | null = null;
+let pendingConn: PendingConnection | null = null;
+let selectedProvider: WalletProvider | null = null;
+let disconnectUnsub: (() => void) | null = null;
+
+/** Check if we should skip external wallet UI (e2e bypass). */
+const walletParam = new URLSearchParams(window.location.search).get("wallet");
+const forceEmbedded = walletParam === "embedded";
+
+function showSection(id: string): void {
+  $(id).classList.remove("hidden");
+}
+
+function hideSection(id: string): void {
+  $(id).classList.add("hidden");
+}
+
+function setProvingModeDisabled(disabled: boolean): void {
+  if (disabled) {
+    showSection("proving-mode-overlay");
+  } else {
+    hideSection("proving-mode-overlay");
+  }
+}
+
+function resetWalletConnectUI(): void {
+  hideSection("wallet-connect-section");
+  hideSection("wallet-discovery");
+  hideSection("wallet-verify");
+  hideSection("wallet-connected");
+  $("wallet-list").replaceChildren();
+  hideSection("no-wallets-msg");
+  $("emoji-grid").replaceChildren();
+  pendingConn = null;
+  selectedProvider = null;
+}
+
+function switchToExternalWalletUI(walletName: string, address: string, icon?: string): void {
+  resetWalletConnectUI();
+  showSection("wallet-connect-section");
+  showSection("wallet-connected");
+  $("external-wallet-name").textContent = walletName;
+  $("external-wallet-address").textContent = `${address.slice(0, 20)}...`;
+  if (icon) {
+    const iconEl = $("external-wallet-icon") as HTMLImageElement;
+    iconEl.src = icon;
+    showSection("external-wallet-icon");
+  }
+  hideSection("connect-external-btn");
+  setProvingModeDisabled(true);
+  // Disable Deploy Test Account for external wallets (they bring their own accounts)
+  $btn("deploy-btn").disabled = true;
+  $btn("deploy-btn").title = "External wallets provide their own accounts";
+}
+
+function switchToEmbeddedWalletUI(): void {
+  resetWalletConnectUI();
+  setProvingModeDisabled(false);
+  showSection("connect-external-btn");
+  $btn("deploy-btn").disabled = false;
+  $btn("deploy-btn").title = "";
+}
+
+async function handleDisconnect(): Promise<void> {
+  if (disconnectUnsub) {
+    disconnectUnsub();
+    disconnectUnsub = null;
+  }
+  if (selectedProvider) {
+    try {
+      await disconnectWallet(selectedProvider);
+    } catch {
+      // Already disconnected
+    }
+    selectedProvider = null;
+  }
+  revertToEmbedded();
+  switchToEmbeddedWalletUI();
+  appendLog("External wallet disconnected — reverted to embedded wallet");
+}
+
+// Connect External button
+$("connect-external-btn").addEventListener("click", async () => {
+  if (deploying || !state.node) return;
+
+  resetWalletConnectUI();
+  showSection("wallet-connect-section");
+  showSection("wallet-discovery");
+  appendLog("Searching for external wallets...");
+
+  const [chainId, version] = await Promise.all([state.node.getChainId(), state.node.getVersion()]);
+  const { Fr } = await import("@aztec/aztec.js/fields");
+  const chainInfo = { chainId: new Fr(chainId), version: new Fr(version) };
+  let found = 0;
+
+  discoveryHandle = discoverWallets(chainInfo, (provider) => {
+    found++;
+    const btn = document.createElement("button");
+    btn.className =
+      "w-full flex items-center gap-2 px-2 py-1.5 text-xs border border-gray-800 hover:border-cyan-700/50 hover:text-cyan-400 transition-colors text-left";
+    if (provider.icon) {
+      const img = document.createElement("img");
+      img.src = provider.icon;
+      img.alt = "";
+      img.className = "w-4 h-4";
+      btn.appendChild(img);
+    }
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = provider.name;
+    btn.appendChild(nameSpan);
+
+    btn.addEventListener("click", async () => {
+      if (discoveryHandle) {
+        discoveryHandle.cancel();
+        discoveryHandle = null;
+      }
+      hideSection("wallet-discovery");
+      showSection("wallet-verify");
+      appendLog(`Connecting to ${provider.name}...`);
+
+      try {
+        const { pending, emojis } = await initiateConnection(provider);
+        pendingConn = pending;
+        selectedProvider = provider;
+
+        // Render emoji grid
+        const grid = $("emoji-grid");
+        grid.replaceChildren();
+        for (const emoji of emojis) {
+          const cell = document.createElement("span");
+          cell.className = "emoji-cell";
+          cell.textContent = emoji;
+          grid.appendChild(cell);
+        }
+      } catch (err) {
+        appendLog(`Connection failed: ${err}`, "error");
+        resetWalletConnectUI();
+        showSection("connect-external-btn");
+      }
+    });
+
+    $("wallet-list").appendChild(btn);
+  });
+
+  // Show "no wallets" after discovery timeout
+  discoveryHandle.session.done.then(() => {
+    if (found === 0) {
+      showSection("no-wallets-msg");
+    }
+  });
+});
+
+// Cancel discovery
+$("cancel-discovery-btn").addEventListener("click", () => {
+  if (discoveryHandle) {
+    discoveryHandle.cancel();
+    discoveryHandle = null;
+  }
+  resetWalletConnectUI();
+  appendLog("Wallet discovery cancelled");
+});
+
+// Emoji confirm
+$("emoji-confirm-btn").addEventListener("click", async () => {
+  if (!pendingConn || !selectedProvider) return;
+  const providerName = selectedProvider.name;
+
+  try {
+    appendLog("Confirming connection...");
+    const wallet = await confirmConnection(pendingConn);
+
+    // Get accounts — try requestCapabilities first, fall back to getAccounts
+    let accounts: any[] = [];
+    try {
+      const capabilities = await wallet.requestCapabilities({
+        version: "1.0",
+        metadata: {
+          name: "TEE-Rex",
+          version: "1.0.0",
+          description: "Compare local, remote & TEE zero-knowledge proving",
+          url: window.location.origin,
+        },
+        capabilities: [
+          { type: "accounts", canGet: true },
+          {
+            type: "simulation",
+            utilities: { scope: [{ contract: "*", function: "*" }] },
+            transactions: { scope: [{ contract: "*", function: "*" }] },
+          },
+          {
+            type: "transaction",
+            scope: [{ contract: "*", function: "*" }],
+          },
+        ],
+      });
+      const accountsCap = capabilities.granted.find((c: any) => c.type === "accounts") as
+        | { type: "accounts"; accounts: any[] }
+        | undefined;
+      accounts = accountsCap?.accounts ?? [];
+    } catch (capErr) {
+      appendLog(`requestCapabilities failed, trying getAccounts: ${capErr}`, "warn");
+    }
+
+    // Fallback: get accounts directly
+    if (accounts.length === 0) {
+      try {
+        accounts = await wallet.getAccounts();
+      } catch {
+        // ignore
+      }
+    }
+
+    if (accounts.length === 0) {
+      appendLog("No accounts granted by wallet", "error");
+      resetWalletConnectUI();
+      showSection("connect-external-btn");
+      return;
+    }
+
+    // Register disconnect handler
+    disconnectUnsub = onDisconnect(selectedProvider, () => {
+      appendLog("External wallet disconnected unexpectedly", "warn");
+      handleDisconnect();
+    });
+
+    // Extract display address from the first account.
+    // Wallet SDK returns accounts as { alias, item } where `item` is an AztecAddress
+    // object (not a string). Use toHexString() to get the hex representation.
+    const firstAccount = accounts[0];
+    const raw = firstAccount?.item ?? firstAccount?.address ?? firstAccount;
+    const displayAddr =
+      typeof raw === "string"
+        ? raw
+        : typeof raw?.toHexString === "function"
+          ? raw.toHexString()
+          : String(raw);
+
+    setExternalWallet(wallet, selectedProvider, accounts);
+    switchToExternalWalletUI(providerName, displayAddr, selectedProvider.icon);
+    setActionButtonsDisabled(false);
+    // Re-disable deploy for external (token flow still works)
+    $btn("deploy-btn").disabled = true;
+    appendLog(`Connected to ${providerName} — ${accounts.length} account(s)`, "success");
+  } catch (err) {
+    appendLog(`Connection confirmation failed: ${err}`, "error");
+    resetWalletConnectUI();
+    showSection("connect-external-btn");
+  }
+});
+
+// Emoji reject
+$("emoji-reject-btn").addEventListener("click", () => {
+  if (pendingConn) {
+    cancelConnection(pendingConn);
+    pendingConn = null;
+  }
+  appendLog("Emoji verification rejected — connection cancelled", "warn");
+  resetWalletConnectUI();
+  showSection("wallet-connect-section");
+  showSection("wallet-discovery");
+});
+
+// Disconnect button
+$("disconnect-wallet-btn").addEventListener("click", () => {
+  handleDisconnect();
 });
 
 // ── Shared helpers ──
@@ -398,6 +678,12 @@ async function init(): Promise<void> {
       $("tee-attestation-label").textContent = "unreachable";
       appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
     }
+  }
+
+  // Show external wallet button after services check — external wallets bring
+  // their own PXE, so they work even when the Aztec node is unreachable.
+  if (!forceEmbedded) {
+    showSection("connect-external-btn");
   }
 
   if (!aztec) {

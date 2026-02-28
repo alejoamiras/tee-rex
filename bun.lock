@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "devDependencies": {
@@ -30,6 +29,7 @@
         "@aztec/pxe": "5.0.0-nightly.20260224",
         "@aztec/simulator": "5.0.0-nightly.20260224",
         "@aztec/stdlib": "5.0.0-nightly.20260224",
+        "@aztec/wallet-sdk": "5.0.0-nightly.20260224",
         "@aztec/wallets": "5.0.0-nightly.20260224",
       },
       "devDependencies": {

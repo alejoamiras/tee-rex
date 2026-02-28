@@ -136,6 +136,19 @@
   border-bottom-color: var(--color-gray-900);
 }
 
+/* ── Emoji verification grid ── */
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  max-width: 180px;
+  margin: 0 auto;
+}
+
+.emoji-cell {
+  @apply text-2xl text-center p-1 border border-gray-800 bg-gray-900/50;
+}
+
 /* ── ASCII art animation ── */
 .ascii-art {
   @apply mt-3 text-[10px] leading-[1.4] text-emerald-500/50 text-center whitespace-pre;
