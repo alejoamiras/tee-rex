@@ -213,3 +213,43 @@ test("external UI elements exist in DOM", async ({ page }) => {
   await expect(page.locator("#ext-account-selector")).toHaveCount(1);
   await expect(page.locator("#ext-wallet-address")).toHaveCount(1);
 });
+
+// ── Wallet selection flow tests ──
+
+test("clicking connect external wallet shows discovery section", async ({ page }) => {
+  await mockServicesOffline(page);
+  await page.goto("/");
+  await expect(page.locator("#log")).toContainText("services");
+
+  // Click the external wallet button
+  await page.click("#choose-external-btn");
+
+  // Discovery section should be visible, choice button should be hidden
+  await expect(page.locator("#ext-discovery-section")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#choose-external-btn")).toHaveClass(/hidden/);
+});
+
+test("cancel discovery returns to choice buttons", async ({ page }) => {
+  await mockServicesOffline(page);
+  await page.goto("/");
+  await expect(page.locator("#log")).toContainText("services");
+
+  // Open discovery
+  await page.click("#choose-external-btn");
+  await expect(page.locator("#ext-discovery-section")).not.toHaveClass(/hidden/);
+
+  // Cancel discovery
+  await page.click("#ext-cancel-discovery-btn");
+
+  // Discovery hidden, choice button restored
+  await expect(page.locator("#ext-discovery-section")).toHaveClass(/hidden/);
+  await expect(page.locator("#choose-external-btn")).not.toHaveClass(/hidden/);
+});
+
+test("switch wallet button in embedded services section has correct text", async ({ page }) => {
+  await mockServicesOffline(page);
+  await page.goto("/?wallet=embedded");
+  await expect(page.locator("#log")).toContainText("services");
+
+  await expect(page.locator("#switch-to-external-btn")).toHaveText("Switch Wallet");
+});

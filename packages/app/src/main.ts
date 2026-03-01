@@ -24,6 +24,7 @@ import {
   type UiMode,
 } from "./aztec";
 import {
+  type AccountEntry,
   hideExternalUI,
   initExternalWalletUI,
   populateExternalWalletUI,
@@ -269,7 +270,7 @@ function goToWalletSelection(): void {
           initEmbeddedWallet();
         }
       },
-      onChooseExternal: async (wallet, provider, accounts) => {
+      onChooseExternal: async (wallet, provider, accounts, aliases) => {
         hideWalletSelection();
 
         // Ensure node is connected (may already be done)
@@ -300,11 +301,11 @@ function goToWalletSelection(): void {
           handleDisconnect();
         });
 
-        populateExternalWalletUI(
-          provider.name,
-          provider.icon,
-          accounts.map((a) => a.toString()),
-        );
+        const accountEntries: AccountEntry[] = accounts.map((a, i) => ({
+          address: a.toString(),
+          alias: aliases[i],
+        }));
+        populateExternalWalletUI(provider.name, provider.icon, accountEntries);
         showExternalUI();
         hideWalletSelection();
 
