@@ -136,6 +136,30 @@
   border-bottom-color: var(--color-gray-900);
 }
 
+/* ── Emoji verification grid ── */
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  max-width: 180px;
+  margin: 0 auto;
+}
+
+.emoji-cell {
+  @apply text-2xl text-center p-1 border border-gray-800 bg-gray-900/50;
+}
+
+/* ── Wallet selection cards ── */
+.wallet-choice-card:not(:disabled):hover {
+  @apply border-emerald-700/50 text-emerald-400;
+  box-shadow: 0 0 12px oklch(from var(--color-emerald-900) l c h / 20%);
+}
+
+.wallet-choice-card:not(:disabled) {
+  cursor: pointer;
+}
+
+
 /* ── ASCII art animation ── */
 .ascii-art {
   @apply mt-3 text-[10px] leading-[1.4] text-emerald-500/50 text-center whitespace-pre;
