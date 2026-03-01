@@ -443,6 +443,25 @@ async function sendWithRetry(
   throw new Error("Unreachable");
 }
 
+const SIMULATE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+
+async function simulateWithTimeout(
+  method: { simulate: (opts: any) => Promise<any> },
+  opts: Record<string, unknown>,
+  step: string,
+): Promise<any> {
+  return Promise.race([
+    method.simulate(opts),
+    new Promise((_, reject) =>
+      setTimeout(
+        () =>
+          reject(new Error(`[diag] ${step}: simulate timed out after ${SIMULATE_TIMEOUT_MS}ms`)),
+        SIMULATE_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+}
+
 /** Simulate → prove/send → confirm a transaction and return a StepTiming. */
 async function executeStep(opts: {
   step: string;
@@ -454,16 +473,22 @@ async function executeStep(opts: {
   const { step, method, sendOpts, log, onConfirming } = opts;
   const stepStart = Date.now();
 
-  const simResult = await method.simulate({ ...sendOpts, includeMetadata: true });
+  console.log(`[diag] ${step}: simulate START`);
+  const simResult = await simulateWithTimeout(method, { ...sendOpts, includeMetadata: true }, step);
+  console.log(`[diag] ${step}: simulate END (${Date.now() - stepStart}ms)`);
   const simulation = extractSimDetail(simResult);
 
   const sendStart = Date.now();
+  console.log(`[diag] ${step}: send START`);
   const txHash = await sendWithRetry(method, sendOpts, log);
+  console.log(`[diag] ${step}: send END (${Date.now() - sendStart}ms)`);
   const proveSendMs = Date.now() - sendStart;
 
   onConfirming();
   const confirmStart = Date.now();
+  console.log(`[diag] ${step}: waitForTx START`);
   await waitForTx(txHash);
+  console.log(`[diag] ${step}: waitForTx END (${Date.now() - confirmStart}ms)`);
   const confirmMs = Date.now() - confirmStart;
 
   return { step, durationMs: Date.now() - stepStart, simulation, proveSendMs, confirmMs };
@@ -731,10 +756,20 @@ export async function runTokenFlow(
     onStep("checking balances");
     log("Checking balances...");
     const balanceStart = Date.now();
-    const [aliceBalance, bobBalance] = await Promise.all([
-      token.methods.balance_of_private(alice).simulate({ from: alice }),
-      token.methods.balance_of_private(bob).simulate({ from: bob }),
-    ]);
+    console.log("[diag] balance check: START");
+    const [aliceBalance, bobBalance] = (await Promise.race([
+      Promise.all([
+        token.methods.balance_of_private(alice).simulate({ from: alice }),
+        token.methods.balance_of_private(bob).simulate({ from: bob }),
+      ]),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("[diag] balance check timed out after 3 minutes")),
+          SIMULATE_TIMEOUT_MS,
+        ),
+      ),
+    ])) as [bigint, bigint];
+    console.log(`[diag] balance check: END (${Date.now() - balanceStart}ms)`);
     const balanceDuration = Date.now() - balanceStart;
     steps.push({ step: "check balances", durationMs: balanceDuration });
     log(

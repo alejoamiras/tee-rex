@@ -4,6 +4,9 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:5173",
     headless: true,
+    launchOptions: {
+      args: ["--disable-dev-shm-usage"],
+    },
   },
   webServer: {
     command: "bun run dev",

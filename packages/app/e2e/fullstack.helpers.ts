@@ -16,8 +16,9 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
   const page = await browser.newPage();
 
   page.on("console", (msg) => {
-    if (msg.type() === "error" || msg.type() === "warning") {
-      console.log(`[browser:${msg.type()}] ${msg.text()}`);
+    const text = msg.text();
+    if (msg.type() === "error" || msg.type() === "warning" || text.startsWith("[diag]")) {
+      console.log(`[browser:${msg.type()}] ${text}`);
     }
   });
   page.on("pageerror", (err) => {
