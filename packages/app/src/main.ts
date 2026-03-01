@@ -67,19 +67,40 @@ if (ENV_NAME) {
 }
 
 // ── Service checks ──
-async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
-  const aztec = await checkAztecNode();
-  setStatus("aztec-status", aztec);
 
-  let teerex = false;
+/** Check prover + TEE services — only needed for embedded proving mode. */
+async function checkEmbeddedServices(): Promise<void> {
   if (PROVER_CONFIGURED) {
     $btn("mode-remote").disabled = false;
-    teerex = await checkTeeRexServer();
+    const teerex = await checkTeeRexServer();
     setStatus("teerex-status", teerex);
     $("teerex-label").textContent = teerex ? "available" : "unavailable";
+    if (!teerex) {
+      appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
+    }
   }
 
-  return { aztec, teerex };
+  if (TEE_CONFIGURED) {
+    $("tee-url").textContent = TEE_DISPLAY_URL;
+    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
+    const attestation = await checkTeeAttestation("/tee");
+    if (attestation.reachable) {
+      setStatus("tee-status", attestation.mode === "nitro");
+      $("tee-attestation-label").textContent =
+        attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
+      if (attestation.mode === "nitro") {
+        $btn("mode-tee").disabled = false;
+      }
+      appendLog(
+        `TEE attestation: ${attestation.mode ?? "unknown"}`,
+        attestation.mode === "nitro" ? "success" : "warn",
+      );
+    } else {
+      setStatus("tee-status", false);
+      $("tee-attestation-label").textContent = "unreachable";
+      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+    }
+  }
 }
 
 // ── Mode toggle ──
@@ -258,7 +279,7 @@ function goToWalletSelection(): void {
     nodeReady,
     chainInfo: cachedChainInfo,
     callbacks: {
-      onChooseEmbedded: () => {
+      onChooseEmbedded: async () => {
         hideWalletSelection();
 
         if (state.embeddedWallet) {
@@ -268,8 +289,9 @@ function goToWalletSelection(): void {
           setActionButtonsDisabled(false);
           appendLog("Switched back to embedded wallet");
         } else {
-          // First time — initialize embedded wallet
+          // First time — check prover/TEE services and initialize embedded wallet
           showEmbeddedUI();
+          await checkEmbeddedServices();
           initEmbeddedWallet();
         }
       },
@@ -365,37 +387,27 @@ async function init(): Promise<void> {
     onSwitchWallet: handleDisconnect,
   });
 
-  appendLog("Checking services...");
-  const { aztec, teerex } = await checkServices();
-
-  if (PROVER_CONFIGURED && !teerex) {
-    appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
-  }
-
-  // Auto-configure TEE
-  if (TEE_CONFIGURED) {
-    $("tee-url").textContent = TEE_DISPLAY_URL;
-    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
-    const attestation = await checkTeeAttestation("/tee");
-    if (attestation.reachable) {
-      setStatus("tee-status", attestation.mode === "nitro");
-      $("tee-attestation-label").textContent =
-        attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
-      if (attestation.mode === "nitro") {
-        $btn("mode-tee").disabled = false;
-      }
-      appendLog(
-        `TEE attestation: ${attestation.mode ?? "unknown"}`,
-        attestation.mode === "nitro" ? "success" : "warn",
-      );
-    } else {
-      setStatus("tee-status", false);
-      $("tee-attestation-label").textContent = "unreachable";
-      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
-    }
-  }
+  appendLog("Checking Aztec node...");
+  const aztec = await checkAztecNode();
+  setStatus("aztec-status", aztec);
 
   nodeReady = aztec;
+
+  // E2E bypass: ?wallet=embedded skips wallet selection (no chain info needed)
+  const walletParam = new URLSearchParams(window.location.search).get("wallet");
+  if (walletParam === "embedded") {
+    showEmbeddedUI();
+    await checkEmbeddedServices();
+    if (aztec) {
+      await initEmbeddedWallet();
+    } else {
+      appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
+      appendLog("Start the Aztec node before using the demo", "warn");
+      $("wallet-state").textContent = "aztec unavailable";
+      setStatus("wallet-dot", false);
+    }
+    return;
+  }
 
   // Cache chain info for wallet discovery
   if (aztec && state.node === null) {
@@ -410,21 +422,6 @@ async function init(): Promise<void> {
     } catch {
       // Node reachable for /status but RPC failed — ok, discovery will work without chain info
     }
-  }
-
-  // E2E bypass: ?wallet=embedded skips wallet selection
-  const walletParam = new URLSearchParams(window.location.search).get("wallet");
-  if (walletParam === "embedded") {
-    showEmbeddedUI();
-    if (aztec) {
-      await initEmbeddedWallet();
-    } else {
-      appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
-      appendLog("Start the Aztec node before using the demo", "warn");
-      $("wallet-state").textContent = "aztec unavailable";
-      setStatus("wallet-dot", false);
-    }
-    return;
   }
 
   // Normal flow: show wallet selection
