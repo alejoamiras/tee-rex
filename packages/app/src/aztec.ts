@@ -174,7 +174,7 @@ const lazyAccountContracts = {
  * Shared by both embedded and external wallet paths.
  */
 export async function initializeNode(log: LogFn): Promise<{
-  rollupAddress: import("@aztec/aztec.js/eth-address").EthAddress;
+  rollupAddress: import("@aztec/aztec.js/addresses").EthAddress;
   l1Contracts: Awaited<
     ReturnType<ReturnType<typeof createAztecNodeClient>["getL1ContractAddresses"]>
   >;
@@ -419,7 +419,7 @@ function extractSimDetail(simResult: { stats: { timings: SimTimings } }): SimSte
  * proving takes long enough for it to go stale on live networks.
  */
 async function sendWithRetry(
-  method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<TxHash> },
+  method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<any> },
   sendOpts: Record<string, unknown>,
   log: LogFn,
 ): Promise<TxHash> {
@@ -446,7 +446,7 @@ async function sendWithRetry(
 /** Simulate → prove/send → confirm a transaction and return a StepTiming. */
 async function executeStep(opts: {
   step: string;
-  method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<TxHash> };
+  method: { simulate: (opts: any) => Promise<any>; send: (opts: any) => Promise<any> };
   sendOpts: Record<string, unknown>;
   log: LogFn;
   onConfirming: () => void;
