@@ -6,6 +6,7 @@ import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import type { TxHash } from "@aztec/aztec.js/tx";
+import type { Wallet } from "@aztec/aztec.js/wallet";
 import { createStore } from "@aztec/kv-store/indexeddb";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
@@ -13,6 +14,7 @@ import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
 import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
+import type { WalletProvider } from "./wallet-connect";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
@@ -59,11 +61,18 @@ const ENV_URLS: Record<string, { other: string; otherName: string }> = {
 export const OTHER_ENV_URL = ENV_NAME ? ENV_URLS[ENV_NAME]?.other : undefined;
 export const OTHER_ENV_NAME = ENV_NAME ? ENV_URLS[ENV_NAME]?.otherName : undefined;
 
+export type WalletType = "embedded" | "external";
+
 export interface AztecState {
   node: ReturnType<typeof createAztecNodeClient> | null;
   prover: TeeRexProver | null;
-  wallet: EmbeddedWallet | null;
+  wallet: Wallet | null;
+  /** The embedded wallet instance, kept for revert-to-embedded after disconnect. */
+  embeddedWallet: EmbeddedWallet | null;
+  walletType: WalletType | null;
+  externalProvider: WalletProvider | null;
   registeredAddresses: AztecAddress[];
+  selectedAccountIndex: number;
   provingMode: ProvingMode;
   uiMode: UiMode;
   teeServerUrl: string;
@@ -81,7 +90,11 @@ export const state: AztecState = {
   node: null,
   prover: null,
   wallet: null,
+  embeddedWallet: null,
+  walletType: null,
+  externalProvider: null,
   registeredAddresses: [],
+  selectedAccountIndex: 0,
   provingMode: "local",
   uiMode: "local",
   teeServerUrl: "/tee",
@@ -156,7 +169,16 @@ const lazyAccountContracts = {
   },
 };
 
-async function doInitializeWallet(log: LogFn): Promise<boolean> {
+/**
+ * Connect to the Aztec node and set up the TeeRexProver.
+ * Shared by both embedded and external wallet paths.
+ */
+export async function initializeNode(log: LogFn): Promise<{
+  rollupAddress: import("@aztec/aztec.js/eth-address").EthAddress;
+  l1Contracts: Awaited<
+    ReturnType<ReturnType<typeof createAztecNodeClient>["getL1ContractAddresses"]>
+  >;
+}> {
   log("Creating TeeRexProver...");
   state.prover = new TeeRexProver(PROVER_PROXY_PATH, new WASMSimulator());
   state.prover.setProvingMode(state.provingMode);
@@ -183,6 +205,27 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
     "success",
   );
 
+  return { rollupAddress, l1Contracts };
+}
+
+/**
+ * Derive the canonical Sponsored FPC address and register it in the PXE.
+ * Shared by both embedded and external wallet paths.
+ */
+export async function initializeFPC(wallet: Wallet, log: LogFn): Promise<void> {
+  log("Setting up Sponsored FPC...");
+  const fpcInstance = await getContractInstanceFromInstantiationParams(
+    SponsoredFPCContract.artifact,
+    { salt: new Fr(0) },
+  );
+  await wallet.registerContract(fpcInstance, SponsoredFPCContract.artifact);
+  state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
+  log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
+}
+
+async function doInitializeWallet(log: LogFn): Promise<boolean> {
+  const { rollupAddress, l1Contracts } = await initializeNode(log);
+
   log("Creating wallet (may take a moment)...");
   // Mirrors BrowserEmbeddedWallet.create() but injects our TeeRexProver.
   // Pass l1Contracts in the config to avoid extra fetches during PXE init.
@@ -206,18 +249,12 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
   const walletDB = WalletDB.init(walletDBStore, (msg) => log(msg));
   log("Wallet DB created", "success");
 
-  state.wallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
+  state.embeddedWallet = new EmbeddedWallet(pxe, state.node, walletDB, lazyAccountContracts);
+  state.wallet = state.embeddedWallet;
+  state.walletType = "embedded";
   log("Wallet created", "success");
 
-  // Derive the canonical Sponsored FPC address and register it in the PXE.
-  log("Setting up Sponsored FPC...");
-  const fpcInstance = await getContractInstanceFromInstantiationParams(
-    SponsoredFPCContract.artifact,
-    { salt: new Fr(0) },
-  );
-  await state.wallet.registerContract(fpcInstance, SponsoredFPCContract.artifact);
-  state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
-  log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
+  await initializeFPC(state.wallet!, log);
 
   if (!state.proofsRequired) {
     log("Registering sandbox accounts...");
@@ -225,7 +262,7 @@ async function doInitializeWallet(log: LogFn): Promise<boolean> {
     const testAccounts = await getInitialTestAccountsData();
     state.registeredAddresses = [];
     for (const account of testAccounts) {
-      const mgr = await state.wallet.createSchnorrAccount(
+      const mgr = await state.embeddedWallet!.createSchnorrAccount(
         account.secret,
         account.salt,
         account.signingKey,
@@ -256,6 +293,36 @@ export async function initializeWallet(log: LogFn): Promise<boolean> {
     }
   }
   return false;
+}
+
+/**
+ * Switch to an external wallet (connected via Wallet SDK).
+ * Stores the provider for disconnect cleanup and replaces the active wallet.
+ */
+export function setExternalWallet(
+  wallet: Wallet,
+  provider: WalletProvider,
+  accounts: AztecAddress[],
+): void {
+  state.wallet = wallet;
+  state.walletType = "external";
+  state.externalProvider = provider;
+  state.registeredAddresses = accounts;
+}
+
+export function setSelectedAccount(index: number): void {
+  state.selectedAccountIndex = index;
+}
+
+/**
+ * Revert to the embedded wallet after disconnecting an external wallet.
+ */
+export function revertToEmbedded(): void {
+  if (!state.embeddedWallet) return;
+  state.wallet = state.embeddedWallet;
+  state.walletType = "embedded";
+  state.externalProvider = null;
+  state.selectedAccountIndex = 0;
 }
 
 export function setUiMode(mode: UiMode, teeUrl?: string): void {
@@ -424,8 +491,8 @@ export async function deployTestAccount(
   onStep: (stepName: string) => void,
   onPhase?: (phase: ProverPhase) => void,
 ): Promise<DeployResult> {
-  if (!state.wallet) {
-    throw new Error("Wallet not initialized");
+  if (!state.embeddedWallet) {
+    throw new Error("Embedded wallet not initialized");
   }
   if (!state.proofsRequired && !state.registeredAddresses.length) {
     throw new Error("Wallet not initialized — no registered addresses");
@@ -448,7 +515,7 @@ export async function deployTestAccount(
 
     const secret = Fr.random();
     const salt = Fr.random();
-    const accountManager = await state.wallet.createSchnorrAccount(secret, salt);
+    const accountManager = await state.embeddedWallet!.createSchnorrAccount(secret, salt);
     const deployMethod = await accountManager.getDeployMethod();
 
     steps.push({ step: "create account", durationMs: Date.now() - stepStart });
@@ -519,6 +586,54 @@ export async function deployTestAccount(
   }
 }
 
+export async function deployToken(
+  log: LogFn,
+  onTick: (elapsedMs: number) => void,
+  onStep: (stepName: string) => void,
+  onPhase?: (phase: ProverPhase) => void,
+): Promise<DeployResult> {
+  if (!state.wallet || state.registeredAddresses.length < 1) {
+    throw new Error("Wallet not initialized — no registered addresses");
+  }
+
+  const mode = state.uiMode;
+  const modeLabel = state.walletType === "external" ? "wallet" : mode;
+  const alice = state.registeredAddresses[state.selectedAccountIndex];
+  const steps: StepTiming[] = [];
+  const totalStart = Date.now();
+  state.prover?.setOnPhase(onPhase ?? null);
+
+  const interval = setInterval(() => {
+    onTick(Date.now() - totalStart);
+  }, 100);
+
+  try {
+    onStep(`deploying token [${modeLabel}]`);
+    log(`Deploying TokenContract (admin=Alice) [${modeLabel}]...`);
+    const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
+    const tokenStep = await executeStep({
+      step: "deploy token",
+      method: tokenDeploy,
+      sendOpts: { from: alice, fee: { paymentMethod: state.feePaymentMethod! } },
+      log,
+      onConfirming: () => onStep(`confirming token deploy [${modeLabel}]`),
+    });
+    steps.push(tokenStep);
+
+    const address = tokenDeploy.address!.toString();
+    const totalDurationMs = Date.now() - totalStart;
+    log(
+      `Token deployed in ${(totalDurationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`,
+      "success",
+    );
+
+    return { address, steps, totalDurationMs, mode };
+  } finally {
+    state.prover?.setOnPhase(null);
+    clearInterval(interval);
+  }
+}
+
 export async function runTokenFlow(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
@@ -530,7 +645,8 @@ export async function runTokenFlow(
   }
 
   const mode = state.uiMode;
-  const alice = state.registeredAddresses[0];
+  const modeLabel = state.walletType === "external" ? "wallet" : mode;
+  const alice = state.registeredAddresses[state.selectedAccountIndex];
   const fee = { paymentMethod: state.feePaymentMethod! };
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
@@ -543,12 +659,15 @@ export async function runTokenFlow(
   try {
     // On live networks, we may need to deploy a second account (bob) for the transfer step
     let bob: AztecAddress;
-    if (state.registeredAddresses.length >= 2) {
-      bob = state.registeredAddresses[1];
+    const bobCandidate = state.registeredAddresses.find((_, i) => i !== state.selectedAccountIndex);
+    if (bobCandidate) {
+      bob = bobCandidate;
+    } else if (state.walletType === "external") {
+      throw new Error("External wallet must provide at least 2 accounts for transfer");
     } else {
-      onStep(`deploying bob account [${mode}]`);
-      log(`Deploying second account (Bob) for transfer [${mode}]...`);
-      const bobManager = await state.wallet.createSchnorrAccount(Fr.random(), Fr.random());
+      onStep(`deploying bob account [${modeLabel}]`);
+      log(`Deploying second account (Bob) for transfer [${modeLabel}]...`);
+      const bobManager = await state.embeddedWallet!.createSchnorrAccount(Fr.random(), Fr.random());
       const bobDeploy = await bobManager.getDeployMethod();
       const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
       const bobStep = await executeStep({
@@ -556,7 +675,7 @@ export async function runTokenFlow(
         method: bobDeploy,
         sendOpts: bobSendOpts,
         log,
-        onConfirming: () => onStep(`confirming bob [${mode}]`),
+        onConfirming: () => onStep(`confirming bob [${modeLabel}]`),
       });
       bob = bobManager.address;
       state.registeredAddresses.push(bob);
@@ -565,15 +684,15 @@ export async function runTokenFlow(
     }
 
     // Step 1: Deploy TokenContract
-    onStep(`deploying token [${mode}]`);
-    log(`Deploying TokenContract (admin=Alice) [${mode}]...`);
+    onStep(`deploying token [${modeLabel}]`);
+    log(`Deploying TokenContract (admin=Alice) [${modeLabel}]...`);
     const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
     const tokenStep = await executeStep({
       step: "deploy token",
       method: tokenDeploy,
       sendOpts: { from: alice, fee },
       log,
-      onConfirming: () => onStep(`confirming token deploy [${mode}]`),
+      onConfirming: () => onStep(`confirming token deploy [${modeLabel}]`),
     });
     const token = TokenContract.at(tokenDeploy.address!, state.wallet);
     steps.push(tokenStep);
@@ -583,27 +702,27 @@ export async function runTokenFlow(
     );
 
     // Step 2: Mint 1000 TREX to Alice (private)
-    onStep(`minting 1000 TREX [${mode}]`);
-    log(`Minting 1000 TREX to Alice [${mode}]...`);
+    onStep(`minting 1000 TREX [${modeLabel}]`);
+    log(`Minting 1000 TREX to Alice [${modeLabel}]...`);
     const mintStep = await executeStep({
       step: "mint to private",
       method: token.methods.mint_to_private(alice, 1000n),
       sendOpts: { from: alice, fee },
       log,
-      onConfirming: () => onStep(`confirming mint [${mode}]`),
+      onConfirming: () => onStep(`confirming mint [${modeLabel}]`),
     });
     steps.push(mintStep);
     log(`Minted in ${(mintStep.durationMs / 1000).toFixed(1)}s`, "success");
 
     // Step 3: Transfer 500 TREX Alice → Bob (private)
-    onStep(`transferring 500 TREX [${mode}]`);
-    log(`Transferring 500 TREX Alice → Bob [${mode}]...`);
+    onStep(`transferring 500 TREX [${modeLabel}]`);
+    log(`Transferring 500 TREX Alice → Bob [${modeLabel}]...`);
     const transferStep = await executeStep({
       step: "private transfer",
       method: token.methods.transfer(bob, 500n),
       sendOpts: { from: alice, fee },
       log,
-      onConfirming: () => onStep(`confirming transfer [${mode}]`),
+      onConfirming: () => onStep(`confirming transfer [${modeLabel}]`),
     });
     steps.push(transferStep);
     log(`Transferred in ${(transferStep.durationMs / 1000).toFixed(1)}s`, "success");

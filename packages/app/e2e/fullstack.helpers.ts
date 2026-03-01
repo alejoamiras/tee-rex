@@ -26,7 +26,7 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 
   const MAX_INIT_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
-    await page.goto("/");
+    await page.goto("/?wallet=embedded");
     if (attempt > 1) {
       await page.evaluate(async () => {
         const dbs = await indexedDB.databases();
@@ -56,14 +56,7 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 }
 
 /** Deploy a test account and assert all UI state transitions. */
-export async function deployAndAssert(
-  page: Page,
-  mode: "local" | "remote" | "tee",
-  deployCount: Record<string, number>,
-): Promise<void> {
-  const expectedTag = deployCount[mode] === 0 ? "cold" : "warm";
-  deployCount[mode]++;
-
+export async function deployAndAssert(page: Page, mode: "local" | "remote" | "tee"): Promise<void> {
   await page.click("#deploy-btn");
 
   await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
@@ -87,7 +80,6 @@ export async function deployAndAssert(
   expect(timeText).not.toBe("—");
   expect(timeText).toMatch(/^\d+\.\d+s$/);
 
-  await expect(page.locator(`#tag-${mode}`)).toHaveText(expectedTag);
   await expect(page.locator(`#result-${mode}`)).toHaveClass(/result-filled/);
   await expect(page.locator("#log")).toContainText("Deployed in");
   await expect(page.locator("#log")).toContainText("step breakdown");

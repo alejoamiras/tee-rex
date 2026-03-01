@@ -1,5 +1,5 @@
 import "./style.css";
-import { type AnimationPhase, AsciiController } from "./ascii-animation";
+import { AsciiController } from "./ascii-animation";
 import {
   AZTEC_DISPLAY_URL,
   checkAztecNode,
@@ -7,23 +7,41 @@ import {
   checkTeeRexServer,
   deployTestAccount,
   ENV_NAME,
+  initializeFPC,
+  initializeNode,
   initializeWallet,
   OTHER_ENV_NAME,
   OTHER_ENV_URL,
   PROVER_CONFIGURED,
   PROVER_DISPLAY_URL,
+  revertToEmbedded,
   runTokenFlow,
-  type StepTiming,
+  setExternalWallet,
   setUiMode,
   state,
   TEE_CONFIGURED,
   TEE_DISPLAY_URL,
   type UiMode,
 } from "./aztec";
+import {
+  type AccountEntry,
+  hideExternalUI,
+  initExternalWalletUI,
+  populateExternalWalletUI,
+  showExternalUI,
+} from "./external-wallet-ui";
+import { showResult, stepToPhase } from "./results";
 import { $, $btn, appendLog, formatDuration, setStatus, startClock } from "./ui";
+import { disconnectWallet, onDisconnect, type WalletProvider } from "./wallet-connect";
+import {
+  hideWalletSelection,
+  initWalletSelection,
+  wireWalletSelectionListeners,
+} from "./wallet-selection";
 
 let deploying = false;
-const runCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
+let disconnectUnsub: (() => void) | null = null;
+let currentExternalProvider: WalletProvider | null = null;
 
 // ── Clock ──
 startClock();
@@ -48,19 +66,40 @@ if (ENV_NAME) {
 }
 
 // ── Service checks ──
-async function checkServices(): Promise<{ aztec: boolean; teerex: boolean }> {
-  const aztec = await checkAztecNode();
-  setStatus("aztec-status", aztec);
 
-  let teerex = false;
+/** Check prover + TEE services — only needed for embedded proving mode. */
+async function checkEmbeddedServices(): Promise<void> {
   if (PROVER_CONFIGURED) {
     $btn("mode-remote").disabled = false;
-    teerex = await checkTeeRexServer();
+    const teerex = await checkTeeRexServer();
     setStatus("teerex-status", teerex);
     $("teerex-label").textContent = teerex ? "available" : "unavailable";
+    if (!teerex) {
+      appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
+    }
   }
 
-  return { aztec, teerex };
+  if (TEE_CONFIGURED) {
+    $("tee-url").textContent = TEE_DISPLAY_URL;
+    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
+    const attestation = await checkTeeAttestation("/tee");
+    if (attestation.reachable) {
+      setStatus("tee-status", attestation.mode === "nitro");
+      $("tee-attestation-label").textContent =
+        attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
+      if (attestation.mode === "nitro") {
+        $btn("mode-tee").disabled = false;
+      }
+      appendLog(
+        `TEE attestation: ${attestation.mode ?? "unknown"}`,
+        attestation.mode === "nitro" ? "success" : "warn",
+      );
+    } else {
+      setStatus("tee-status", false);
+      $("tee-attestation-label").textContent = "unreachable";
+      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+    }
+  }
 }
 
 // ── Mode toggle ──
@@ -108,177 +147,7 @@ function setActionButtonsDisabled(disabled: boolean): void {
   $btn("token-flow-btn").disabled = disabled;
 }
 
-function formatMs(ms: number): string {
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
-}
-
-/** Shorten "ContractName:function_name" → "function_name" */
-function shortFnName(name: string): string {
-  if (!name) return "unknown";
-  const i = name.lastIndexOf(":");
-  return i >= 0 && i < name.length - 1 ? name.slice(i + 1) : name;
-}
-
-/** Build a "label ··· value" row using safe DOM APIs (no innerHTML). */
-function buildDotRow(
-  className: string,
-  label: string,
-  labelClass: string,
-  value: string,
-  valueClass: string,
-): HTMLDivElement {
-  const row = document.createElement("div");
-  row.className = className;
-
-  const labelSpan = document.createElement("span");
-  labelSpan.className = labelClass;
-  labelSpan.textContent = label;
-
-  const dots = document.createElement("span");
-  dots.className = "step-dots";
-
-  const valueSpan = document.createElement("span");
-  valueSpan.className = valueClass;
-  valueSpan.textContent = value;
-
-  row.append(labelSpan, dots, valueSpan);
-  return row;
-}
-
-function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
-  container.replaceChildren();
-  const details = document.createElement("details");
-  const summary = document.createElement("summary");
-  summary.textContent = `${steps.length} steps`;
-  details.appendChild(summary);
-
-  const list = document.createElement("div");
-  list.className = "mt-1.5 space-y-1.5";
-
-  for (const step of steps) {
-    const group = document.createElement("div");
-
-    // Step header row
-    group.appendChild(
-      buildDotRow(
-        "step-row",
-        step.step,
-        "text-gray-300",
-        formatMs(step.durationMs),
-        "text-emerald-500/80 tabular-nums",
-      ),
-    );
-
-    // Sub-phase details (simulation + prove/send + confirm)
-    if (step.simulation || step.proveSendMs != null) {
-      const sub = document.createElement("div");
-      sub.className = "step-sim";
-
-      // Simulation sub-details
-      if (step.simulation) {
-        const sim = step.simulation;
-        sub.appendChild(
-          buildDotRow(
-            "step-sim-row",
-            "sim",
-            "text-gray-600",
-            formatMs(sim.totalMs),
-            "tabular-nums",
-          ),
-        );
-        sub.appendChild(
-          buildDotRow(
-            "step-sim-row",
-            "sync",
-            "text-gray-600",
-            formatMs(sim.syncMs),
-            "tabular-nums",
-          ),
-        );
-        for (const fn of sim.perFunction) {
-          sub.appendChild(
-            buildDotRow(
-              "step-sim-row",
-              shortFnName(fn.name),
-              "text-gray-600",
-              formatMs(fn.ms),
-              "tabular-nums",
-            ),
-          );
-        }
-      }
-
-      // Prove + send / confirm sub-rows
-      if (step.proveSendMs != null) {
-        sub.appendChild(
-          buildDotRow(
-            "step-sim-row",
-            "prove + send",
-            "text-gray-600",
-            formatMs(step.proveSendMs),
-            "tabular-nums",
-          ),
-        );
-      }
-
-      if (step.confirmMs != null) {
-        sub.appendChild(
-          buildDotRow(
-            "step-sim-row",
-            "confirm",
-            "text-gray-600",
-            formatMs(step.confirmMs),
-            "tabular-nums",
-          ),
-        );
-      }
-
-      group.appendChild(sub);
-    }
-
-    list.appendChild(group);
-  }
-
-  details.appendChild(list);
-  container.appendChild(details);
-  container.classList.remove("hidden");
-}
-
-function showResult(mode: UiMode, durationMs: number, tag: string, steps?: StepTiming[]): void {
-  $("results").classList.remove("hidden");
-  const suffix = mode;
-
-  const timeEl = $(`time-${suffix}`);
-  timeEl.textContent = formatDuration(durationMs);
-  timeEl.className = "text-3xl font-bold tabular-nums text-emerald-400";
-
-  const tagEl = $(`tag-${suffix}`);
-  tagEl.textContent = tag;
-  tagEl.className = `mt-1.5 text-[10px] uppercase tracking-widest ${
-    tag === "token flow"
-      ? "text-cyan-500/70"
-      : tag === "cold"
-        ? "text-amber-500/70"
-        : "text-cyan-500/70"
-  }`;
-
-  $(`result-${suffix}`).classList.add("result-filled");
-
-  if (steps?.length) {
-    renderSteps($(`steps-${suffix}`), steps);
-  }
-}
-
-// ── ASCII animation helpers ──
-/** Map onStep step names to app-level animation phases. */
-function stepToPhase(stepName: string): AnimationPhase | null {
-  if (stepName.includes("simulat")) return "app:simulate";
-  if (stepName.includes("proving") || stepName.includes("deploying")) return "app:prove";
-  if (stepName.includes("confirm")) return "app:confirm";
-  return null;
-}
-
-// ── Deploy ──
+// ── Embedded UI: Deploy ──
 $("deploy-btn").addEventListener("click", async () => {
   if (deploying) return;
   deploying = true;
@@ -309,9 +178,7 @@ $("deploy-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    runCount[result.mode]++;
-    const isCold = runCount[result.mode] === 1;
-    showResult(result.mode, result.totalDurationMs, isCold ? "cold" : "warm", result.steps);
+    showResult("", result.mode, result.totalDurationMs, undefined, result.steps);
   } catch (err) {
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
@@ -323,7 +190,7 @@ $("deploy-btn").addEventListener("click", async () => {
   }
 });
 
-// ── Token Flow ──
+// ── Embedded UI: Token Flow ──
 $("token-flow-btn").addEventListener("click", async () => {
   if (deploying) return;
   deploying = true;
@@ -354,7 +221,7 @@ $("token-flow-btn").addEventListener("click", async () => {
     }
     appendLog(`  total: ${formatDuration(result.totalDurationMs)}`);
 
-    showResult(result.mode, result.totalDurationMs, "token flow", result.steps);
+    showResult("", result.mode, result.totalDurationMs, "token flow", result.steps);
   } catch (err) {
     appendLog(`Token flow failed: ${err}`, "error");
   } finally {
@@ -366,52 +233,112 @@ $("token-flow-btn").addEventListener("click", async () => {
   }
 });
 
-// ── Init ──
-async function init(): Promise<void> {
-  $("aztec-url").textContent = AZTEC_DISPLAY_URL;
-  if (PROVER_CONFIGURED) {
-    $("teerex-url").textContent = PROVER_DISPLAY_URL;
+// ── Embedded → External switch ──
+$("switch-to-external-btn").addEventListener("click", () => {
+  if (deploying) return;
+  $("embedded-ui").classList.add("hidden");
+  goToWalletSelection();
+});
+
+// ── UI transitions ──
+
+function showEmbeddedUI(): void {
+  $("embedded-ui").classList.remove("hidden");
+  hideExternalUI();
+  hideWalletSelection();
+}
+
+async function handleDisconnect(): Promise<void> {
+  if (disconnectUnsub) {
+    disconnectUnsub();
+    disconnectUnsub = null;
   }
-
-  appendLog("Checking services...");
-  const { aztec, teerex } = await checkServices();
-
-  if (PROVER_CONFIGURED && !teerex) {
-    appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
-  }
-
-  // Auto-configure TEE when env var is set (display URL + check attestation)
-  // Runs regardless of Aztec node status — service checks are independent.
-  if (TEE_CONFIGURED) {
-    $("tee-url").textContent = TEE_DISPLAY_URL;
-    appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
-    const attestation = await checkTeeAttestation("/tee");
-    if (attestation.reachable) {
-      setStatus("tee-status", attestation.mode === "nitro");
-      $("tee-attestation-label").textContent =
-        attestation.mode === "nitro" ? "attested" : `attestation: ${attestation.mode ?? "unknown"}`;
-      if (attestation.mode === "nitro") {
-        $btn("mode-tee").disabled = false;
-      }
-      appendLog(
-        `TEE attestation: ${attestation.mode ?? "unknown"}`,
-        attestation.mode === "nitro" ? "success" : "warn",
-      );
-    } else {
-      setStatus("tee-status", false);
-      $("tee-attestation-label").textContent = "unreachable";
-      appendLog(`TEE server unreachable at ${TEE_DISPLAY_URL}`, "warn");
+  if (currentExternalProvider) {
+    try {
+      await disconnectWallet(currentExternalProvider);
+    } catch {
+      // Already disconnected
     }
+    currentExternalProvider = null;
   }
+  revertToEmbedded();
+  hideExternalUI();
+  appendLog("External wallet disconnected — returning to wallet selection");
+  goToWalletSelection();
+}
 
-  if (!aztec) {
-    appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
-    appendLog("Start the Aztec node before using the demo", "warn");
-    $("wallet-state").textContent = "aztec unavailable";
-    setStatus("wallet-dot", false);
-    return;
-  }
+/** Cached chain info from initial service check. */
+let cachedChainInfo: { chainId: any; version: any } | null = null;
+let nodeReady = false;
 
+function goToWalletSelection(): void {
+  initWalletSelection({
+    nodeReady,
+    chainInfo: cachedChainInfo,
+    callbacks: {
+      onChooseEmbedded: async () => {
+        hideWalletSelection();
+
+        if (state.embeddedWallet) {
+          // Re-use existing embedded wallet
+          revertToEmbedded();
+          showEmbeddedUI();
+          setActionButtonsDisabled(false);
+          appendLog("Switched back to embedded wallet");
+        } else {
+          // First time — check prover/TEE services and initialize embedded wallet
+          showEmbeddedUI();
+          await checkEmbeddedServices();
+          initEmbeddedWallet();
+        }
+      },
+      onChooseExternal: async (wallet, provider, accounts, aliases) => {
+        hideWalletSelection();
+
+        // Ensure node is connected (may already be done)
+        if (!state.node) {
+          try {
+            appendLog("Connecting to Aztec node...");
+            await initializeNode(appendLog);
+          } catch (err) {
+            appendLog(`Node connection failed: ${err}`, "error");
+            goToWalletSelection();
+            return;
+          }
+        }
+
+        setExternalWallet(wallet, provider, accounts);
+        currentExternalProvider = provider;
+
+        // Register FPC on external wallet
+        try {
+          await initializeFPC(wallet, appendLog);
+        } catch (err) {
+          appendLog(`FPC setup failed: ${err}`, "error");
+        }
+
+        // Register disconnect handler
+        disconnectUnsub = onDisconnect(provider, () => {
+          appendLog("External wallet disconnected unexpectedly", "warn");
+          handleDisconnect();
+        });
+
+        const accountEntries: AccountEntry[] = accounts.map((a, i) => ({
+          address: a.toString(),
+          alias: aliases[i],
+        }));
+        populateExternalWalletUI(provider.name, provider.icon, accountEntries);
+        showExternalUI();
+        hideWalletSelection();
+
+        appendLog(`Using external wallet: ${provider.name}`, "success");
+      },
+    },
+    log: appendLog,
+  });
+}
+
+async function initEmbeddedWallet(): Promise<void> {
   appendLog("Initializing wallet...");
   $("wallet-state").textContent = "initializing...";
   setStatus("wallet-dot", null);
@@ -422,6 +349,7 @@ async function init(): Promise<void> {
     $("wallet-state").className = "text-emerald-500/80 ml-auto font-light";
     setStatus("wallet-dot", true);
     setActionButtonsDisabled(false);
+    $("switch-to-external-wrapper").classList.remove("hidden");
 
     const networkLabel = $("network-label");
     if (state.proofsRequired) {
@@ -438,6 +366,63 @@ async function init(): Promise<void> {
     $("wallet-state").className = "text-red-400/80 ml-auto font-light";
     setStatus("wallet-dot", false);
   }
+}
+
+// ── Init ──
+async function init(): Promise<void> {
+  $("aztec-url").textContent = AZTEC_DISPLAY_URL;
+  if (PROVER_CONFIGURED) {
+    $("teerex-url").textContent = PROVER_DISPLAY_URL;
+  }
+
+  // Wire up wallet selection listeners once
+  wireWalletSelectionListeners();
+
+  // Wire up external wallet UI listeners once
+  initExternalWalletUI({
+    log: appendLog,
+    onSwitchWallet: handleDisconnect,
+  });
+
+  appendLog("Checking Aztec node...");
+  const aztec = await checkAztecNode();
+  setStatus("aztec-status", aztec);
+
+  nodeReady = aztec;
+
+  // E2E bypass: ?wallet=embedded skips wallet selection (no chain info needed)
+  const walletParam = new URLSearchParams(window.location.search).get("wallet");
+  if (walletParam === "embedded") {
+    showEmbeddedUI();
+    await checkEmbeddedServices();
+    if (aztec) {
+      await initEmbeddedWallet();
+    } else {
+      appendLog(`Aztec node not reachable at ${AZTEC_DISPLAY_URL}`, "error");
+      appendLog("Start the Aztec node before using the demo", "warn");
+      $("wallet-state").textContent = "aztec unavailable";
+      setStatus("wallet-dot", false);
+    }
+    return;
+  }
+
+  // Cache chain info for wallet discovery
+  if (aztec && state.node === null) {
+    // Node is available but not yet connected — we'll get chain info via a lightweight check
+    try {
+      const node = (await import("@aztec/aztec.js/node")).createAztecNodeClient(
+        process.env.AZTEC_NODE_URL || "/aztec",
+      );
+      const [chainId, version] = await Promise.all([node.getChainId(), node.getVersion()]);
+      const { Fr } = await import("@aztec/aztec.js/fields");
+      cachedChainInfo = { chainId: new Fr(chainId), version: new Fr(version) };
+    } catch {
+      // Node reachable for /status but RPC failed — ok, discovery will work without chain info
+    }
+  }
+
+  // Normal flow: show wallet selection
+  goToWalletSelection();
 }
 
 init();

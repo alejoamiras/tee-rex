@@ -15,7 +15,6 @@ const PROVER_URL = process.env.PROVER_URL || "";
 const TEE_URL = process.env.TEE_URL || "";
 
 let sharedPage: Page;
-const deployCount: Record<string, number> = { local: 0, remote: 0, tee: 0 };
 
 test.describe.configure({ mode: "serial" });
 
@@ -39,7 +38,7 @@ test.describe("TEE", () => {
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
     await assertTeeAttested(page);
-    await deployAndAssert(page, "tee", deployCount);
+    await deployAndAssert(page, "tee");
   });
 });
 
@@ -54,7 +53,7 @@ test.describe("remote", () => {
     const page = sharedPage;
     await page.click("#mode-remote");
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote", deployCount);
+    await deployAndAssert(page, "remote");
   });
 });
 
@@ -65,6 +64,6 @@ test.describe("local", () => {
     const page = sharedPage;
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "local", deployCount);
+    await deployAndAssert(page, "local");
   });
 });
