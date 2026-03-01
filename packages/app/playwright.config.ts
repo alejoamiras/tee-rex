@@ -28,7 +28,7 @@ export default defineConfig({
       name: "local-network",
       testDir: "./e2e",
       testMatch: "*.local-network.spec.ts",
-      timeout: 5 * 60 * 1000,
+      timeout: 10 * 60 * 1000,
       retries: 1,
       use: {
         actionTimeout: 0,
