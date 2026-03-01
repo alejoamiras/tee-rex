@@ -6,11 +6,9 @@ import { $, $btn, type appendLog, formatDuration } from "./ui";
 let deploying = false;
 const runCount = { wallet: 0 };
 
-/** Extract a display hex string from a wallet-sdk account entry or AztecAddress. */
-function addressToHex(addr: any): string {
-  if (typeof addr === "string") return addr;
-  if (typeof addr?.toString === "function") return addr.toString();
-  return String(addr);
+export interface AccountEntry {
+  address: string;
+  alias?: string;
 }
 
 export function initExternalWalletUI(opts: {
@@ -121,11 +119,16 @@ function setExtActionButtonsDisabled(disabled: boolean): void {
   $btn("ext-token-flow-btn").disabled = disabled;
 }
 
+/** Short display label for an account — alias if available, otherwise truncated address. */
+function accountLabel(entry: AccountEntry): string {
+  return entry.alias || `${entry.address.slice(0, 20)}...`;
+}
+
 /** Populate the external wallet info bar. */
 export function populateExternalWalletUI(
   walletName: string,
   icon: string | undefined,
-  accounts: any[],
+  accounts: AccountEntry[],
 ): void {
   // Network label
   const networkLabel = ENV_NAME || "local sandbox";
@@ -152,17 +155,15 @@ export function populateExternalWalletUI(
   if (accounts.length > 1) {
     selector.replaceChildren();
     for (const acct of accounts) {
-      const hex = addressToHex(acct);
       const opt = document.createElement("option");
-      opt.value = hex;
-      opt.textContent = `${hex.slice(0, 20)}...`;
+      opt.value = acct.address;
+      opt.textContent = accountLabel(acct);
       selector.appendChild(opt);
     }
     selector.classList.remove("hidden");
     addressSpan.classList.add("hidden");
   } else {
-    const hex = addressToHex(accounts[0]);
-    addressSpan.textContent = `${hex.slice(0, 20)}...`;
+    addressSpan.textContent = accountLabel(accounts[0]);
     addressSpan.classList.remove("hidden");
     selector.classList.add("hidden");
   }

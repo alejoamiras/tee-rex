@@ -26,7 +26,12 @@ function accountToHex(account: any): string {
 
 export interface WalletSelectionCallbacks {
   onChooseEmbedded: () => void;
-  onChooseExternal: (wallet: Wallet, provider: WalletProvider, accounts: AztecAddress[]) => void;
+  onChooseExternal: (
+    wallet: Wallet,
+    provider: WalletProvider,
+    accounts: AztecAddress[],
+    aliases: (string | undefined)[],
+  ) => void;
 }
 
 let callbacks: WalletSelectionCallbacks | null = null;
@@ -228,9 +233,10 @@ function wireEmojiConfirm(): void {
         const raw = acct?.item ?? acct?.address ?? acct;
         return raw instanceof AztecAddress ? raw : AztecAddress.fromString(accountToHex(acct));
       });
+      const aliases = accounts.map((acct: any) => acct?.alias as string | undefined);
 
       appendLog(`Connected to ${providerName} — ${accounts.length} account(s)`, "success");
-      callbacks?.onChooseExternal(wallet, selectedProvider, addresses);
+      callbacks?.onChooseExternal(wallet, selectedProvider, addresses, aliases);
     } catch (err) {
       appendLog(`Connection confirmation failed: ${err}`, "error");
       resetToWalletList();
