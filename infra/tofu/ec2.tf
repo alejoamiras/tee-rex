@@ -78,7 +78,7 @@ resource "aws_instance" "prod_tee" {
 
 resource "aws_instance" "devnet_tee" {
   ami                    = var.instance_amis.devnet_tee
-  instance_type          = "c7i.12xlarge"
+  instance_type          = "m5.4xlarge"
   key_name               = aws_key_pair.tee_rex.key_name
   subnet_id              = var.default_subnet_id
   vpc_security_group_ids = [aws_security_group.tee_rex.id]
