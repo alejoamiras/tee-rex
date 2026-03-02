@@ -46,7 +46,8 @@ test.describe("TEE", () => {
     await deployAndAssert(page, "tee");
   });
 
-  test("runs full token flow", async () => {
+  // TODO: re-enable when Aztec nightly WASM perf regression is resolved (token flow takes ~7 min on CI)
+  test.skip("runs full token flow", async () => {
     const page = sharedPage;
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
     await runTokenFlowAndAssert(page, "tee");
@@ -89,7 +90,8 @@ test.describe("remote", () => {
     await deployAndAssert(page, "remote");
   });
 
-  test("runs full token flow", async () => {
+  // TODO: re-enable when Aztec nightly WASM perf regression is resolved (token flow takes ~7 min on CI)
+  test.skip("runs full token flow", async () => {
     const page = sharedPage;
     await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
     await runTokenFlowAndAssert(page, "remote");
@@ -128,7 +130,8 @@ test.describe("local", () => {
     await deployAndAssert(page, "local");
   });
 
-  test("runs full token flow", async () => {
+  // TODO: re-enable when Aztec nightly WASM perf regression is resolved (token flow takes ~7 min on CI)
+  test.skip("runs full token flow", async () => {
     const page = sharedPage;
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await runTokenFlowAndAssert(page, "local");
