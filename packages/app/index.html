@@ -45,122 +45,252 @@
         </div>
       </header>
 
-      <!-- ═══ SERVICES ═══ -->
-      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm" aria-label="Service status">
+      <!-- ═══ WALLET SELECTION ═══ -->
+      <section id="wallet-selection" class="hidden border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
         <div class="border-b border-gray-800 px-4 py-1.5">
-          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">services</span>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">connect</span>
         </div>
-        <div class="px-4 py-3 space-y-2">
-          <div class="flex items-center gap-3 text-xs">
-            <span id="aztec-status" class="status-dot status-unknown"></span>
-            <span class="text-gray-400 w-28">Aztec Node</span>
-            <span id="network-label" class="text-gray-600 text-[10px] uppercase tracking-wider ml-2"></span>
-            <span id="aztec-url" class="text-gray-600 ml-auto font-light">localhost:8080</span>
-          </div>
-          <div class="flex items-center gap-3 text-xs">
-            <span id="teerex-status" class="status-dot status-unknown"></span>
-            <span class="text-gray-400 w-28">TEE-Rex Server</span>
-            <span id="teerex-label" class="text-[10px] text-gray-600">not configured</span>
-            <span id="teerex-url" class="text-gray-600 ml-auto font-light"></span>
-          </div>
-          <div class="flex items-center gap-3 text-xs">
-            <span id="tee-status" class="status-dot status-unknown"></span>
-            <span class="text-gray-400 w-28">TEE Enclave</span>
-            <span id="tee-attestation-label" class="text-[10px] text-gray-600">not configured</span>
-            <span id="tee-url" class="text-gray-600 ml-auto font-light"></span>
-          </div>
-          <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
-            <span id="wallet-dot" class="status-dot status-unknown"></span>
-            <span class="text-gray-400 w-28">Wallet</span>
-            <span id="wallet-state" class="text-gray-600 ml-auto font-light">not initialized</span>
+        <div class="p-5 space-y-4">
+          <p class="text-xs text-gray-500 text-center">How do you want to interact with Aztec?</p>
+          <button
+            id="choose-embedded-btn"
+            disabled
+            class="wallet-choice-card w-full text-left px-4 py-3 border border-gray-800 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <div class="text-xs font-medium text-gray-300">Continue without external wallet</div>
+            <div class="text-[10px] text-gray-600 mt-0.5">Uses a built-in browser wallet — compare local, remote &amp; TEE proving</div>
+          </button>
+          <button
+            id="choose-external-btn"
+            class="wallet-choice-card w-full text-left px-4 py-3 border border-gray-800 transition-all duration-150"
+          >
+            <div class="text-xs font-medium text-gray-300">Connect external wallet</div>
+            <div class="text-[10px] text-gray-600 mt-0.5">Use an Aztec wallet extension — proving is handled by the wallet</div>
+          </button>
+          <!-- Discovery + verification (shown after clicking "Connect external wallet") -->
+          <div id="ext-discovery-section" class="hidden space-y-3">
+            <div id="ext-wallet-list" class="space-y-2"></div>
+            <div id="ext-wallet-search-status" class="text-[10px] text-gray-600 text-center">
+              Searching for wallets...
+            </div>
+            <button id="ext-cancel-discovery-btn" class="w-full py-1.5 text-[10px] uppercase tracking-wider text-gray-600 hover:text-gray-400 transition-colors">
+              Cancel
+            </button>
+            <!-- Emoji verification -->
+            <div id="ext-emoji-section" class="hidden">
+              <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">
+                Verify connection — confirm emojis match your wallet
+              </div>
+              <div id="ext-emoji-grid" class="emoji-grid"></div>
+              <div class="flex gap-2 mt-2">
+                <button id="ext-emoji-confirm-btn" class="flex-1 py-1.5 px-3 text-[10px] uppercase tracking-wider border border-emerald-700/50 text-emerald-500 hover:bg-emerald-900/20 transition-colors">They Match</button>
+                <button id="ext-emoji-reject-btn" class="flex-1 py-1.5 px-3 text-[10px] uppercase tracking-wider border border-red-700/50 text-red-400 hover:bg-red-900/20 transition-colors">They Don't Match</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- ═══ MODE TOGGLE ═══ -->
-      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
-        <div class="border-b border-gray-800 px-4 py-1.5">
-          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">proving mode</span>
-        </div>
-        <div class="p-3 flex gap-2">
-          <button
-            id="mode-local"
-            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
-          >
-            ▸ Local <span class="normal-case tracking-normal opacity-80">(wasm)</span>
-          </button>
-          <button
-            id="mode-remote"
-            disabled
-            title="Remote proving not configured"
-            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
-          >
-            ▸ Remote <span class="text-gray-600 normal-case tracking-normal">(server)</span>
-          </button>
-          <button
-            id="mode-tee"
-            disabled
-            title="TEE proving not configured"
-            class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
-          >
-            ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
-          </button>
-        </div>
-      </section>
+      <!-- ═══ EMBEDDED UI ═══ -->
+      <div id="embedded-ui" class="hidden space-y-4">
 
-      <!-- ═══ DEPLOY ACTION ═══ -->
-      <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
-        <div class="border-b border-gray-800 px-4 py-1.5">
-          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">action</span>
-        </div>
-        <div class="p-3 space-y-3">
-          <button
-            id="deploy-btn"
-            disabled
-            class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-emerald-700/50 bg-emerald-900/20 text-emerald-500 hover:bg-emerald-900/40 hover:border-emerald-600/60 hover:text-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-emerald-900/20 disabled:hover:border-emerald-700/50 disabled:hover:text-emerald-500"
-          >
-            Deploy Test Account
-          </button>
-          <button
-            id="token-flow-btn"
-            disabled
-            class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-cyan-700/50 bg-cyan-900/20 text-cyan-500 hover:bg-cyan-900/40 hover:border-cyan-600/60 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-cyan-900/20 disabled:hover:border-cyan-700/50 disabled:hover:text-cyan-500"
-          >
-            Run Token Flow
-          </button>
+        <!-- ═══ SERVICES ═══ -->
+        <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm" aria-label="Service status">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">services</span>
+          </div>
+          <div class="px-4 py-3 space-y-2">
+            <div class="flex items-center gap-3 text-xs">
+              <span id="aztec-status" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">Aztec Node</span>
+              <span id="network-label" class="text-gray-600 text-[10px] uppercase tracking-wider ml-2"></span>
+              <span id="aztec-url" class="text-gray-600 ml-auto font-light">localhost:8080</span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span id="teerex-status" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">TEE-Rex Server</span>
+              <span id="teerex-label" class="text-[10px] text-gray-600">not configured</span>
+              <span id="teerex-url" class="text-gray-600 ml-auto font-light"></span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span id="tee-status" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">TEE Enclave</span>
+              <span id="tee-attestation-label" class="text-[10px] text-gray-600">not configured</span>
+              <span id="tee-url" class="text-gray-600 ml-auto font-light"></span>
+            </div>
+            <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
+              <span id="wallet-dot" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">Wallet</span>
+              <span id="wallet-state" class="text-gray-600 ml-auto font-light">not initialized</span>
+            </div>
+            <div class="hidden flex justify-end pt-1" id="switch-to-external-wrapper">
+              <button id="switch-to-external-btn" class="text-[10px] text-gray-600 hover:text-cyan-400 transition-colors uppercase tracking-wider">Switch Wallet</button>
+            </div>
+          </div>
+        </section>
 
-          <div id="progress" class="hidden">
-            <pre id="ascii-art" class="ascii-art"></pre>
+        <!-- ═══ MODE TOGGLE ═══ -->
+        <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">proving mode</span>
           </div>
-        </div>
-      </section>
+          <div id="proving-mode-container" class="p-3">
+            <div id="proving-mode-buttons" class="flex gap-2">
+              <button
+                id="mode-local"
+                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
+              >
+                ▸ Local <span class="normal-case tracking-normal opacity-80">(wasm)</span>
+              </button>
+              <button
+                id="mode-remote"
+                disabled
+                title="Remote proving not configured"
+                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+              >
+                ▸ Remote <span class="text-gray-600 normal-case tracking-normal">(server)</span>
+              </button>
+              <button
+                id="mode-tee"
+                disabled
+                title="TEE proving not configured"
+                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+              >
+                ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
+              </button>
+            </div>
+          </div>
+        </section>
 
-      <!-- ═══ RESULTS ═══ -->
-      <section id="results" class="hidden border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
-        <div class="border-b border-gray-800 px-4 py-1.5">
-          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
-        </div>
-        <div class="p-3 grid grid-cols-3 gap-2">
-          <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
-            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
-            <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-            <div id="tag-local" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-            <div id="steps-local" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+        <!-- ═══ DEPLOY ACTION ═══ -->
+        <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">action</span>
           </div>
-          <div id="result-remote" class="border border-gray-800 p-4 text-center transition-colors">
-            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (server)</div>
-            <div id="time-remote" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-            <div id="tag-remote" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-            <div id="steps-remote" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+          <div class="p-3 space-y-3">
+            <button
+              id="deploy-btn"
+              disabled
+              class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-emerald-700/50 bg-emerald-900/20 text-emerald-500 hover:bg-emerald-900/40 hover:border-emerald-600/60 hover:text-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-emerald-900/20 disabled:hover:border-emerald-700/50 disabled:hover:text-emerald-500"
+            >
+              Deploy Test Account
+            </button>
+            <button
+              id="token-flow-btn"
+              disabled
+              class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-cyan-700/50 bg-cyan-900/20 text-cyan-500 hover:bg-cyan-900/40 hover:border-cyan-600/60 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-cyan-900/20 disabled:hover:border-cyan-700/50 disabled:hover:text-cyan-500"
+            >
+              Run Token Flow
+            </button>
+            <div id="progress" class="hidden">
+              <pre id="ascii-art" class="ascii-art"></pre>
+            </div>
           </div>
-          <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
-            <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>
-            <div id="time-tee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-            <div id="tag-tee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-            <div id="steps-tee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+        </section>
+
+        <!-- ═══ RESULTS ═══ -->
+        <section id="results" class="hidden border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
           </div>
-        </div>
-      </section>
+          <div class="p-3 grid grid-cols-3 gap-2">
+            <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
+              <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+              <div id="tag-local" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+              <div id="steps-local" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            </div>
+            <div id="result-remote" class="border border-gray-800 p-4 text-center transition-colors">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (server)</div>
+              <div id="time-remote" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+              <div id="tag-remote" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+              <div id="steps-remote" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            </div>
+            <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>
+              <div id="time-tee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+              <div id="tag-tee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+              <div id="steps-tee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /embedded-ui -->
+
+      <!-- ═══ EXTERNAL UI ═══ -->
+      <div id="external-ui" class="hidden space-y-4">
+
+        <!-- Wallet info bar -->
+        <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">wallet</span>
+          </div>
+          <div class="px-4 py-3 space-y-2">
+            <div class="flex items-center gap-3 text-xs">
+              <span id="ext-network-dot" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">Network</span>
+              <span id="ext-network-label" class="text-gray-600 ml-auto font-light"></span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <img id="ext-wallet-icon" class="w-3.5 h-3.5 hidden" alt="" />
+              <span id="ext-wallet-icon-placeholder" class="status-dot bg-cyan-700"></span>
+              <span class="text-gray-400 w-28">Wallet</span>
+              <span id="ext-wallet-name" class="text-gray-600 ml-auto font-light"></span>
+            </div>
+            <div class="border-t border-gray-800/60 mt-2 pt-2 flex items-center gap-3 text-xs">
+              <span class="status-dot bg-gray-700"></span>
+              <span class="text-gray-400 w-28">Account</span>
+              <select id="ext-account-selector" class="hidden bg-gray-900 text-gray-400 text-xs border border-gray-700 rounded px-1.5 py-0.5 ml-auto outline-none cursor-pointer font-light"></select>
+              <span id="ext-wallet-address" class="text-gray-600 ml-auto font-light truncate max-w-[200px]"></span>
+            </div>
+            <div class="flex justify-end pt-1">
+              <button id="ext-disconnect-btn" class="text-[10px] text-gray-600 hover:text-cyan-400 transition-colors uppercase tracking-wider">Switch Wallet</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Action buttons -->
+        <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">action</span>
+          </div>
+          <div class="p-3 space-y-3">
+            <button
+              id="ext-deploy-token-btn"
+              disabled
+              class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-emerald-700/50 bg-emerald-900/20 text-emerald-500 hover:bg-emerald-900/40 hover:border-emerald-600/60 hover:text-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-emerald-900/20 disabled:hover:border-emerald-700/50 disabled:hover:text-emerald-500"
+            >
+              Deploy Token
+            </button>
+            <button
+              id="ext-token-flow-btn"
+              disabled
+              class="w-full py-3 px-4 text-xs font-semibold uppercase tracking-widest transition-all duration-150 border border-cyan-700/50 bg-cyan-900/20 text-cyan-500 hover:bg-cyan-900/40 hover:border-cyan-600/60 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-cyan-900/20 disabled:hover:border-cyan-700/50 disabled:hover:text-cyan-500"
+            >
+              Run Token Flow
+            </button>
+            <div id="ext-progress" class="hidden">
+              <pre id="ext-ascii-art" class="ascii-art"></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- Results (single column) -->
+        <section id="ext-results" class="hidden border border-gray-800 bg-gray-950/80 backdrop-blur-sm">
+          <div class="border-b border-gray-800 px-4 py-1.5">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
+          </div>
+          <div class="p-3">
+            <div id="ext-result-wallet" class="border border-gray-800 p-4 text-center transition-colors">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Wallet</div>
+              <div id="ext-time-wallet" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+              <div id="ext-tag-wallet" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+              <div id="ext-steps-wallet" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /external-ui -->
 
       <!-- ═══ LOG ═══ -->
       <section class="border border-gray-800 bg-gray-950/80 backdrop-blur-sm" aria-label="Activity log">

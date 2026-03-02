@@ -16,8 +16,9 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
   const page = await browser.newPage();
 
   page.on("console", (msg) => {
-    if (msg.type() === "error" || msg.type() === "warning") {
-      console.log(`[browser:${msg.type()}] ${msg.text()}`);
+    const text = msg.text();
+    if (msg.type() === "error" || msg.type() === "warning" || text.startsWith("[e2e]")) {
+      console.log(`[browser:${msg.type()}] ${text}`);
     }
   });
   page.on("pageerror", (err) => {
@@ -26,7 +27,17 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 
   const MAX_INIT_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
-    await page.goto("/");
+    await page.goto("/?wallet=embedded");
+
+    // Diagnostic: check if multi-threaded WASM is available
+    if (attempt === 1) {
+      const threadInfo = await page.evaluate(() => ({
+        crossOriginIsolated: self.crossOriginIsolated,
+        sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
+        hardwareConcurrency: navigator.hardwareConcurrency,
+      }));
+      console.log(`[e2e] threading: ${JSON.stringify(threadInfo)}`);
+    }
     if (attempt > 1) {
       await page.evaluate(async () => {
         const dbs = await indexedDB.databases();

@@ -5,7 +5,7 @@
 - **Repo**: `alejoamiras/tee-rex` (GitHub)
 - **SDK** (`/packages/sdk`): TypeScript package `@alejoamiras/tee-rex` - Remote proving client for Aztec
 - **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
-- **App** (`/packages/app`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow
+- **App** (`/packages/app`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow, external wallet connection via `@aztec/wallet-sdk`
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
 - **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows), sort-package-json (`package.json` key ordering), OpenTofu fmt + validate (`.tf` files)
 - **Commit hygiene**: Husky + lint-staged + commitlint (conventional commits). lint-staged runs Biome on `*.{ts,tsx,js,jsx}`, shellcheck on `*.sh`, actionlint on `.github/workflows/*.yml`, `sort-package-json` on `**/package.json`, and `tofu fmt` on `infra/tofu/*.tf`.

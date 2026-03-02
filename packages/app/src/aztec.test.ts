@@ -4,6 +4,8 @@ import {
   checkTeeAttestation,
   checkTeeRexServer,
   PROVER_CONFIGURED,
+  revertToEmbedded,
+  setExternalWallet,
   setUiMode,
   state,
   TEE_CONFIGURED,
@@ -17,6 +19,12 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   // Reset state
   state.prover = null;
+  state.wallet = null;
+  state.embeddedWallet = null;
+  state.walletType = null;
+  state.externalProvider = null;
+  state.registeredAddresses = [];
+  state.selectedAccountIndex = 0;
   state.provingMode = "local";
   state.uiMode = "local";
   state.teeServerUrl = "/tee";
@@ -209,5 +217,50 @@ describe("feature flags", () => {
     if (!process.env.TEE_URL) {
       expect(TEE_CONFIGURED).toBe(false);
     }
+  });
+});
+
+// ── setExternalWallet / revertToEmbedded ──
+describe("setExternalWallet", () => {
+  test("switches to external wallet state", () => {
+    const mockWallet = { id: "ext" } as any;
+    const mockProvider = { name: "Test" } as any;
+    const mockAddresses = [{ toString: () => "0x1234" }] as any;
+
+    setExternalWallet(mockWallet, mockProvider, mockAddresses);
+
+    expect(state.wallet).toBe(mockWallet);
+    expect(state.walletType).toBe("external");
+    expect(state.externalProvider).toBe(mockProvider);
+    expect(state.registeredAddresses).toBe(mockAddresses);
+  });
+});
+
+describe("revertToEmbedded", () => {
+  test("restores embedded wallet state", () => {
+    const mockEmbedded = { id: "embedded" } as any;
+    state.embeddedWallet = mockEmbedded;
+    state.wallet = { id: "ext" } as any;
+    state.walletType = "external";
+    state.externalProvider = { name: "Test" } as any;
+    state.selectedAccountIndex = 2;
+
+    revertToEmbedded();
+
+    expect(state.wallet).toBe(mockEmbedded);
+    expect(state.walletType).toBe("embedded");
+    expect(state.externalProvider).toBeNull();
+    expect(state.selectedAccountIndex).toBe(0);
+  });
+
+  test("does nothing when embeddedWallet is null", () => {
+    state.embeddedWallet = null;
+    state.wallet = { id: "ext" } as any;
+    state.walletType = "external";
+
+    revertToEmbedded();
+
+    expect(state.wallet).toEqual({ id: "ext" });
+    expect(state.walletType).toBe("external");
   });
 });
