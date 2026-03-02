@@ -104,23 +104,34 @@ echo "=== Reserving hugepages (${MEMORY_MB}MB) ==="
 sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
 sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
 
-# Verify using Hugetlb (total hugepage memory in kB across ALL page sizes).
-# On Sapphire Rapids (c7i), the allocator uses a mix of 1GB and 2MB hugepages.
-# HugePages_Total only counts 2MB pages, so checking it alone would falsely
-# report failure even when the full allocation succeeded via 1GB pages.
+# On Sapphire Rapids (c7i), the allocator uses 1GB hugepages when available.
+# The Nitro Enclave hypervisor only supports 2MB hugepages, so 1GB pages are
+# unusable. Force-release any 1GB hugepages so the allocator uses 2MB pages only.
+if [[ -f /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages ]]; then
+  HUGE_1G=$(cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages)
+  if [[ "${HUGE_1G}" -gt 0 ]]; then
+    echo "Releasing ${HUGE_1G} x 1GB hugepages (Nitro Enclaves require 2MB pages)"
+    echo 0 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+    sleep 2
+    sync && echo 3 > /proc/sys/vm/drop_caches
+    echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+    sleep 2
+  fi
+fi
+
 ALLOC_OK=false
-EXPECTED_KB=$((MEMORY_MB * 1024))
+EXPECTED_PAGES=$((MEMORY_MB / 2))
 for attempt in 1 2; do
   if systemctl restart nitro-enclaves-allocator.service; then
     sleep 3
-    HUGETLB_KB=$(grep "^Hugetlb:" /proc/meminfo | awk '{print $2}')
-    HUGE_2MB=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
-    echo "Hugepages: Hugetlb=${HUGETLB_KB}kB expected=${EXPECTED_KB}kB 2MB_pages=${HUGE_2MB} (attempt ${attempt})"
-    if [[ "${HUGETLB_KB}" -ge "${EXPECTED_KB}" ]]; then
+    HUGE_TOTAL=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
+    HUGE_FREE=$(grep HugePages_Free /proc/meminfo | awk '{print $2}')
+    echo "Hugepages: total=${HUGE_TOTAL} expected=${EXPECTED_PAGES} free=${HUGE_FREE} (attempt ${attempt})"
+    if [[ "${HUGE_TOTAL}" -ge "${EXPECTED_PAGES}" ]]; then
       ALLOC_OK=true
       break
     fi
-    echo "WARNING: Insufficient hugepages (got ${HUGETLB_KB}kB, need ${EXPECTED_KB}kB), retrying..."
+    echo "WARNING: Insufficient hugepages (got ${HUGE_TOTAL}, need ${EXPECTED_PAGES}), retrying..."
   else
     echo "WARNING: Allocator restart failed (attempt ${attempt})"
   fi
