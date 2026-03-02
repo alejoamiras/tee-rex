@@ -742,7 +742,7 @@ export async function runTokenFlow(
     const balanceStart = Date.now();
     const [aliceBalance, bobBalance] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
-      token.methods.balance_of_private(bob).simulate({ from: bob }),
+      token.methods.balance_of_private(bob).simulate({ from: alice, additionalScopes: [bob] }),
     ]);
     const balanceDuration = Date.now() - balanceStart;
     console.log(`[e2e] balance check: END (${balanceDuration}ms)`);
