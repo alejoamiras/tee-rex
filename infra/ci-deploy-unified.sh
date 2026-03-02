@@ -52,46 +52,14 @@ rm -rf /var/lib/docker/*
 systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
 
-# Allocate hugepages to target IMMEDIATELY, before any Docker/Linuxkit activity.
-# On clean memory (right after teardown), the allocator can find contiguous 2MB
-# pages. Doing this AFTER the EIF build fails on large instances (c7i.12xlarge)
-# because Linuxkit fragments memory beyond recovery — even with drop_caches +
-# compact_memory, the allocator only reclaims ~15GB of hugepages on a 96GB host.
-# With 88GB hugepages pre-allocated, ~8GB remains for the host — enough for
-# Linuxkit (~3.5GB RSS) since NITRO_CLI_ARTIFACTS uses disk-backed storage.
-echo "=== Allocating hugepages (${MEMORY_MB}MB) ==="
-sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
-sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
-
-ALLOC_OK=false
-for attempt in 1 2; do
-  if systemctl restart nitro-enclaves-allocator.service; then
-    sleep 5
-    HUGE_TOTAL=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
-    HUGE_FREE=$(grep HugePages_Free /proc/meminfo | awk '{print $2}')
-    EXPECTED_PAGES=$((MEMORY_MB / 2))
-    echo "Hugepages: total=${HUGE_TOTAL} expected=${EXPECTED_PAGES} free=${HUGE_FREE} (attempt ${attempt})"
-    if [[ "${HUGE_TOTAL}" -ge "${EXPECTED_PAGES}" ]]; then
-      ALLOC_OK=true
-      break
-    fi
-    echo "WARNING: Insufficient hugepages (got ${HUGE_TOTAL}, need ${EXPECTED_PAGES}), retrying..."
-  else
-    echo "WARNING: Allocator restart failed (attempt ${attempt})"
-  fi
-  sync && echo 3 > /proc/sys/vm/drop_caches
-  echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
-  sleep 5
-done
-
-if [[ "${ALLOC_OK}" != "true" ]]; then
-  echo "ERROR: Failed to allocate ${MEMORY_MB}MB hugepages"
-  grep Huge /proc/meminfo
-  free -m
-  exit 1
-fi
-echo "Host memory after hugepage allocation:"
-free -m
+# Reduce hugepages for the build phase — Linuxkit (used by nitro-cli build-enclave)
+# needs ~3.5GB RSS and Docker pull uses buffer cache. With 8GB hugepages reserved,
+# only ~5.2GB remains for host operations, causing OOM kills on Linuxkit.
+# We reduce to 512MB here, build the EIF, then re-allocate after cleanup.
+echo "=== Reducing hugepages for build phase ==="
+sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
+systemctl restart nitro-enclaves-allocator.service || true
+sleep 2
 
 # ── 1. Disk space check ──────────────────────────────────────────
 AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
@@ -120,13 +88,53 @@ NITRO_CLI_ARTIFACTS="${BUILD_ARTIFACTS}" nitro-cli build-enclave \
   --docker-uri "${NITRO_IMAGE_URI}" \
   --output-file "${EIF_PATH}"
 
-# ── 4. Clean up build artifacts ──────────────────────────────────
-# Hugepages were already allocated before the build (step 0b), so no
-# re-allocation needed. Just clean up Docker images and temp files.
-echo "=== Cleaning up build artifacts ==="
+# ── 4. Clean up + reserve hugepages ──────────────────────────────
+# Docker prune + drop_caches + compact_memory BEFORE allocator restart.
+# This is critical: Linuxkit fragments host memory during EIF build. Without
+# cleanup, the allocator can't find contiguous 2MB pages for hugepages.
+echo "=== Cleaning up before hugepage allocation ==="
 docker image prune -af
 rm -rf "${BUILD_ARTIFACTS}" 2>/dev/null || true
+sync && echo 3 > /proc/sys/vm/drop_caches
+echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+sleep 2
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
+
+echo "=== Reserving hugepages (${MEMORY_MB}MB) ==="
+sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
+
+# Verify using Hugetlb (total hugepage memory in kB across ALL page sizes).
+# On Sapphire Rapids (c7i), the allocator uses a mix of 1GB and 2MB hugepages.
+# HugePages_Total only counts 2MB pages, so checking it alone would falsely
+# report failure even when the full allocation succeeded via 1GB pages.
+ALLOC_OK=false
+EXPECTED_KB=$((MEMORY_MB * 1024))
+for attempt in 1 2; do
+  if systemctl restart nitro-enclaves-allocator.service; then
+    sleep 3
+    HUGETLB_KB=$(grep "^Hugetlb:" /proc/meminfo | awk '{print $2}')
+    HUGE_2MB=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
+    echo "Hugepages: Hugetlb=${HUGETLB_KB}kB expected=${EXPECTED_KB}kB 2MB_pages=${HUGE_2MB} (attempt ${attempt})"
+    if [[ "${HUGETLB_KB}" -ge "${EXPECTED_KB}" ]]; then
+      ALLOC_OK=true
+      break
+    fi
+    echo "WARNING: Insufficient hugepages (got ${HUGETLB_KB}kB, need ${EXPECTED_KB}kB), retrying..."
+  else
+    echo "WARNING: Allocator restart failed (attempt ${attempt})"
+  fi
+  sync && echo 3 > /proc/sys/vm/drop_caches
+  echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+  sleep 5
+done
+
+if [[ "${ALLOC_OK}" != "true" ]]; then
+  echo "ERROR: Failed to reserve hugepages after 2 attempts"
+  grep Huge /proc/meminfo
+  free -m
+  exit 1
+fi
 
 # ── 5. Install systemd services + config ─────────────────────────
 # Two services make the enclave survive reboots:
