@@ -533,6 +533,8 @@ export async function deployTestAccount(
       from: state.proofsRequired ? AztecAddress.ZERO : state.registeredAddresses[0],
       skipClassPublication: true,
       fee: { paymentMethod: state.feePaymentMethod! },
+      // Account constructor initializes private storage — needs its own nullifier key in scope.
+      additionalScopes: [accountManager.address],
     };
 
     // Step 2: Simulate (captures witness gen timing)
@@ -677,7 +679,13 @@ export async function runTokenFlow(
       log(`Deploying second account (Bob) for transfer [${modeLabel}]...`);
       const bobManager = await state.embeddedWallet!.createSchnorrAccount(Fr.random(), Fr.random());
       const bobDeploy = await bobManager.getDeployMethod();
-      const bobSendOpts = { from: AztecAddress.ZERO, skipClassPublication: true, fee };
+      // Account constructor initializes private storage — needs its own nullifier key in scope.
+      const bobSendOpts = {
+        from: AztecAddress.ZERO,
+        skipClassPublication: true,
+        fee,
+        additionalScopes: [bobManager.address],
+      };
       const bobStep = await executeStep({
         step: "deploy bob",
         method: bobDeploy,
@@ -742,7 +750,7 @@ export async function runTokenFlow(
     const balanceStart = Date.now();
     const [aliceBalance, bobBalance] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
-      token.methods.balance_of_private(bob).simulate({ from: alice, additionalScopes: [bob] }),
+      token.methods.balance_of_private(bob).simulate({ from: bob }),
     ]);
     const balanceDuration = Date.now() - balanceStart;
     console.log(`[e2e] balance check: END (${balanceDuration}ms)`);
