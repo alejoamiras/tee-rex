@@ -52,14 +52,91 @@ rm -rf /var/lib/docker/*
 systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
 
-# Reduce hugepages for the build phase — Linuxkit (used by nitro-cli build-enclave)
-# needs ~3.5GB RSS and Docker pull uses buffer cache. With 8GB hugepages reserved,
-# only ~5.2GB remains for host operations, causing OOM kills on Linuxkit.
-# We reduce to 512MB here, build the EIF, then re-allocate after cleanup.
-echo "=== Reducing hugepages for build phase ==="
-sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
-systemctl restart nitro-enclaves-allocator.service || true
+# ── 0.5. Pre-allocate 1GB hugepages while memory is unfragmented ──
+# On Sapphire Rapids (c7i), the allocator uses a MIX of 1GB + 2MB hugepages.
+# Nitro Enclaves have a 4096 memory-region limit per enclave. With 88064MB:
+#   - 86 × 1GB = 88064MB → 86 regions (fits easily)
+#   - 44032 × 2MB = 88064MB → 44032 regions (WAY over limit!)
+# We MUST use 1GB pages. Allocate via sysfs before the EIF build fragments
+# memory. The EIF build + Docker will run in the remaining ~10 GiB.
+echo "=== Pre-allocating hugepages (before EIF build) ==="
+systemctl stop nitro-enclaves-allocator.service 2>/dev/null || true
+
+# Release any existing hugepages from previous deploys
+echo 0 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages 2>/dev/null || true
+echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
+sync && echo 3 > /proc/sys/vm/drop_caches
+echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
 sleep 2
+
+PAGES_1G=$((MEMORY_MB / 1024))
+REMAINDER_MB=$((MEMORY_MB - PAGES_1G * 1024))
+
+echo "Target: ${MEMORY_MB}MB = ${PAGES_1G} x 1GB + ${REMAINDER_MB}MB remainder"
+echo "Host RAM: $(free -m | awk '/Mem:/{print $2}')MB"
+
+if [[ -d /sys/kernel/mm/hugepages/hugepages-1048576kB ]]; then
+  echo "${PAGES_1G}" > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+  sleep 2
+  ACTUAL_1G=$(cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages)
+  echo "1GB hugepages: requested=${PAGES_1G} allocated=${ACTUAL_1G}"
+
+  if [[ "${ACTUAL_1G}" -lt "${PAGES_1G}" ]]; then
+    # Couldn't get all 1GB pages — allocate remainder as 2MB
+    ALLOCATED_MB=$((ACTUAL_1G * 1024))
+    REMAINING_MB=$((MEMORY_MB - ALLOCATED_MB))
+    PAGES_2M=$((REMAINING_MB / 2))
+    TOTAL_REGIONS=$((ACTUAL_1G + PAGES_2M))
+    echo "WARNING: Only got ${ACTUAL_1G} x 1GB, need ${PAGES_2M} x 2MB for remainder"
+    echo "Total regions: ${TOTAL_REGIONS} (limit: 4096)"
+    if [[ "${TOTAL_REGIONS}" -gt 4096 ]]; then
+      echo "ERROR: Would exceed 4096 memory region limit (${TOTAL_REGIONS} regions)"
+      echo "Need at least $((PAGES_1G - (PAGES_2M - 4096 + ACTUAL_1G) / 512 )) x 1GB pages"
+      free -m
+      exit 1
+    fi
+    echo "${PAGES_2M}" > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    sleep 1
+    ACTUAL_2M=$(cat /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages)
+    echo "2MB hugepages: requested=${PAGES_2M} allocated=${ACTUAL_2M}"
+  else
+    PAGES_2M=0
+    ACTUAL_2M=0
+    if [[ "${REMAINDER_MB}" -gt 0 ]]; then
+      PAGES_2M=$((REMAINDER_MB / 2))
+      echo "${PAGES_2M}" > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+      ACTUAL_2M=$(cat /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages)
+    fi
+  fi
+else
+  echo "WARNING: No 1GB hugepage support — falling back to 2MB only"
+  PAGES_2M=$((MEMORY_MB / 2))
+  if [[ "${PAGES_2M}" -gt 4096 ]]; then
+    echo "ERROR: Need ${PAGES_2M} x 2MB pages, exceeds 4096 region limit"
+    echo "1GB hugepages required for ${MEMORY_MB}MB on this instance"
+    exit 1
+  fi
+  echo "${PAGES_2M}" > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+  ACTUAL_1G=0
+  ACTUAL_2M=$(cat /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages)
+fi
+
+TOTAL_ALLOC_MB=$((ACTUAL_1G * 1024 + ACTUAL_2M * 2))
+echo "Hugepage allocation: ${ACTUAL_1G} x 1GB + ${ACTUAL_2M} x 2MB = ${TOTAL_ALLOC_MB}MB / ${MEMORY_MB}MB"
+if [[ "${TOTAL_ALLOC_MB}" -lt "${MEMORY_MB}" ]]; then
+  echo "ERROR: Insufficient hugepage memory (${TOTAL_ALLOC_MB}MB < ${MEMORY_MB}MB)"
+  grep Huge /proc/meminfo
+  free -m
+  exit 1
+fi
+
+# Configure allocator to match (so systemd service dependencies work)
+sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
+# Start allocator — it should see pages are already allocated and not reallocate
+systemctl start nitro-enclaves-allocator.service || true
+
+echo "Host memory remaining: $(free -m | awk '/Mem:/{print $7}')MB available"
 
 # ── 1. Disk space check ──────────────────────────────────────────
 AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
@@ -88,93 +165,26 @@ NITRO_CLI_ARTIFACTS="${BUILD_ARTIFACTS}" nitro-cli build-enclave \
   --docker-uri "${NITRO_IMAGE_URI}" \
   --output-file "${EIF_PATH}"
 
-# ── 4. Clean up + reserve hugepages ──────────────────────────────
-# Docker prune + drop_caches + compact_memory BEFORE allocator restart.
-# This is critical: Linuxkit fragments host memory during EIF build. Without
-# cleanup, the allocator can't find contiguous 2MB pages for hugepages.
-echo "=== Cleaning up before hugepage allocation ==="
+# ── 4. Clean up after EIF build ───────────────────────────────────
+# Hugepages were pre-allocated in step 0.5 (before EIF build). Just clean Docker.
+echo "=== Cleaning up after EIF build ==="
 docker image prune -af
 rm -rf "${BUILD_ARTIFACTS}" 2>/dev/null || true
-sync && echo 3 > /proc/sys/vm/drop_caches
-echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
-sleep 2
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
-echo "=== Reserving hugepages (${MEMORY_MB}MB) ==="
-sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
-sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
-
-# Diagnostics: understand hugepage pool structure before allocation
-echo "--- Hugepage pools before allocation ---"
+# Verify hugepages survived the EIF build (they should — hugepages are pinned)
+echo "=== Verifying hugepage allocation ==="
 for pool in /sys/kernel/mm/hugepages/hugepages-*; do
   size=$(basename "${pool}")
   nr=$(cat "${pool}/nr_hugepages" 2>/dev/null || echo "N/A")
   free=$(cat "${pool}/free_hugepages" 2>/dev/null || echo "N/A")
   echo "  ${size}: nr=${nr} free=${free}"
 done
-grep Huge /proc/meminfo
-free -m
-
-# Stop the allocator to release ALL hugepages (including any 1GB pages
-# it may have allocated). Then release any remaining 1GB hugepages that
-# were set at boot time via kernel parameters.
-echo "=== Stopping allocator to release all hugepages ==="
-systemctl stop nitro-enclaves-allocator.service 2>/dev/null || true
-sleep 2
-
-# Release 1GB hugepages if the pool exists
-if [[ -d /sys/kernel/mm/hugepages/hugepages-1048576kB ]]; then
-  HUGE_1G=$(cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages 2>/dev/null || echo 0)
-  echo "1GB hugepages: ${HUGE_1G}"
-  if [[ "${HUGE_1G}" -gt 0 ]]; then
-    echo "Releasing ${HUGE_1G} x 1GB hugepages"
-    echo 0 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
-    sleep 2
-  fi
-fi
-
-# Also release any leftover 2MB hugepages from previous allocator run
-echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
-sleep 1
-
-# Drop caches and compact after releasing all hugepages
-sync && echo 3 > /proc/sys/vm/drop_caches
-echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
-sleep 3
-
-echo "--- Memory after releasing all hugepages ---"
-grep Huge /proc/meminfo
-free -m
-
-# Now restart the allocator — it should allocate only 2MB pages
-ALLOC_OK=false
-EXPECTED_PAGES=$((MEMORY_MB / 2))
-for attempt in 1 2; do
-  if systemctl restart nitro-enclaves-allocator.service; then
-    sleep 5
-    HUGE_TOTAL=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
-    HUGE_FREE=$(grep HugePages_Free /proc/meminfo | awk '{print $2}')
-    echo "Hugepages: total=${HUGE_TOTAL} expected=${EXPECTED_PAGES} free=${HUGE_FREE} (attempt ${attempt})"
-    for pool in /sys/kernel/mm/hugepages/hugepages-*; do
-      size=$(basename "${pool}")
-      nr=$(cat "${pool}/nr_hugepages" 2>/dev/null || echo "N/A")
-      echo "  ${size}: nr=${nr}"
-    done
-    if [[ "${HUGE_TOTAL}" -ge "${EXPECTED_PAGES}" ]]; then
-      ALLOC_OK=true
-      break
-    fi
-    echo "WARNING: Insufficient hugepages (got ${HUGE_TOTAL}, need ${EXPECTED_PAGES}), retrying..."
-  else
-    echo "WARNING: Allocator restart failed (attempt ${attempt})"
-  fi
-  sync && echo 3 > /proc/sys/vm/drop_caches
-  echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
-  sleep 5
-done
-
-if [[ "${ALLOC_OK}" != "true" ]]; then
-  echo "ERROR: Failed to reserve hugepages after 2 attempts"
+HUGETLB_KB=$(grep Hugetlb /proc/meminfo | awk '{print $2}')
+EXPECTED_KB=$((MEMORY_MB * 1024))
+echo "Hugetlb: ${HUGETLB_KB}kB (expected: ${EXPECTED_KB}kB)"
+if [[ "${HUGETLB_KB}" -lt "${EXPECTED_KB}" ]]; then
+  echo "ERROR: Hugepages were lost during EIF build!"
   grep Huge /proc/meminfo
   free -m
   exit 1
@@ -231,7 +241,25 @@ systemctl enable tee-rex-enclave tee-rex-proxy
 
 # ── 6. Start enclave + proxy ────────────────────────────────────
 echo "=== Starting enclave ==="
-systemctl start tee-rex-enclave
+if ! systemctl start tee-rex-enclave; then
+  echo "ERROR: Enclave failed to start"
+  echo "--- journalctl ---"
+  journalctl -xeu tee-rex-enclave.service --no-pager -n 30 2>/dev/null || true
+  echo "--- nitro-cli describe ---"
+  nitro-cli describe-enclaves 2>/dev/null || true
+  echo "--- nitro-cli version ---"
+  nitro-cli --version 2>/dev/null || true
+  echo "--- Hugepages ---"
+  for pool in /sys/kernel/mm/hugepages/hugepages-*; do
+    size=$(basename "${pool}")
+    nr=$(cat "${pool}/nr_hugepages" 2>/dev/null || echo "N/A")
+    free=$(cat "${pool}/free_hugepages" 2>/dev/null || echo "N/A")
+    echo "  ${size}: nr=${nr} free=${free}"
+  done
+  grep Huge /proc/meminfo
+  free -m
+  exit 1
+fi
 echo "=== Starting proxy ==="
 systemctl restart tee-rex-proxy
 
