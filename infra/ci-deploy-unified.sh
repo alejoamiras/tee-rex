@@ -104,29 +104,62 @@ echo "=== Reserving hugepages (${MEMORY_MB}MB) ==="
 sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
 sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
 
-# On Sapphire Rapids (c7i), the allocator uses 1GB hugepages when available.
-# The Nitro Enclave hypervisor only supports 2MB hugepages, so 1GB pages are
-# unusable. Force-release any 1GB hugepages so the allocator uses 2MB pages only.
-if [[ -f /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages ]]; then
-  HUGE_1G=$(cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages)
+# Diagnostics: understand hugepage pool structure before allocation
+echo "--- Hugepage pools before allocation ---"
+for pool in /sys/kernel/mm/hugepages/hugepages-*; do
+  size=$(basename "${pool}")
+  nr=$(cat "${pool}/nr_hugepages" 2>/dev/null || echo "N/A")
+  free=$(cat "${pool}/free_hugepages" 2>/dev/null || echo "N/A")
+  echo "  ${size}: nr=${nr} free=${free}"
+done
+grep Huge /proc/meminfo
+free -m
+
+# Stop the allocator to release ALL hugepages (including any 1GB pages
+# it may have allocated). Then release any remaining 1GB hugepages that
+# were set at boot time via kernel parameters.
+echo "=== Stopping allocator to release all hugepages ==="
+systemctl stop nitro-enclaves-allocator.service 2>/dev/null || true
+sleep 2
+
+# Release 1GB hugepages if the pool exists
+if [[ -d /sys/kernel/mm/hugepages/hugepages-1048576kB ]]; then
+  HUGE_1G=$(cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages 2>/dev/null || echo 0)
+  echo "1GB hugepages: ${HUGE_1G}"
   if [[ "${HUGE_1G}" -gt 0 ]]; then
-    echo "Releasing ${HUGE_1G} x 1GB hugepages (Nitro Enclaves require 2MB pages)"
+    echo "Releasing ${HUGE_1G} x 1GB hugepages"
     echo 0 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
-    sleep 2
-    sync && echo 3 > /proc/sys/vm/drop_caches
-    echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
     sleep 2
   fi
 fi
 
+# Also release any leftover 2MB hugepages from previous allocator run
+echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
+sleep 1
+
+# Drop caches and compact after releasing all hugepages
+sync && echo 3 > /proc/sys/vm/drop_caches
+echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+sleep 3
+
+echo "--- Memory after releasing all hugepages ---"
+grep Huge /proc/meminfo
+free -m
+
+# Now restart the allocator — it should allocate only 2MB pages
 ALLOC_OK=false
 EXPECTED_PAGES=$((MEMORY_MB / 2))
 for attempt in 1 2; do
   if systemctl restart nitro-enclaves-allocator.service; then
-    sleep 3
+    sleep 5
     HUGE_TOTAL=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
     HUGE_FREE=$(grep HugePages_Free /proc/meminfo | awk '{print $2}')
     echo "Hugepages: total=${HUGE_TOTAL} expected=${EXPECTED_PAGES} free=${HUGE_FREE} (attempt ${attempt})"
+    for pool in /sys/kernel/mm/hugepages/hugepages-*; do
+      size=$(basename "${pool}")
+      nr=$(cat "${pool}/nr_hugepages" 2>/dev/null || echo "N/A")
+      echo "  ${size}: nr=${nr}"
+    done
     if [[ "${HUGE_TOTAL}" -ge "${EXPECTED_PAGES}" ]]; then
       ALLOC_OK=true
       break
