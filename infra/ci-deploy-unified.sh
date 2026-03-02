@@ -19,7 +19,7 @@ EIF_DIR="/opt/tee-rex"
 EIF_PATH="${EIF_DIR}/tee-rex.eif"
 BUILD_ARTIFACTS="${EIF_DIR}/build-artifacts"
 CPU_COUNT=46
-MEMORY_MB=88064
+MEMORY_MB=81920
 ENCLAVE_CID=16
 PROVER_CONTAINER_NAME="tee-rex-prover"
 
@@ -53,12 +53,11 @@ systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
 
 # ── 0.5. Pre-allocate 1GB hugepages while memory is unfragmented ──
-# On Sapphire Rapids (c7i), the allocator uses a MIX of 1GB + 2MB hugepages.
-# Nitro Enclaves have a 4096 memory-region limit per enclave. With 88064MB:
-#   - 86 × 1GB = 88064MB → 86 regions (fits easily)
-#   - 44032 × 2MB = 88064MB → 44032 regions (WAY over limit!)
-# We MUST use 1GB pages. Allocate via sysfs before the EIF build fragments
-# memory. The EIF build + Docker will run in the remaining ~10 GiB.
+# On Sapphire Rapids (c7i), Nitro Enclaves have a 4096 memory-region limit.
+# The c7i.12xlarge provides ~73 contiguous 1GB regions (physical layout limit).
+# With 81920MB = 80 GiB: 73×1GB + 3584×2MB = 3657 regions (under 4096).
+# We pre-allocate 1GB pages via sysfs before the EIF build fragments memory.
+# The EIF build + Docker will run in the remaining ~16 GiB.
 echo "=== Pre-allocating hugepages (before EIF build) ==="
 systemctl stop nitro-enclaves-allocator.service 2>/dev/null || true
 
