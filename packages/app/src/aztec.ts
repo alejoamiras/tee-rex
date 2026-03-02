@@ -200,6 +200,9 @@ export async function initializeNode(log: LogFn): Promise<{
     log("Forced proverEnabled=true via ?forceProofs query param", "warn");
   }
 
+  console.log(
+    `[e2e] node: chain=${nodeInfo.l1ChainId} proofsRequired=${state.proofsRequired} proverEnabled=${state.proofsRequired}`,
+  );
   log(
     `Connected — chain ${nodeInfo.l1ChainId} (proofs ${state.proofsRequired ? "required" : "simulated"})`,
     "success",
