@@ -11,6 +11,26 @@ Delegate [Aztec](https://aztec.network) transaction proving to a Trusted Executi
 npm add @alejoamiras/tee-rex
 ```
 
+The SDK version tracks Aztec nightly releases. Use dist-tags to install the right version for your network:
+
+```sh
+npm add @alejoamiras/tee-rex@nightlies  # latest nightly (nextnet-compatible)
+npm add @alejoamiras/tee-rex@devnet     # devnet-compatible
+```
+
+## Hosted Servers
+
+Public TEE-Rex servers are available for both Aztec networks. No authentication or AWS account required — the SDK handles encryption automatically.
+
+| Network | Prover URL | TEE URL |
+|---------|-----------|---------|
+| Nextnet | `https://nextnet.tee-rex.dev/prover` | `https://nextnet.tee-rex.dev/tee` |
+| Devnet  | `https://devnet.tee-rex.dev/prover`  | `https://devnet.tee-rex.dev/tee`  |
+
+- Rate limited to **10 proofs per hour per IP**
+- Security: client encrypts proving inputs with the server's attested public key (curve25519 + AES-256-GCM) — the server never sees plaintext data outside the TEE
+- You need your own Aztec node URL (e.g. `https://v4-devnet-2.aztec-labs.com` for devnet)
+
 ## Quick Start
 
 Drop `TeeRexProver` into your PXE as a custom prover:
@@ -20,12 +40,11 @@ import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { createPXE } from "@aztec/pxe/client/lazy";
 import { getPXEConfig } from "@aztec/pxe/config";
 import { WASMSimulator } from "@aztec/simulator/client";
-import { TeeRexProver, ProvingMode } from "@alejoamiras/tee-rex";
+import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-const TEE_REX_API = "http://localhost:4000";
-const node = createAztecNodeClient("<aztec-node-rpc-url>");
+const node = createAztecNodeClient("<your-aztec-node-url>");
 
-const prover = new TeeRexProver(TEE_REX_API, new WASMSimulator());
+const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
 const pxe = await createPXE(node, getPXEConfig(), {
   proverOrOptions: prover,
 });
@@ -33,7 +52,44 @@ const pxe = await createPXE(node, getPXEConfig(), {
 // use the PXE as usual — proving is delegated to the TEE
 ```
 
-### Switch proving modes
+## Embedded Wallet Integration
+
+The most common production pattern uses `TeeRexProver` with Aztec's `EmbeddedWallet`:
+
+```ts
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
+import { WASMSimulator } from "@aztec/simulator/client";
+import { createStore } from "@aztec/kv-store/indexeddb";
+import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
+import { TeeRexProver } from "@alejoamiras/tee-rex";
+
+// 1. Create prover and connect to an Aztec node
+const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
+const node = createAztecNodeClient("<your-aztec-node-url>");
+
+// 2. Initialize PXE with the TEE-Rex prover
+const l1Contracts = await node.getL1ContractAddresses();
+const rollupAddress = l1Contracts.rollupAddress;
+const pxeConfig = getPXEConfig();
+pxeConfig.proverEnabled = true;
+pxeConfig.l1Contracts = l1Contracts;
+
+const pxe = await createPXE(node, pxeConfig, { proverOrOptions: prover });
+
+// 3. Create EmbeddedWallet
+const store = await createStore(`wallet-${rollupAddress}`, {
+  dataDirectory: "wallet",
+  dataStoreMapSizeKb: 2e10,
+});
+const walletDB = WalletDB.init(store);
+const wallet = new EmbeddedWallet(pxe, node, walletDB);
+
+// 4. Use the wallet — proving happens remotely in the TEE
+const account = await wallet.createSchnorrAccount(secret, salt, signingKey);
+```
+
+## Mode Switching
 
 ```ts
 import { ProvingMode } from "@alejoamiras/tee-rex";
@@ -45,7 +101,7 @@ prover.setProvingMode(ProvingMode.remote);
 prover.setProvingMode(ProvingMode.local);
 ```
 
-### Configure attestation verification
+## Attestation Configuration
 
 ```ts
 prover.setAttestationConfig({
@@ -58,7 +114,7 @@ prover.setAttestationConfig({
 });
 ```
 
-## API
+## API Reference
 
 ### `TeeRexProver`
 
@@ -75,7 +131,7 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 }
 ```
 
-- **`apiUrl`** — TEE-Rex server endpoint (e.g. `http://localhost:4000`)
+- **`apiUrl`** — TEE-Rex server endpoint (e.g. `https://nextnet.tee-rex.dev/prover`)
 - **`...args`** — forwarded to `BBLazyPrivateKernelProver` (typically a `CircuitSimulator` instance)
 - **`setProvingMode(mode)`** — switch between `"remote"` (TEE) and `"local"` (WASM) proving
 - **`setApiUrl(url)`** — update the tee-rex server URL at runtime
@@ -145,12 +201,30 @@ In **remote** mode, `createChonkProof`:
 
 In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createChonkProof` which runs Barretenberg WASM in the browser or Node.js.
 
-## Requirements
+## Compatibility
 
+The SDK version scheme tracks Aztec nightly releases:
+
+| SDK Version | Aztec Network | Install Command |
+|-------------|---------------|-----------------|
+| `5.x.x-nightly.*` | Nextnet | `npm add @alejoamiras/tee-rex@nightlies` |
+| `5.x.x-devnet.*` | Devnet | `npm add @alejoamiras/tee-rex@devnet` |
+
+To install a specific version:
+
+```sh
+npm add @alejoamiras/tee-rex@5.0.0-nightly.20260303
+```
+
+Requirements:
 - Aztec `5.0.0-nightly` or compatible version
-- A running TEE-Rex server for remote proving
 - A running Aztec node for PXE connectivity
+- A TEE-Rex server for remote proving (or use the [hosted servers](#hosted-servers))
+
+## Self-Hosting
+
+To run your own TEE-Rex server (standalone or in an AWS Nitro Enclave), see the [Server README](../server/README.md).
 
 ## Contributors
 
-Made with ♥️ by alejo · inspired by [nemi.fi](https://github.com/nemi-fi/tee-rex/)
+Made with &#9829; by alejo · inspired by [nemi.fi](https://github.com/nemi-fi/tee-rex/)
