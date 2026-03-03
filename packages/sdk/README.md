@@ -203,12 +203,12 @@ In **local** mode, it delegates to the parent `BBLazyPrivateKernelProver.createC
 
 ## Compatibility
 
-The SDK version scheme tracks Aztec nightly releases:
+The SDK version scheme tracks Aztec releases:
 
 | SDK Version | Aztec Network | Install Command |
 |-------------|---------------|-----------------|
 | `5.x.x-nightly.*` | Nextnet | `npm add @alejoamiras/tee-rex@nightlies` |
-| `5.x.x-devnet.*` | Devnet | `npm add @alejoamiras/tee-rex@devnet` |
+| `4.x.x-devnet.*` | Devnet | `npm add @alejoamiras/tee-rex@devnet` |
 
 To install a specific version:
 
