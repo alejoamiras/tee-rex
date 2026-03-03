@@ -2,82 +2,113 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
 import * as attestationModule from "./attestation.js";
-import { ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
+import { type ProverPhase, ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
+
+// --- Test helpers ---
+
+const API_URL = "http://tee-rex-test.invalid:9999";
+const ACCELERATOR_PORT = 59833;
+
+const fakeStep = {
+  functionName: "test_fn",
+  witness: new Map([[0, "val"]]),
+  bytecode: new Uint8Array([0, 1]),
+  vk: new Uint8Array([2, 3]),
+  timings: { witgen: 10 },
+} as any;
+
+/**
+ * Handler receives the URL string and the original fetch input (may be a
+ * `Request` object when called by ky). Read the body from `request` if needed:
+ * `await request.text()` when `request` is a Request, or `init?.body` otherwise.
+ */
+type RouteHandler = (url: string, request: Request | string) => Response | Promise<Response>;
+
+/**
+ * Replace `globalThis.fetch` with a route-based mock. Routes are matched by
+ * `url.includes(pattern)` in insertion order. Unmatched requests return 404.
+ * Returns `fetchedUrls` for assertions on which endpoints were called.
+ */
+function mockFetch(routes: Record<string, RouteHandler> = {}): { fetchedUrls: string[] } {
+  const fetchedUrls: string[] = [];
+
+  globalThis.fetch = mock(async (input: any, _init?: any) => {
+    const url: string = typeof input === "string" ? input : input.url;
+    fetchedUrls.push(url);
+
+    for (const [pattern, handler] of Object.entries(routes)) {
+      if (url.includes(pattern)) {
+        return handler(url, input);
+      }
+    }
+    return new Response("not found", { status: 404 });
+  }) as any;
+
+  return { fetchedUrls };
+}
+
+/** Mock that rejects every request (simulates no server running). */
+function mockFetchOffline(): { fetchedUrls: string[] } {
+  const fetchedUrls: string[] = [];
+
+  globalThis.fetch = mock(async (input: any) => {
+    const url: string = typeof input === "string" ? input : input.url;
+    fetchedUrls.push(url);
+    throw new TypeError("fetch failed (connection refused)");
+  }) as any;
+
+  return { fetchedUrls };
+}
+
+/** Spy on the parent WASM prover and make it reject (bb not available in tests). */
+function mockWasmProver() {
+  const spy = spyOn(BBLazyPrivateKernelProver.prototype, "createChonkProof");
+  spy.mockRejectedValue(new Error("local prover not available in test"));
+  return spy;
+}
+
+// --- Tests ---
 
 describe("TeeRexProver", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   test("can instantiate with correct proving modes", () => {
     const prover = new TeeRexProver("http://localhost:4000", new WASMSimulator());
 
-    // Default mode should be remote
     expect(prover).toBeDefined();
-
-    // Can set to local mode
     prover.setProvingMode(ProvingMode.local);
-
-    // Can set back to remote mode
     prover.setProvingMode(ProvingMode.remote);
+    prover.setProvingMode(ProvingMode.accelerated);
   });
 
-  describe("createChonkProof routing", () => {
-    const API_URL = "http://tee-rex-test.invalid:9999";
-
-    // Minimal fake execution step matching PrivateExecutionStep shape
-    const fakeStep = {
-      functionName: "test_fn",
-      witness: new Map([[0, "val"]]),
-      bytecode: new Uint8Array([0, 1]),
-      vk: new Uint8Array([2, 3]),
-      timings: { witgen: 10 },
-    } as any;
-
-    let originalFetch: typeof globalThis.fetch;
-
-    beforeEach(() => {
-      originalFetch = globalThis.fetch;
-    });
-
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
-    test("remote mode calls the API's attestation endpoint", async () => {
-      const fetchedUrls: string[] = [];
-
-      globalThis.fetch = mock(async (input: any) => {
-        const url = typeof input === "string" ? input : input.url;
-        fetchedUrls.push(url);
-        // Return a failure to stop the flow early — we just want to verify the URL
-        return new Response("not found", { status: 404 });
-      }) as any;
+  describe("Remote", () => {
+    test("calls the API's attestation endpoint", async () => {
+      const { fetchedUrls } = mockFetch();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.remote);
 
-      // createChonkProof will fail because our mock server returns 404,
-      // but we can verify it tried to reach the right endpoint
       try {
         await prover.createChonkProof([fakeStep]);
       } catch {
-        // Expected — the mock doesn't return a valid response
+        // Expected — mock returns 404
       }
 
-      const attestationEndpointCalled = fetchedUrls.some((url) =>
-        url.includes(`${API_URL}/attestation`),
-      );
-      expect(attestationEndpointCalled).toBe(true);
+      expect(fetchedUrls.some((url) => url.includes(`${API_URL}/attestation`))).toBe(true);
     });
 
     test("requireAttestation rejects standard mode servers", async () => {
-      globalThis.fetch = mock(async (input: any) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.includes("/attestation")) {
-          return new Response(JSON.stringify({ mode: "standard", publicKey: "fake-key" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        return new Response("not found", { status: 404 });
-      }) as any;
+      mockFetch({
+        "/attestation": () => Response.json({ mode: "standard", publicKey: "fake-key" }),
+      });
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.remote);
@@ -89,25 +120,15 @@ describe("TeeRexProver", () => {
     });
 
     test("nitro mode falls back to server-provided key when node:crypto unavailable", async () => {
-      const SERVER_PUBLIC_KEY = "server-provided-key-abc123";
+      mockFetch({
+        "/attestation": () =>
+          Response.json({
+            mode: "nitro",
+            attestationDocument: "fake-doc",
+            publicKey: "server-provided-key-abc123",
+          }),
+      });
 
-      globalThis.fetch = mock(async (input: any) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.includes("/attestation")) {
-          return new Response(
-            JSON.stringify({
-              mode: "nitro",
-              attestationDocument: "fake-doc",
-              publicKey: SERVER_PUBLIC_KEY,
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        // /prove endpoint — return a valid response so the flow completes up to encryption
-        return new Response("not found", { status: 404 });
-      }) as any;
-
-      // Mock verifyNitroAttestation to throw a browser-like error
       const verifySpy = spyOn(attestationModule, "verifyNitroAttestation").mockRejectedValue(
         new TypeError("s is not a constructor"),
       );
@@ -115,13 +136,10 @@ describe("TeeRexProver", () => {
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.remote);
 
-      // createChonkProof will fail at the /prove call (404), but the attestation
-      // fallback should have succeeded — verify by checking the spy was called
-      // and the flow continued past attestation to the /prove request
       try {
         await prover.createChonkProof([fakeStep]);
       } catch {
-        // Expected — the mock /prove returns 404
+        // Expected — mock /prove returns 404
       }
 
       expect(verifySpy).toHaveBeenCalledTimes(1);
@@ -129,22 +147,15 @@ describe("TeeRexProver", () => {
     });
 
     test("nitro mode re-throws real verification errors", async () => {
-      globalThis.fetch = mock(async (input: any) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.includes("/attestation")) {
-          return new Response(
-            JSON.stringify({
-              mode: "nitro",
-              attestationDocument: "fake-doc",
-              publicKey: "server-key",
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        return new Response("not found", { status: 404 });
-      }) as any;
+      mockFetch({
+        "/attestation": () =>
+          Response.json({
+            mode: "nitro",
+            attestationDocument: "fake-doc",
+            publicKey: "server-key",
+          }),
+      });
 
-      // Mock verifyNitroAttestation to throw a real verification error
       const verifySpy = spyOn(attestationModule, "verifyNitroAttestation").mockRejectedValue(
         new Error("PCR0 mismatch: expected abc got def"),
       );
@@ -156,16 +167,12 @@ describe("TeeRexProver", () => {
 
       verifySpy.mockRestore();
     });
+  });
 
-    test("local mode calls super.createChonkProof, not the API", async () => {
-      let fetchCalled = false;
-      globalThis.fetch = mock(async () => {
-        fetchCalled = true;
-        return new Response("", { status: 500 });
-      }) as any;
-
-      const superSpy = spyOn(BBLazyPrivateKernelProver.prototype, "createChonkProof");
-      superSpy.mockRejectedValue(new Error("local prover not available in test"));
+  describe("Local", () => {
+    test("calls super.createChonkProof, not the API", async () => {
+      const { fetchedUrls } = mockFetch();
+      const superSpy = mockWasmProver();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.local);
@@ -173,12 +180,157 @@ describe("TeeRexProver", () => {
       try {
         await prover.createChonkProof([fakeStep]);
       } catch {
-        // Expected — we mocked super to throw
+        // Expected — WASM mock throws
       }
 
-      expect(fetchCalled).toBe(false);
+      expect(fetchedUrls).toHaveLength(0);
       expect(superSpy).toHaveBeenCalledTimes(1);
       superSpy.mockRestore();
+    });
+  });
+
+  describe("Accelerated", () => {
+    const healthOk: RouteHandler = () => Response.json({ status: "ok" });
+
+    test("calls accelerator health check and /prove endpoint", async () => {
+      const { fetchedUrls } = mockFetch({ "/health": healthOk });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — mock /prove returns 404
+      }
+
+      expect(fetchedUrls.some((url) => url.includes(`127.0.0.1:${ACCELERATOR_PORT}/health`))).toBe(
+        true,
+      );
+      expect(fetchedUrls.some((url) => url.includes(`127.0.0.1:${ACCELERATOR_PORT}/prove`))).toBe(
+        true,
+      );
+      expect(fetchedUrls.some((url) => url.includes(API_URL))).toBe(false);
+    });
+
+    test("falls back to WASM when accelerator is unavailable", async () => {
+      mockFetchOffline();
+      const superSpy = mockWasmProver();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — WASM mock throws
+      }
+
+      expect(superSpy).toHaveBeenCalledTimes(1);
+      superSpy.mockRestore();
+    });
+
+    test("sends correct serialization format to /prove", async () => {
+      let capturedBody: any = null;
+
+      mockFetch({
+        "/health": healthOk,
+        "/prove": async (_url, request) => {
+          const text = typeof request === "string" ? request : await (request as Request).text();
+          capturedBody = JSON.parse(text);
+          return new Response("not found", { status: 404 });
+        },
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected
+      }
+
+      expect(capturedBody).toBeDefined();
+      expect(capturedBody.executionSteps).toBeArray();
+      expect(capturedBody.executionSteps).toHaveLength(1);
+
+      const step = capturedBody.executionSteps[0];
+      expect(step.functionName).toBe("test_fn");
+      expect(step.witness).toEqual([[0, "val"]]);
+      expect(typeof step.bytecode).toBe("string");
+      expect(typeof step.vk).toBe("string");
+      expect(step.timings).toEqual({ witgen: 10 });
+    });
+
+    test("uses configured port for health check", async () => {
+      const customPort = 12345;
+      const { fetchedUrls } = mockFetch({ "/health": healthOk });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+      prover.setAcceleratorConfig({ port: customPort });
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — mock /prove returns 404
+      }
+
+      expect(fetchedUrls.some((url) => url.includes(`:${customPort}/health`))).toBe(true);
+      expect(fetchedUrls.some((url) => url.includes(`:${ACCELERATOR_PORT}/`))).toBe(false);
+    });
+
+    test("fires phase callbacks in order when accelerator is available", async () => {
+      const phases: ProverPhase[] = [];
+      mockFetch({ "/health": healthOk });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+      prover.setOnPhase((phase) => phases.push(phase));
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected
+      }
+
+      expect(phases).toEqual(["detect", "serialize", "transmit", "proving"]);
+    });
+
+    test("fires phase callbacks for WASM fallback path", async () => {
+      const phases: ProverPhase[] = [];
+      mockFetchOffline();
+      const superSpy = mockWasmProver();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+      prover.setOnPhase((phase) => phases.push(phase));
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected
+      }
+
+      expect(phases).toEqual(["detect", "proving"]);
+      superSpy.mockRestore();
+    });
+
+    test("does not call remote TEE API or attestation endpoints", async () => {
+      const { fetchedUrls } = mockFetch({ "/health": healthOk });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected
+      }
+
+      expect(fetchedUrls.some((url) => url.includes("/attestation"))).toBe(false);
+      expect(fetchedUrls.some((url) => url.includes(API_URL))).toBe(false);
     });
   });
 });

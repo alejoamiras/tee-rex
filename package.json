@@ -3,7 +3,8 @@
   "workspaces": [
     "packages/sdk",
     "packages/server",
-    "packages/app"
+    "packages/app",
+    "packages/accelerator"
   ],
   "scripts": {
     "app": "bun run --cwd packages/app dev",

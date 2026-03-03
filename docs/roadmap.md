@@ -419,6 +419,18 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
+## Phase 31: Local Native Accelerator — PLANNING
+
+**Goal**: Bypass browser WASM throttling by routing proving to a native `bb` binary on the user's machine via a lightweight desktop app.
+
+**Key decisions**: Tauri 2.0 (not Electron), localhost HTTP on port 59833 (no extension), no encryption in v1. See [accelerator-decision.md](./accelerator-decision.md) for full rationale and rollback paths. See [accelerator-plan.md](./accelerator-plan.md) for step-by-step implementation plan.
+
+**SDK change**: Add `ProvingMode.accelerated` to `TeeRexProver` — tries `http://127.0.0.1:59833/prove`, auto-falls back to WASM if unavailable.
+
+**New package**: `packages/accelerator` — Tauri tray app that listens on localhost and runs the `bb` proving binary natively.
+
+---
+
 ## Backlog
 
 - Phase 6 (next-net testing) absorbed into Phase 12B/12C, further work in Phase 17F
