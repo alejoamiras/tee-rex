@@ -200,9 +200,6 @@ export async function initializeNode(log: LogFn): Promise<{
     log("Forced proverEnabled=true via ?forceProofs query param", "warn");
   }
 
-  console.log(
-    `[e2e] node: chain=${nodeInfo.l1ChainId} proofsRequired=${state.proofsRequired} proverEnabled=${state.proofsRequired}`,
-  );
   log(
     `Connected — chain ${nodeInfo.l1ChainId} (proofs ${state.proofsRequired ? "required" : "simulated"})`,
     "success",
@@ -456,27 +453,19 @@ async function executeStep(opts: {
 }): Promise<StepTiming> {
   const { step, method, sendOpts, log, onConfirming } = opts;
   const stepStart = Date.now();
-  const ts = () => `+${((Date.now() - stepStart) / 1000).toFixed(1)}s`;
 
-  console.log(`[e2e] ${step}: simulate START`);
   const simResult = await method.simulate({ ...sendOpts, includeMetadata: true });
   const simulation = extractSimDetail(simResult);
-  console.log(`[e2e] ${step}: simulate END (${ts()})`);
 
   const sendStart = Date.now();
-  console.log(`[e2e] ${step}: send START (${ts()})`);
   const txHash = await sendWithRetry(method, sendOpts, log);
   const proveSendMs = Date.now() - sendStart;
-  console.log(`[e2e] ${step}: send END (${ts()}, prove+send=${proveSendMs}ms)`);
 
   onConfirming();
   const confirmStart = Date.now();
-  console.log(`[e2e] ${step}: waitForTx START (${ts()})`);
   await waitForTx(txHash);
   const confirmMs = Date.now() - confirmStart;
-  console.log(`[e2e] ${step}: waitForTx END (${ts()}, confirm=${confirmMs}ms)`);
 
-  console.log(`[e2e] ${step}: DONE total=${Date.now() - stepStart}ms`);
   return { step, durationMs: Date.now() - stepStart, simulation, proveSendMs, confirmMs };
 }
 
@@ -749,14 +738,12 @@ export async function runTokenFlow(
     // Step 4: Check balances (simulate, no proof needed)
     onStep("checking balances");
     log("Checking balances...");
-    console.log("[e2e] balance check: START");
     const balanceStart = Date.now();
     const [aliceBalance, bobBalance] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
       token.methods.balance_of_private(bob).simulate({ from: bob }),
     ]);
     const balanceDuration = Date.now() - balanceStart;
-    console.log(`[e2e] balance check: END (${balanceDuration}ms)`);
     steps.push({ step: "check balances", durationMs: balanceDuration });
     log(
       `Balances — Alice: ${aliceBalance}, Bob: ${bobBalance} (${(balanceDuration / 1000).toFixed(1)}s)`,

@@ -40,13 +40,15 @@ import { getPXEConfig } from "@aztec/pxe/config";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-const prover = new TeeRexProver("https://your-tee-rex-server", new WASMSimulator());
+const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
 const pxe = await createPXE(node, getPXEConfig(), { proverOrOptions: prover });
 
 // use the PXE as usual -- proving is delegated to the TEE
 ```
 
-See the [SDK README](packages/sdk/README.md) for the full API reference.
+See the [SDK README](packages/sdk/README.md) for the full API reference, hosted server URLs, and embedded wallet integration examples.
+
+To run your own TEE-Rex server, see the [Server README](packages/server/README.md).
 
 ## Architecture
 
@@ -90,9 +92,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 | Document | Description |
 |----------|-------------|
 | [SDK README](packages/sdk/README.md) | SDK installation, API reference, usage examples |
+| [Server README](packages/server/README.md) | Self-hosting guide, API reference, Docker setup |
 | [Architecture](docs/architecture.md) | System diagrams, proving flow, Docker strategy |
 | [CI Pipeline](docs/ci-pipeline.md) | Workflow reference, change detection, deploy logic |
-| [CLAUDE.md](CLAUDE.md) | Full development roadmap and architectural decisions |
 
 ## Contributors
 
