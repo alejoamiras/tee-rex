@@ -222,21 +222,15 @@ describe("TeeRexProver", () => {
       serializeSpy.mockRestore();
     });
 
-    test("falls back to WASM when accelerator is unavailable", async () => {
+    test("throws when accelerator is unavailable", async () => {
       mockFetchOffline();
-      const superSpy = mockWasmProver();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
 
-      try {
-        await prover.createChonkProof([fakeStep]);
-      } catch {
-        // Expected — WASM mock throws
-      }
-
-      expect(superSpy).toHaveBeenCalledTimes(1);
-      superSpy.mockRestore();
+      await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
+        "Accelerator not available",
+      );
     });
 
     test("sends msgpack binary payload to /prove", async () => {
@@ -312,10 +306,9 @@ describe("TeeRexProver", () => {
       serializeSpy.mockRestore();
     });
 
-    test("fires phase callbacks for WASM fallback path", async () => {
+    test("fires detect phase before throwing when unavailable", async () => {
       const phases: ProverPhase[] = [];
       mockFetchOffline();
-      const superSpy = mockWasmProver();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
@@ -324,11 +317,10 @@ describe("TeeRexProver", () => {
       try {
         await prover.createChonkProof([fakeStep]);
       } catch {
-        // Expected
+        // Expected — throws "Accelerator not available"
       }
 
-      expect(phases).toEqual(["detect", "proving"]);
-      superSpy.mockRestore();
+      expect(phases).toEqual(["detect"]);
     });
 
     test("does not call remote TEE API or attestation endpoints", async () => {

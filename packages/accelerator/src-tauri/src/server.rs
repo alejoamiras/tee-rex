@@ -2,7 +2,7 @@ use axum::{
     Router,
     body::Bytes,
     extract::{DefaultBodyLimit, State},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
 };
@@ -12,6 +12,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::bb;
 
@@ -44,6 +45,10 @@ pub fn router(state: AppState) -> Router {
         .route("/prove", post(prove))
         .layer(DefaultBodyLimit::max(50 * 1024 * 1024)) // 50MB — proving payloads can be large
         .layer(cors)
+        .layer(SetResponseHeaderLayer::overriding(
+            http::header::HeaderName::from_static("cross-origin-resource-policy"),
+            HeaderValue::from_static("cross-origin"),
+        ))
         .with_state(state)
 }
 

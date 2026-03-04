@@ -2,6 +2,7 @@ import "./style.css";
 import { AsciiController } from "./ascii-animation";
 import {
   AZTEC_DISPLAY_URL,
+  checkAccelerator,
   checkAztecNode,
   checkTeeAttestation,
   checkTeeRexServer,
@@ -79,6 +80,14 @@ async function checkEmbeddedServices(): Promise<void> {
     }
   }
 
+  const accel = await checkAccelerator();
+  setStatus("accelerator-status", accel);
+  $("accelerator-label").textContent = accel ? "available" : "not detected";
+  if (accel) {
+    $btn("mode-accelerated").disabled = false;
+    appendLog("Native accelerator detected on localhost:59833", "success");
+  }
+
   if (TEE_CONFIGURED) {
     $("tee-url").textContent = TEE_DISPLAY_URL;
     appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
@@ -111,6 +120,7 @@ const ACTIVE_BTN =
 function updateModeUI(mode: UiMode): void {
   const buttons: Record<UiMode, HTMLElement> = {
     local: $("mode-local"),
+    accelerated: $("mode-accelerated"),
     remote: $("mode-remote"),
     tee: $("mode-tee"),
   };
@@ -139,6 +149,13 @@ $("mode-tee").addEventListener("click", () => {
   setUiMode("tee");
   updateModeUI("tee");
   appendLog("Switched to TEE proving mode");
+});
+
+$("mode-accelerated").addEventListener("click", () => {
+  if (deploying || $btn("mode-accelerated").disabled) return;
+  setUiMode("accelerated");
+  updateModeUI("accelerated");
+  appendLog("Switched to accelerated proving mode");
 });
 
 // ── Shared helpers ──

@@ -186,15 +186,11 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     const isAvailable = await this.#checkAcceleratorHealth();
 
     if (!isAvailable) {
-      logger.info("Accelerator not available, falling back to WASM");
-      this.#onPhase?.("proving");
-      const start = performance.now();
-      const result = await super.createChonkProof(executionSteps);
-      logger.info("WASM fallback proof completed", {
-        durationMs: Math.round(performance.now() - start),
-      });
-      this.#onPhase?.("receive");
-      return result;
+      throw new Error(
+        "Accelerator not available at " +
+          `${this.#acceleratorBaseUrl}. ` +
+          "Start the TeeRex Accelerator app or switch to local proving mode.",
+      );
     }
 
     logger.info("Accelerator available, proving natively", {
@@ -222,9 +218,8 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
 
   async #checkAcceleratorHealth(): Promise<boolean> {
     try {
-      const response = await ky.get(joinURL(this.#acceleratorBaseUrl, "health"), {
-        timeout: ms("2s"),
-        retry: 0,
+      const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
+        signal: AbortSignal.timeout(2000),
       });
       return response.ok;
     } catch {

@@ -155,8 +155,13 @@ function encryptFrames(): FrameFn {
   };
 }
 
-function transmitFrames(mode: "tee" | "remote"): FrameFn {
-  const target = mode === "tee" ? "ENCLAVE" : "SERVER";
+function detectFrames(): FrameFn {
+  return (tick) =>
+    box([`> checking accelerator ${spin(tick)}`, "  localhost:59833"], "round", "health check");
+}
+
+function transmitFrames(mode: UiMode): FrameFn {
+  const target = mode === "tee" ? "ENCLAVE" : mode === "accelerated" ? "ACCELERATOR" : "SERVER";
   const trackW = 24;
   const slots = trackW - 4; // positions for >>> within the track
   return (tick) => {
@@ -170,6 +175,7 @@ const MODE_CONFIG: Record<UiMode, { border: Border; title: string; wrap?: Border
   tee: { border: "double", title: "AWS NITRO ENCLAVE" },
   remote: { border: "single", title: "REMOTE SERVER" },
   local: { border: "single", title: "wasm prover", wrap: "round" },
+  accelerated: { border: "single", title: "NATIVE ACCELERATOR", wrap: "round" },
 };
 
 function provingFrames(mode: UiMode): FrameFn {
@@ -281,6 +287,8 @@ function confirmFrames(): FrameFn {
 /** Return the frame generator for a given (mode, phase) combination. */
 export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
   switch (phase) {
+    case "detect":
+      return detectFrames();
     case "app:simulate":
       return simulateFrames();
     case "serialize":
@@ -290,7 +298,7 @@ export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
     case "encrypt":
       return encryptFrames();
     case "transmit":
-      return transmitFrames(mode === "tee" ? "tee" : "remote");
+      return transmitFrames(mode);
     case "proving":
     case "app:prove":
       return provingFrames(mode);

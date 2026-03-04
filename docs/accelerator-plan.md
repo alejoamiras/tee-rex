@@ -460,20 +460,13 @@ Implement the bb binary resolution/download/bundling based on the decision.
 - Windows: Registry / Startup folder
 - Linux: systemd user service or XDG autostart
 
-### 8B. Auto-update
-
-Configure Tauri's built-in updater:
-- GitHub Releases as update source
-- Check for updates on launch (background check)
-- Tray menu: "Check for Updates"
-
-### 8C. Error handling and logging
+### 8B. Error handling and logging
 
 - Log to `~/.tee-rex/accelerator.log`
 - Tray menu: "View Logs"
 - Crash recovery: if bb segfaults, return 500 to SDK, log the error, reset state
 
-### 8D. App README and docs
+### 8C. App README and docs
 
 - `packages/accelerator/README.md` — installation, usage, configuration
 - Update root `README.md` architecture section
