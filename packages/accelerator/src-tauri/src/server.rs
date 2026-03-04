@@ -60,20 +60,29 @@ async fn prove(
     State(state): State<AppState>,
     body: Bytes,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    tracing::info!(payload_bytes = body.len(), "Received /prove request");
+
     if let Some(ref cb) = state.on_status {
         cb("Status: Proving...");
     }
 
+    let start = std::time::Instant::now();
     let result = bb::prove(&body).await;
+    let elapsed = start.elapsed();
 
     match &result {
-        Ok(_) => {
+        Ok(proof) => {
+            tracing::info!(
+                elapsed_ms = elapsed.as_millis() as u64,
+                proof_bytes = proof.len(),
+                "Proving succeeded"
+            );
             if let Some(ref cb) = state.on_status {
                 cb("Status: Idle");
             }
         }
         Err(e) => {
-            tracing::error!("Proving failed: {e}");
+            tracing::error!(elapsed_ms = elapsed.as_millis() as u64, "Proving failed: {e}");
             if let Some(cb) = state.on_status.clone() {
                 cb("Status: Error");
                 tokio::spawn(async move {

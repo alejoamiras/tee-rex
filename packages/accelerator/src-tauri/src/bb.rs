@@ -67,13 +67,22 @@ pub async fn prove(ivc_inputs: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Err
         .output()
         .await?;
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.is_empty() {
+        tracing::info!("bb stderr:\n{stderr}");
+    }
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("bb prove failed (exit {}): {stderr}", output.status).into());
     }
 
     let proof_path = output_dir.join("proof");
     let raw_proof = std::fs::read(&proof_path)?;
+
+    tracing::info!(
+        proof_bytes = raw_proof.len(),
+        "bb prove completed"
+    );
 
     Ok(prepend_field_count_header(&raw_proof))
 }
