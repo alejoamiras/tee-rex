@@ -4,6 +4,8 @@
 mod bb;
 mod server;
 
+use server::AppState;
+use std::sync::Arc;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 
@@ -27,9 +29,16 @@ fn main() {
                 })
                 .build(app)?;
 
+            let status_clone = status.clone();
+            let state = AppState {
+                on_status: Some(Arc::new(move |text: &str| {
+                    let _ = status_clone.set_text(text);
+                })),
+            };
+
             // Spawn the HTTP server on the Tokio runtime
-            tauri::async_runtime::spawn(async {
-                if let Err(e) = server::start().await {
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = server::start(state).await {
                     tracing::error!("Accelerator server error: {e}");
                 }
             });
