@@ -25,6 +25,13 @@ import {
   type UiMode,
 } from "./aztec";
 import {
+  diagMemory,
+  downloadDiagnostics,
+  installErrorHandlers,
+  installWasmDiagnostics,
+  installWorkerDiagnostics,
+} from "./diagnostics";
+import {
   type AccountEntry,
   hideExternalUI,
   initExternalWalletUI,
@@ -179,6 +186,7 @@ $("deploy-btn").addEventListener("click", async () => {
   ascii.start(state.uiMode);
 
   try {
+    diagMemory("deploy-start");
     const result = await deployTestAccount(
       appendLog,
       () => {},
@@ -188,6 +196,7 @@ $("deploy-btn").addEventListener("click", async () => {
       },
       (phase) => ascii.pushPhase(phase),
     );
+    diagMemory("deploy-end");
 
     appendLog("--- step breakdown ---");
     for (const step of result.steps) {
@@ -197,6 +206,7 @@ $("deploy-btn").addEventListener("click", async () => {
 
     showResult("", result.mode, result.totalDurationMs, undefined, result.steps);
   } catch (err) {
+    diagMemory("deploy-error");
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
     ascii.stop();
@@ -222,6 +232,7 @@ $("token-flow-btn").addEventListener("click", async () => {
   ascii.start(state.uiMode);
 
   try {
+    diagMemory("token-flow-start");
     const result = await runTokenFlow(
       appendLog,
       () => {},
@@ -231,6 +242,7 @@ $("token-flow-btn").addEventListener("click", async () => {
       },
       (phase) => ascii.pushPhase(phase),
     );
+    diagMemory("token-flow-end");
 
     appendLog("--- step breakdown ---");
     for (const step of result.steps) {
@@ -240,6 +252,7 @@ $("token-flow-btn").addEventListener("click", async () => {
 
     showResult("", result.mode, result.totalDurationMs, "token flow", result.steps);
   } catch (err) {
+    diagMemory("token-flow-error");
     appendLog(`Token flow failed: ${err}`, "error");
   } finally {
     ascii.stop();
@@ -387,10 +400,18 @@ async function initEmbeddedWallet(): Promise<void> {
 
 // ── Init ──
 async function init(): Promise<void> {
+  // Install diagnostics BEFORE any Worker/WASM is created
+  installWorkerDiagnostics();
+  installWasmDiagnostics();
+  installErrorHandlers();
+
   $("aztec-url").textContent = AZTEC_DISPLAY_URL;
   if (PROVER_CONFIGURED) {
     $("teerex-url").textContent = PROVER_DISPLAY_URL;
   }
+
+  // Wire diagnostics export
+  $("export-diagnostics-btn").addEventListener("click", downloadDiagnostics);
 
   // Wire up wallet selection listeners once
   wireWalletSelectionListeners();

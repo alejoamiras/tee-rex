@@ -1,3 +1,5 @@
+import { diagLog } from "./diagnostics";
+
 export function $(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Element #${id} not found`);
@@ -25,6 +27,7 @@ export function appendLog(
   msg: string,
   level: "info" | "warn" | "error" | "success" = "info",
 ): void {
+  diagLog(msg, level);
   const log = $("log");
   const line = document.createElement("div");
   const time = new Date().toLocaleTimeString("en-US", { hour12: false });
