@@ -1,5 +1,5 @@
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
-import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
+import { type PrivateExecutionStep, serializePrivateExecutionSteps } from "@aztec/stdlib/kernel";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
 import ky from "ky";
@@ -202,27 +202,22 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     });
 
     this.#onPhase?.("serialize");
-    const executionStepsSerialized = executionSteps.map((step) => ({
-      functionName: step.functionName,
-      witness: Array.from(step.witness.entries()),
-      bytecode: Base64.fromBytes(step.bytecode),
-      vk: Base64.fromBytes(step.vk),
-      timings: step.timings,
-    }));
+    const msgpack = serializePrivateExecutionSteps(executionSteps);
 
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
     const response = await ky
       .post(joinURL(this.#acceleratorBaseUrl, "prove"), {
-        json: { executionSteps: executionStepsSerialized },
+        body: new Uint8Array(msgpack),
         timeout: ms("10 min"),
         retry: 0,
+        headers: { "content-type": "application/octet-stream" },
       })
-      .json();
+      .json<{ proof: string }>();
 
     this.#onPhase?.("receive");
-    const data = z.object({ proof: schemas.Buffer }).parse(response);
-    return ChonkProofWithPublicInputs.fromBuffer(data.proof);
+    const proofBuffer = Buffer.from(response.proof, "base64");
+    return ChonkProofWithPublicInputs.fromBuffer(proofBuffer);
   }
 
   async #checkAcceleratorHealth(): Promise<boolean> {

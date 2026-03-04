@@ -95,6 +95,24 @@ describe("TeeRexProver", () => {
     }, 600000);
   });
 
+  describe.skipIf(!process.env.ACCELERATOR_URL)("Accelerated", () => {
+    test("should deploy account with accelerated proving", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setProvingMode(ProvingMode.accelerated);
+      if (process.env.ACCELERATOR_URL) {
+        const url = new URL(process.env.ACCELERATOR_URL);
+        prover.setAcceleratorConfig({
+          host: url.hostname,
+          port: Number.parseInt(url.port, 10),
+        });
+      }
+
+      const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
+      expect(deployed).toBeDefined();
+    }, 600000);
+  });
+
   describe.skipIf(!config.teeUrl)("TEE", () => {
     test("should return nitro attestation from TEE server", async () => {
       const response = await fetch(`${config.teeUrl}/attestation`);

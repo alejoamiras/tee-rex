@@ -1,6 +1,9 @@
 // Prevents additional console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bb;
+mod server;
+
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 
@@ -23,6 +26,13 @@ fn main() {
                     }
                 })
                 .build(app)?;
+
+            // Spawn the HTTP server on the Tokio runtime
+            tauri::async_runtime::spawn(async {
+                if let Err(e) = server::start().await {
+                    tracing::error!("Accelerator server error: {e}");
+                }
+            });
 
             Ok(())
         })

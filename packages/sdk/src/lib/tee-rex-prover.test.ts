@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
+import * as stdlibKernel from "@aztec/stdlib/kernel";
 import * as attestationModule from "./attestation.js";
 import { type ProverPhase, ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
 
@@ -191,9 +192,16 @@ describe("TeeRexProver", () => {
 
   describe("Accelerated", () => {
     const healthOk: RouteHandler = () => Response.json({ status: "ok" });
+    const fakeMsgpack = Buffer.from([0x93, 0x01, 0x02, 0x03]);
+
+    /** Mock serializePrivateExecutionSteps to avoid WASM panic on fake witness data. */
+    function mockSerializer() {
+      return spyOn(stdlibKernel, "serializePrivateExecutionSteps").mockReturnValue(fakeMsgpack);
+    }
 
     test("calls accelerator health check and /prove endpoint", async () => {
       const { fetchedUrls } = mockFetch({ "/health": healthOk });
+      const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
@@ -211,6 +219,7 @@ describe("TeeRexProver", () => {
         true,
       );
       expect(fetchedUrls.some((url) => url.includes(API_URL))).toBe(false);
+      serializeSpy.mockRestore();
     });
 
     test("falls back to WASM when accelerator is unavailable", async () => {
@@ -230,14 +239,19 @@ describe("TeeRexProver", () => {
       superSpy.mockRestore();
     });
 
-    test("sends correct serialization format to /prove", async () => {
-      let capturedBody: any = null;
+    test("sends msgpack binary payload to /prove", async () => {
+      let capturedContentType: string | null = null;
+      let capturedBody: ArrayBuffer | null = null;
+
+      const serializeSpy = mockSerializer();
 
       mockFetch({
         "/health": healthOk,
         "/prove": async (_url, request) => {
-          const text = typeof request === "string" ? request : await (request as Request).text();
-          capturedBody = JSON.parse(text);
+          if (typeof request !== "string") {
+            capturedContentType = (request as Request).headers.get("content-type");
+            capturedBody = await (request as Request).arrayBuffer();
+          }
           return new Response("not found", { status: 404 });
         },
       });
@@ -248,24 +262,21 @@ describe("TeeRexProver", () => {
       try {
         await prover.createChonkProof([fakeStep]);
       } catch {
-        // Expected
+        // Expected — mock /prove returns 404
       }
 
+      expect(serializeSpy).toHaveBeenCalledWith([fakeStep]);
+      expect(capturedContentType).toBe("application/octet-stream");
       expect(capturedBody).toBeDefined();
-      expect(capturedBody.executionSteps).toBeArray();
-      expect(capturedBody.executionSteps).toHaveLength(1);
+      expect(new Uint8Array(capturedBody!)).toEqual(new Uint8Array(fakeMsgpack));
 
-      const step = capturedBody.executionSteps[0];
-      expect(step.functionName).toBe("test_fn");
-      expect(step.witness).toEqual([[0, "val"]]);
-      expect(typeof step.bytecode).toBe("string");
-      expect(typeof step.vk).toBe("string");
-      expect(step.timings).toEqual({ witgen: 10 });
+      serializeSpy.mockRestore();
     });
 
     test("uses configured port for health check", async () => {
       const customPort = 12345;
       const { fetchedUrls } = mockFetch({ "/health": healthOk });
+      const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
@@ -279,11 +290,13 @@ describe("TeeRexProver", () => {
 
       expect(fetchedUrls.some((url) => url.includes(`:${customPort}/health`))).toBe(true);
       expect(fetchedUrls.some((url) => url.includes(`:${ACCELERATOR_PORT}/`))).toBe(false);
+      serializeSpy.mockRestore();
     });
 
     test("fires phase callbacks in order when accelerator is available", async () => {
       const phases: ProverPhase[] = [];
       mockFetch({ "/health": healthOk });
+      const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
@@ -296,6 +309,7 @@ describe("TeeRexProver", () => {
       }
 
       expect(phases).toEqual(["detect", "serialize", "transmit", "proving"]);
+      serializeSpy.mockRestore();
     });
 
     test("fires phase callbacks for WASM fallback path", async () => {
@@ -319,6 +333,7 @@ describe("TeeRexProver", () => {
 
     test("does not call remote TEE API or attestation endpoints", async () => {
       const { fetchedUrls } = mockFetch({ "/health": healthOk });
+      const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
@@ -331,6 +346,7 @@ describe("TeeRexProver", () => {
 
       expect(fetchedUrls.some((url) => url.includes("/attestation"))).toBe(false);
       expect(fetchedUrls.some((url) => url.includes(API_URL))).toBe(false);
+      serializeSpy.mockRestore();
     });
   });
 });
