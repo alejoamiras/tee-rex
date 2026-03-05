@@ -84,7 +84,7 @@ fn main() {
                     if text.contains("Proving") {
                         let _ = tray_clone.set_title(Some("Proving..."));
                     } else {
-                        let _ = tray_clone.set_title(None::<&str>);
+                        let _ = tray_clone.set_title(Some(""));
                     }
                 })),
             };

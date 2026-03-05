@@ -61,6 +61,20 @@ async fn health() -> impl IntoResponse {
     }))
 }
 
+/// Drop guard that resets tray status to Idle when the prove handler exits for any reason
+/// (success, error, client disconnect, panic).
+struct StatusGuard {
+    cb: Option<StatusCallback>,
+}
+
+impl Drop for StatusGuard {
+    fn drop(&mut self) {
+        if let Some(ref cb) = self.cb {
+            cb("Status: Idle");
+        }
+    }
+}
+
 async fn prove(
     State(state): State<AppState>,
     body: Bytes,
@@ -70,6 +84,11 @@ async fn prove(
     if let Some(ref cb) = state.on_status {
         cb("Status: Proving...");
     }
+
+    // Guard ensures status resets to Idle on any exit path (success, error, drop)
+    let _guard = StatusGuard {
+        cb: state.on_status.clone(),
+    };
 
     let start = std::time::Instant::now();
     let result = bb::prove(&body).await;
@@ -82,19 +101,9 @@ async fn prove(
                 proof_bytes = proof.len(),
                 "Proving succeeded"
             );
-            if let Some(ref cb) = state.on_status {
-                cb("Status: Idle");
-            }
         }
         Err(e) => {
             tracing::error!(elapsed_ms = elapsed.as_millis() as u64, "Proving failed: {e}");
-            if let Some(cb) = state.on_status.clone() {
-                cb("Status: Error");
-                tokio::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                    cb("Status: Idle");
-                });
-            }
         }
     }
 
