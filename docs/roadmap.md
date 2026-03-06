@@ -426,7 +426,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 **Key decisions**: Tauri 2.0 (not Electron), localhost HTTP on port 59833 (no extension), no encryption in v1. See [accelerator-decision.md](./accelerator-decision.md) for full rationale and rollback paths. See [accelerator-plan.md](./accelerator-plan.md) for step-by-step implementation plan.
 
-**SDK change**: Add `ProvingMode.accelerated` to `TeeRexProver` — tries `http://127.0.0.1:59833/prove`, auto-falls back to WASM if unavailable.
+**SDK change**: Add `ProvingMode.accelerated` to `TeeRexProver` — tries `http://127.0.0.1:59833/prove`, auto-falls back to WASM if unavailable. Emits `"fallback"` phase before WASM fallback so apps can inform users.
 
 **New package**: `packages/accelerator` — Tauri tray app that listens on localhost and runs the `bb` proving binary natively.
 
@@ -442,12 +442,13 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **Step 5A** | Manual end-to-end integration test: SDK ↔ accelerator with real Aztec proving — confirmed working |
 | **Diagnostics** | Crash diagnostics for `DataCloneError` / OOM investigation: frontend ring buffer (Worker postMessage sizes, WASM Memory allocations, global error handlers, memory snapshots, JSON export), accelerator file-based logging (daily-rotating via `tracing-appender`, "Show Logs" tray menu), enriched `/health` with version + bb path + log_dir |
 | **Bugfix** | `StatusGuard` drop guard ensures tray resets to Idle on any exit (success, error, client disconnect). Fixed `set_title(None)` not clearing macOS menu bar text — use `set_title(Some(""))` |
+| **Step 5B** | `"fallback"` ProverPhase — SDK emits `fallback` before WASM fallback so apps can inform users. Frontend: fallback ASCII animation, accelerator status update + warning log on mid-session fallback. ACCEL button always enabled (was permanently disabled — `checkEmbeddedServices` never set `disabled=false`). |
 
 **Remaining:**
 
 | Part | Summary |
 |------|---------|
-| **Step 5B-C** | Fallback test (accelerator unavailable → WASM), SDK e2e test in `proving.test.ts` |
+| **Step 5C** | SDK e2e test for accelerated mode in `proving.test.ts` |
 | **Step 6** | Cross-platform builds: macOS build + code signing/notarization, CI workflow (`accelerator.yml`), Windows/Linux smoke test |
 | **Step 7** | bb binary distribution strategy: bundle vs download vs expect pre-installed |
 | **Step 8A/C** | Auto-start on login, README/docs updates |
