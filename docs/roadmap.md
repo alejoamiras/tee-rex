@@ -444,15 +444,15 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **Bugfix** | `StatusGuard` drop guard ensures tray resets to Idle on any exit (success, error, client disconnect). Fixed `set_title(None)` not clearing macOS menu bar text — use `set_title(Some(""))` |
 | **Step 5B** | `"fallback"` ProverPhase — SDK emits `fallback` before WASM fallback so apps can inform users. Frontend: fallback ASCII animation, accelerator status update + warning log on mid-session fallback. ACCEL button always enabled (was permanently disabled — `checkEmbeddedServices` never set `disabled=false`). |
 | **Step 5C** | Accelerated mode e2e tests — phase tracking on happy path (`detect`+`serialize`, no `fallback`), fallback test (dead port → WASM, `detect`+`fallback`, no `serialize`), accelerator health check in `connectivity.test.ts`, accelerated mode transitions in `mode-switching.test.ts` (Remote→Accelerated→Local). Fallback test always runs (no skipIf). |
+| **Step 6** | CI pipeline: `accelerator.yml` PR gate (changes → clippy + rust tests + lint → gate), `release-accelerator.yml` release pipeline (tag-triggered matrix build: macOS arm64/x86_64 + Linux x86_64, GitHub Releases). Branch protection updated with "Accelerator Status" gate. Windows blocked (no `bb` binary from Aztec). macOS code signing deferred (TODO in workflow). |
 
 **Remaining:**
 
 | Part | Summary |
 |------|---------|
-| **Step 6** | Cross-platform builds: macOS build + code signing/notarization, CI workflow (`accelerator.yml`), Windows/Linux smoke test |
 | **Step 7** | bb binary distribution strategy: bundle vs download vs expect pre-installed |
 | **Step 8A/C** | Auto-start on login, README/docs updates |
-| **Step 9** | CI pipeline: build on PR, release workflow, integration e2e |
+| **Step 9** | Live integration e2e in CI (requires headless display context) |
 
 ---
 
