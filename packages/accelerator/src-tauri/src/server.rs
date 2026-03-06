@@ -1,10 +1,10 @@
 use axum::{
-    Router,
     body::Bytes,
     extract::{DefaultBodyLimit, State},
     http::{HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
+    Router,
 };
 use http::Method;
 use serde_json::json;
@@ -103,7 +103,10 @@ async fn prove(
             );
         }
         Err(e) => {
-            tracing::error!(elapsed_ms = elapsed.as_millis() as u64, "Proving failed: {e}");
+            tracing::error!(
+                elapsed_ms = elapsed.as_millis() as u64,
+                "Proving failed: {e}"
+            );
         }
     }
 
@@ -160,7 +163,10 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            response.headers().get("access-control-allow-origin").unwrap(),
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .unwrap(),
             "*"
         );
     }
@@ -181,7 +187,10 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            response.headers().get("access-control-allow-origin").unwrap(),
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .unwrap(),
             "*"
         );
     }

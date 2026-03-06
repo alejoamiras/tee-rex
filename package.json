@@ -15,10 +15,11 @@
     "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
     "dev": "bun run --cwd packages/server dev",
     "format": "biome format --write .",
-    "lint": "biome check . && shellcheck infra/*.sh infra/tofu/*.sh && bun run lint:pkg",
+    "lint": "biome check . && shellcheck infra/*.sh infra/tofu/*.sh && bun run lint:pkg && bun run lint:rust",
     "lint:actions": "actionlint",
-    "lint:fix": "biome check --write .",
+    "lint:fix": "biome check --write . && cd packages/accelerator/src-tauri && cargo fmt",
     "lint:pkg": "sort-package-json --check package.json packages/*/package.json",
+    "lint:rust": "cd packages/accelerator/src-tauri && cargo fmt --check",
     "lint:shell": "shellcheck infra/*.sh infra/tofu/*.sh",
     "lint:tofu": "cd infra/tofu && tofu fmt -check -diff .",
     "prepare": "husky",
@@ -37,6 +38,9 @@
     ],
     ".github/workflows/*.yml": [
       "actionlint"
+    ],
+    "*.rs": [
+      "rustfmt --edition 2021"
     ],
     "*.sh": [
       "shellcheck"

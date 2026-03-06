@@ -40,7 +40,8 @@ fn home_dir_fallback() -> Option<PathBuf> {
 /// Run `bb prove` on the given IVC inputs (msgpack bytes) and return the proof
 /// with a 4-byte BE field-count header suitable for `ChonkProofWithPublicInputs.fromBuffer()`.
 pub async fn prove(ivc_inputs: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-    let bb_path = find_bb().map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
+    let bb_path =
+        find_bb().map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
 
     let tmp_dir = tempfile::tempdir()?;
     let input_path = tmp_dir.path().join("ivc-inputs.msgpack");
@@ -79,10 +80,7 @@ pub async fn prove(ivc_inputs: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Err
     let proof_path = output_dir.join("proof");
     let raw_proof = std::fs::read(&proof_path)?;
 
-    tracing::info!(
-        proof_bytes = raw_proof.len(),
-        "bb prove completed"
-    );
+    tracing::info!(proof_bytes = raw_proof.len(), "bb prove completed");
 
     Ok(prepend_field_count_header(&raw_proof))
 }
