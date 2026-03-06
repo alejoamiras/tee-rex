@@ -53,8 +53,10 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+        working-directory: .
       - name: Copy bb sidecar
         run: bun run --cwd packages/accelerator prebuild
+        working-directory: .
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -88,8 +90,10 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+        working-directory: .
       - name: Copy bb sidecar
         run: bun run --cwd packages/accelerator prebuild
+        working-directory: .
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
