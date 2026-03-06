@@ -40,7 +40,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 - AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. S3 permissions split: `S3AppDeploy` (put/list) and `S3AppCleanup` (delete, object-level ARNs only). Setup: `infra/iam/README.md`
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
-- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
+- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/Accelerated/Accelerated fallback/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
 - SDK e2e tests are network-agnostic: always use Sponsored FPC + `from: AztecAddress.ZERO` (no `registerInitialLocalNetworkAccountsInWallet`)
 - CI test workflows (`sdk.yml`, `app.yml`, `server.yml`) only trigger on PRs + manual dispatch — no push-to-main triggers (deploy-prod.yml handles post-merge)
 - **SDK publish pipeline**: `npm version` doesn't work in Bun workspaces (`workspace:*` protocol error) — use `node -e` to set version. `npm publish --provenance` requires `repository.url` in package.json matching the GitHub repo. YAML `if:` expressions with colons must be double-quoted. `workflow_dispatch` can trigger `_publish-sdk.yml` directly for retries. Uses `NPM_TOKEN` automation token — OIDC trusted publishing only supports one workflow per package (see `lessons/npm-trusted-publishing.md`). npm package-level 2FA must be set to "Authorization only" (not "Authorization and publishing") for automation tokens to work.
@@ -443,12 +443,12 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **Diagnostics** | Crash diagnostics for `DataCloneError` / OOM investigation: frontend ring buffer (Worker postMessage sizes, WASM Memory allocations, global error handlers, memory snapshots, JSON export), accelerator file-based logging (daily-rotating via `tracing-appender`, "Show Logs" tray menu), enriched `/health` with version + bb path + log_dir |
 | **Bugfix** | `StatusGuard` drop guard ensures tray resets to Idle on any exit (success, error, client disconnect). Fixed `set_title(None)` not clearing macOS menu bar text — use `set_title(Some(""))` |
 | **Step 5B** | `"fallback"` ProverPhase — SDK emits `fallback` before WASM fallback so apps can inform users. Frontend: fallback ASCII animation, accelerator status update + warning log on mid-session fallback. ACCEL button always enabled (was permanently disabled — `checkEmbeddedServices` never set `disabled=false`). |
+| **Step 5C** | Accelerated mode e2e tests — phase tracking on happy path (`detect`+`serialize`, no `fallback`), fallback test (dead port → WASM, `detect`+`fallback`, no `serialize`), accelerator health check in `connectivity.test.ts`, accelerated mode transitions in `mode-switching.test.ts` (Remote→Accelerated→Local). Fallback test always runs (no skipIf). |
 
 **Remaining:**
 
 | Part | Summary |
 |------|---------|
-| **Step 5C** | SDK e2e test for accelerated mode in `proving.test.ts` |
 | **Step 6** | Cross-platform builds: macOS build + code signing/notarization, CI workflow (`accelerator.yml`), Windows/Linux smoke test |
 | **Step 7** | bb binary distribution strategy: bundle vs download vs expect pre-installed |
 | **Step 8A/C** | Auto-start on login, README/docs updates |
