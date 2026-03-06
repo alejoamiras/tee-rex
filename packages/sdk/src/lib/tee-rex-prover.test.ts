@@ -222,15 +222,19 @@ describe("TeeRexProver", () => {
       serializeSpy.mockRestore();
     });
 
-    test("throws when accelerator is unavailable", async () => {
+    test("falls back to WASM when accelerator is unavailable", async () => {
       mockFetchOffline();
+      const wasmSpy = mockWasmProver();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
 
+      // Falls back to WASM (which rejects in test env — but the point is it's called)
       await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
-        "Accelerator not available",
+        "local prover not available in test",
       );
+      expect(wasmSpy).toHaveBeenCalled();
+      wasmSpy.mockRestore();
     });
 
     test("sends msgpack binary payload to /prove", async () => {
@@ -306,9 +310,10 @@ describe("TeeRexProver", () => {
       serializeSpy.mockRestore();
     });
 
-    test("fires detect phase before throwing when unavailable", async () => {
+    test("fires detect → fallback → proving phases on WASM fallback", async () => {
       const phases: ProverPhase[] = [];
       mockFetchOffline();
+      const wasmSpy = mockWasmProver();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
       prover.setProvingMode(ProvingMode.accelerated);
@@ -317,10 +322,11 @@ describe("TeeRexProver", () => {
       try {
         await prover.createChonkProof([fakeStep]);
       } catch {
-        // Expected — throws "Accelerator not available"
+        // WASM mock rejects in test env
       }
 
-      expect(phases).toEqual(["detect"]);
+      expect(phases).toEqual(["detect", "fallback", "proving"]);
+      wasmSpy.mockRestore();
     });
 
     test("does not call remote TEE API or attestation endpoints", async () => {

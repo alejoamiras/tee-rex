@@ -88,11 +88,12 @@ async function checkEmbeddedServices(): Promise<void> {
   }
 
   const accel = await checkAccelerator();
-  setStatus("accelerator-status", accel);
-  $("accelerator-label").textContent = accel ? "available" : "not detected";
+  $btn("mode-accelerated").disabled = false;
+  updateAcceleratorLabel(accel);
   if (accel) {
-    $btn("mode-accelerated").disabled = false;
     appendLog("Native accelerator detected on localhost:59833", "success");
+  } else {
+    appendLog("Accelerator not detected — ACCEL mode will fall back to WASM", "warn");
   }
 
   if (TEE_CONFIGURED) {
@@ -166,6 +167,22 @@ $("mode-accelerated").addEventListener("click", () => {
 });
 
 // ── Shared helpers ──
+
+/** Update the accelerator service label and button state. */
+function updateAcceleratorLabel(available: boolean): void {
+  setStatus("accelerator-status", available);
+  $("accelerator-label").textContent = available ? "available" : "not detected — fallback: wasm";
+}
+
+/** Handle a prover phase: feed the animation and react to fallback. */
+function handleProverPhase(ascii: AsciiController, phase: string): void {
+  ascii.pushPhase(phase as Parameters<typeof ascii.pushPhase>[0]);
+  if (phase === "fallback") {
+    updateAcceleratorLabel(false);
+    appendLog("Accelerator offline — falling back to WASM (this will be slower)", "warn");
+  }
+}
+
 function setActionButtonsDisabled(disabled: boolean): void {
   $btn("deploy-btn").disabled = disabled;
   $btn("token-flow-btn").disabled = disabled;
@@ -194,7 +211,7 @@ $("deploy-btn").addEventListener("click", async () => {
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
-      (phase) => ascii.pushPhase(phase),
+      (phase) => handleProverPhase(ascii, phase),
     );
     diagMemory("deploy-end");
 
@@ -240,7 +257,7 @@ $("token-flow-btn").addEventListener("click", async () => {
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
-      (phase) => ascii.pushPhase(phase),
+      (phase) => handleProverPhase(ascii, phase),
     );
     diagMemory("token-flow-end");
 

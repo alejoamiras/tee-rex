@@ -28,7 +28,8 @@ export type ProverPhase =
   | "encrypt"
   | "transmit"
   | "proving"
-  | "receive";
+  | "receive"
+  | "fallback";
 
 export interface TeeRexAttestationConfig {
   /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
@@ -186,11 +187,12 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     const isAvailable = await this.#checkAcceleratorHealth();
 
     if (!isAvailable) {
-      throw new Error(
-        "Accelerator not available at " +
-          `${this.#acceleratorBaseUrl}. ` +
-          "Start the TeeRex Accelerator app or switch to local proving mode.",
-      );
+      logger.info("Accelerator not available, falling back to WASM");
+      this.#onPhase?.("fallback");
+      this.#onPhase?.("proving");
+      const proof = await super.createChonkProof(executionSteps);
+      this.#onPhase?.("receive");
+      return proof;
     }
 
     logger.info("Accelerator available, proving natively", {

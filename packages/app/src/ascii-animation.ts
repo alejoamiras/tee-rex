@@ -160,6 +160,11 @@ function detectFrames(): FrameFn {
     box([`> checking accelerator ${spin(tick)}`, "  localhost:59833"], "round", "health check");
 }
 
+function fallbackFrames(): FrameFn {
+  return (tick) =>
+    box([`  accelerator offline  ${spin(tick)}`, "  falling back to wasm"], "round", "⚠ FALLBACK");
+}
+
 function transmitFrames(mode: UiMode): FrameFn {
   const target = mode === "tee" ? "ENCLAVE" : mode === "accelerated" ? "ACCELERATOR" : "SERVER";
   const trackW = 24;
@@ -289,6 +294,8 @@ export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
   switch (phase) {
     case "detect":
       return detectFrames();
+    case "fallback":
+      return fallbackFrames();
     case "app:simulate":
       return simulateFrames();
     case "serialize":

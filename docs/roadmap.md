@@ -30,6 +30,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **18C** | Attribution update — "made with ♥ by alejo · inspired by nemi.fi" across all READMEs and app footer |
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 | **30** | **Wallet SDK integration** — `@aztec/wallet-sdk` for external wallet (browser extension) support. Dual-path: embedded wallet auto-inits as before + "Connect External" button triggers SDK discovery → emoji verification → capability request. External wallet replaces embedded for all operations; proving mode grayed out ("handled by wallet"); deploy disabled (wallet provides accounts). `?wallet=embedded` URL param bypasses external UI for e2e tests. New files: `wallet-connect.ts` (pure logic), UI section in `index.html`, wiring in `main.ts`. `AztecState` extended with `walletType`, `embeddedWallet`, `externalProvider`. |
+| **31** *(in progress)* | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics. See Phase 31 section for details. |
 
 ---
 
@@ -419,7 +420,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
-## Phase 31: Local Native Accelerator — PLANNING
+## Phase 31: Local Native Accelerator — IN PROGRESS
 
 **Goal**: Bypass browser WASM throttling by routing proving to a native `bb` binary on the user's machine via a lightweight desktop app.
 
@@ -428,6 +429,29 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 **SDK change**: Add `ProvingMode.accelerated` to `TeeRexProver` — tries `http://127.0.0.1:59833/prove`, auto-falls back to WASM if unavailable.
 
 **New package**: `packages/accelerator` — Tauri tray app that listens on localhost and runs the `bb` proving binary natively.
+
+**Completed parts:**
+
+| Part | Summary |
+|------|---------|
+| **Step 0** | Branch setup, Rust toolchain, workspace entry for `packages/accelerator` |
+| **Step 1** | SDK: `ProvingMode.accelerated`, `#acceleratedCreateChonkProof` with msgpack serialization, `detect` phase, auto-fallback to WASM, unit tests, accelerator health check in frontend |
+| **Step 2** | Tauri scaffold: tray-only app (no window), system tray with status + quit menu items, tee-rex icon |
+| **Step 3** | bb execution: `bb::find_bb()` resolution (sidecar → `~/.bb/bb` → PATH), `bb::prove()` spawns `bb prove --scheme chonk`, temp file I/O, field-count header prepend |
+| **Step 4** | HTTP server: Axum on `127.0.0.1:59833`, `GET /health`, `POST /prove` (msgpack body → bb → base64 proof), CORS headers, 50MB body limit, tray status updates during proving |
+| **Step 5A** | Manual end-to-end integration test: SDK ↔ accelerator with real Aztec proving — confirmed working |
+| **Diagnostics** | Crash diagnostics for `DataCloneError` / OOM investigation: frontend ring buffer (Worker postMessage sizes, WASM Memory allocations, global error handlers, memory snapshots, JSON export), accelerator file-based logging (daily-rotating via `tracing-appender`, "Show Logs" tray menu), enriched `/health` with version + bb path + log_dir |
+| **Bugfix** | `StatusGuard` drop guard ensures tray resets to Idle on any exit (success, error, client disconnect). Fixed `set_title(None)` not clearing macOS menu bar text — use `set_title(Some(""))` |
+
+**Remaining:**
+
+| Part | Summary |
+|------|---------|
+| **Step 5B-C** | Fallback test (accelerator unavailable → WASM), SDK e2e test in `proving.test.ts` |
+| **Step 6** | Cross-platform builds: macOS build + code signing/notarization, CI workflow (`accelerator.yml`), Windows/Linux smoke test |
+| **Step 7** | bb binary distribution strategy: bundle vs download vs expect pre-installed |
+| **Step 8A/C** | Auto-start on login, README/docs updates |
+| **Step 9** | CI pipeline: build on PR, release workflow, integration e2e |
 
 ---
 

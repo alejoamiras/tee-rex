@@ -48,8 +48,10 @@ describe("PhaseQueue", () => {
 });
 
 describe("getFrameFn", () => {
-  const allModes: UiMode[] = ["local", "remote", "tee"];
+  const allModes: UiMode[] = ["local", "remote", "tee", "accelerated"];
   const allPhases: AnimationPhase[] = [
+    "detect",
+    "fallback",
     "app:simulate",
     "serialize",
     "fetch-attestation",
