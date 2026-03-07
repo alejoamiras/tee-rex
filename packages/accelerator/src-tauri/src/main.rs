@@ -7,8 +7,9 @@ mod server;
 use server::AppState;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -36,22 +37,32 @@ fn main() {
     tracing::info!(log_dir = %log_path.display(), "Logging initialized");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let status = MenuItemBuilder::with_id("status", "Status: Idle")
                 .enabled(false)
                 .build(app)?;
             let show_logs = MenuItemBuilder::with_id("show_logs", "Show Logs").build(app)?;
+
+            let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+            let autostart = CheckMenuItemBuilder::with_id("toggle_autostart", "Start on Login")
+                .checked(autostart_enabled)
+                .build(app)?;
+
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
 
             let menu = MenuBuilder::new(app)
-                .items(&[&status, &show_logs, &quit])
+                .items(&[&status, &show_logs, &autostart, &quit])
                 .build()?;
 
             let tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("TeeRex Accelerator")
                 .menu(&menu)
-                .on_menu_event(|app, event| match event.id().as_ref() {
+                .on_menu_event(move |app, event| match event.id().as_ref() {
                     "quit" => app.exit(0),
                     "show_logs" => {
                         let dir = log_dir();
@@ -66,6 +77,19 @@ fn main() {
                         #[cfg(target_os = "windows")]
                         {
                             let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+                        }
+                    }
+                    "toggle_autostart" => {
+                        let manager = app.autolaunch();
+                        let currently_enabled = manager.is_enabled().unwrap_or(false);
+                        if currently_enabled {
+                            let _ = manager.disable();
+                            let _ = autostart.set_checked(false);
+                            tracing::info!("Auto-start on login disabled");
+                        } else {
+                            let _ = manager.enable();
+                            let _ = autostart.set_checked(true);
+                            tracing::info!("Auto-start on login enabled");
                         }
                     }
                     _ => {}

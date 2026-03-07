@@ -8,6 +8,7 @@ import { Base64, Bytes } from "ox";
 import { UnreachableCaseError, type ValueOf } from "ts-essentials";
 import { joinURL } from "ufo";
 import { z } from "zod";
+import sdkPkg from "../../package.json" with { type: "json" };
 import { type AttestationVerifyOptions, verifyNitroAttestation } from "./attestation.js";
 import { encrypt } from "./encrypt.js";
 import { logger } from "./logger.js";
@@ -223,10 +224,28 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
         signal: AbortSignal.timeout(2000),
       });
-      return response.ok;
+      if (!response.ok) return false;
+
+      const data = (await response.json()) as { aztec_version?: string };
+      const acceleratorVersion = data.aztec_version;
+      if (acceleratorVersion && acceleratorVersion !== "unknown") {
+        const sdkVersion = this.#getAztecVersion();
+        if (sdkVersion && acceleratorVersion !== sdkVersion) {
+          logger.warn("Accelerator Aztec version mismatch", {
+            accelerator: acceleratorVersion,
+            sdk: sdkVersion,
+          });
+          return false;
+        }
+      }
+      return true;
     } catch {
       return false;
     }
+  }
+
+  #getAztecVersion(): string | undefined {
+    return (sdkPkg.dependencies as Record<string, string | undefined>)["@aztec/stdlib"];
   }
 
   async #fetchEncryptionPublicKey() {

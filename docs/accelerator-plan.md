@@ -452,26 +452,29 @@ Implement the bb binary resolution/download/bundling based on the decision.
 
 ---
 
-## Step 8: Polish and Production Readiness
+## Step 8: Polish and Production Readiness — DONE
 
-### 8A. Auto-start on login (optional)
+### 8A. Auto-start on login — DONE
 
-- macOS: Login Item
-- Windows: Registry / Startup folder
-- Linux: systemd user service or XDG autostart
+- `tauri-plugin-autostart` (v2) with `MacosLauncher::LaunchAgent`
+- "Start on Login" `CheckMenuItem` in tray menu (between "Show Logs" and "Quit")
+- Toggle handler: `autolaunch().enable()` / `autolaunch().disable()`, checkbox state synced
+- Capabilities: `capabilities/default.json` with `autostart:default` permission
 
-### 8B. Error handling and logging
+### 8B. Error handling and logging — DONE (completed in Diagnostics step)
 
-- Log to `~/.tee-rex/accelerator.log`
-- Tray menu: "View Logs"
-- Crash recovery: if bb segfaults, return 500 to SDK, log the error, reset state
+- Daily-rotating logs via `tracing-appender` to `~/Library/Application Support/tee-rex-accelerator/logs/`
+- "Show Logs" tray menu item opens log directory
+- `StatusGuard` drop guard resets tray to Idle on any exit path
+- bb errors return 500 with error message
 
-### 8C. App README and docs
+### 8C. App README and docs — DONE
 
-- `packages/accelerator/README.md` — installation, usage, configuration
-- Update root `README.md` architecture section
-- Update `docs/architecture.md` with accelerator flow diagram
-- Update SDK README with accelerator section
+- `packages/accelerator/README.md` — installation, usage, configuration, troubleshooting, development
+- Root `README.md` — accelerator in Features, Architecture tree, Documentation table, CI badge
+- `docs/architecture.md` — accelerator in Package Structure, Accelerated Proving Flow diagram, system overview
+- `docs/how-it-works.md` — three modes (added accelerated), Accelerator in glossary
+- `docs/ci-pipeline.md` — accelerator.yml + release-accelerator.yml sections, updated overview counts and branch protection
 
 ---
 
