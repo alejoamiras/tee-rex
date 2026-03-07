@@ -7,8 +7,8 @@ How the tee-rex CI/CD system works. Last updated: 2026-02-27.
 ## Overview
 
 ```
-13 workflow files total:
-   8 main workflows   (sdk, app, server, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet)
+15 workflow files total:
+  10 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet, release-accelerator)
    5 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
@@ -19,7 +19,7 @@ All workflows use **OIDC auth** (no stored AWS keys), **SSM tunnels** (no public
 
 ## 1. PR Validation
 
-Three independent workflows trigger on every PR to `main`. Each uses [`dorny/paths-filter`](https://github.com/dorny/paths-filter) to detect relevant file changes and skip when nothing changed. A gate job at the end ensures branch protection works regardless of skips.
+Four independent workflows trigger on every PR to `main`. Each uses [`dorny/paths-filter`](https://github.com/dorny/paths-filter) (or Rust-specific change detection for the accelerator) to detect relevant file changes and skip when nothing changed. A gate job at the end ensures branch protection works regardless of skips.
 
 ```mermaid
 graph LR
@@ -49,6 +49,14 @@ graph LR
     srv_changes -->|yes| srv_unit["Unit Tests"]
     srv_changes -->|no| srv_skip["Skip all"]
     srv_lint & srv_tc & srv_unit & srv_skip --> srv_gate["Server Status\n(gate)"]
+
+    PR --> accel["accelerator.yml"]
+    accel --> accel_changes{"Accelerator files\nchanged?"}
+    accel_changes -->|yes| accel_clippy["Clippy"]
+    accel_changes -->|yes| accel_test["Rust Tests"]
+    accel_changes -->|yes| accel_fmt["Rust Fmt"]
+    accel_changes -->|no| accel_skip["Skip all"]
+    accel_clippy & accel_test & accel_fmt & accel_skip --> accel_gate["Accelerator Status\n(gate)"]
 ```
 
 ### Change detection paths
@@ -58,12 +66,13 @@ graph LR
 | `sdk.yml` | `packages/sdk/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/sdk.yml`, `.github/workflows/_e2e-sdk.yml`, `.github/actions/**` |
 | `app.yml` | `packages/app/**`, `packages/sdk/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/app.yml`, `.github/workflows/_e2e-app.yml`, `.github/actions/**` |
 | `server.yml` | `packages/server/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/server.yml` |
+| `accelerator.yml` | `packages/accelerator/**`, `.github/workflows/accelerator.yml` |
 
 Note: `app.yml` includes `packages/sdk/**` because the app depends on the SDK. `workflow_dispatch` overrides all filters to `true`.
 
 ### Branch protection
 
-Four gate jobs are required for merge: **SDK Status**, **App Status**, **Server Status**, **Infra Status**. These always run (`if: always()`) and report failure if any upstream job failed or was cancelled, pass if all passed or were skipped. **Infra Status** auto-passes when the `test-infra` label is absent, ensuring misc PRs aren't blocked by infrastructure tests.
+Five gate jobs are required for merge: **SDK Status**, **App Status**, **Server Status**, **Accelerator Status**, **Infra Status**. These always run (`if: always()`) and report failure if any upstream job failed or was cancelled, pass if all passed or were skipped. **Infra Status** auto-passes when the `test-infra` label is absent, ensuring misc PRs aren't blocked by infrastructure tests.
 
 ---
 
@@ -191,7 +200,28 @@ Both wrappers call `_aztec-update.yml` with these inputs:
 
 ---
 
-## 5. Reusable Workflows
+## 5. Accelerator Release
+
+### `release-accelerator.yml`
+
+Tag-triggered workflow that builds and publishes the TeeRex Accelerator to GitHub Releases.
+
+```mermaid
+graph LR
+    tag["Tag push\n(accelerator-v*)"] --> matrix["Matrix build"]
+    matrix --> mac_arm["macOS arm64\n(.dmg)"]
+    matrix --> mac_x64["macOS x86_64\n(.dmg)"]
+    matrix --> linux["Linux x86_64\n(.deb, .AppImage)"]
+    mac_arm & mac_x64 & linux --> release["GitHub Release\n(upload artifacts)"]
+```
+
+Trigger: tag push matching `accelerator-v*`. Each matrix job runs `cargo tauri build` with the appropriate target, then uploads the artifacts to the GitHub Release created by the tag.
+
+Note: macOS code signing is deferred (TODO). Windows is not supported (no `bb` binary from Aztec).
+
+---
+
+## 6. Reusable Workflows
 
 | Workflow | Purpose | Key inputs |
 |----------|---------|-----------|
@@ -204,7 +234,7 @@ Both wrappers call `_aztec-update.yml` with these inputs:
 
 ---
 
-## 6. Composite Actions
+## 7. Composite Actions
 
 ### `setup-aztec`
 
@@ -216,7 +246,7 @@ Starts Aztec local network and tee-rex server in the background, then waits for 
 
 ---
 
-## 7. Docker Image Strategy
+## 8. Docker Image Strategy
 
 Two-layer Docker build to maximize layer caching:
 
@@ -242,7 +272,7 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 
 ---
 
-## 8. Key Design Decisions
+## 9. Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|

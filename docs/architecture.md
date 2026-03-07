@@ -12,6 +12,10 @@ graph TB
     PXE --> SDK
   end
 
+  subgraph Local["Local Machine"]
+    Accelerator["TeeRex Accelerator<br/>(Tauri tray app)<br/>bb binary on localhost:59833"]
+  end
+
   CF["CloudFront CDN"]
 
   subgraph AWS["AWS"]
@@ -32,6 +36,7 @@ graph TB
     end
   end
 
+  Client -->|"localhost"| Accelerator
   Client -->|"HTTPS"| CF
   CF -->|"/*"| S3
   CF -->|"/prover/*"| ProverEC2
@@ -61,18 +66,47 @@ sequenceDiagram
   Note over C: Deserialize proof<br/>Return to PXE for transaction submission
 ```
 
+## Accelerated Proving Flow
+
+When the SDK is set to `ProvingMode.accelerated`, it routes proving to the native TeeRex Accelerator running on the user's machine — bypassing browser WASM throttling.
+
+```mermaid
+sequenceDiagram
+  participant C as Client (SDK)
+  participant A as Accelerator (localhost:59833)
+  participant BB as bb binary (native)
+
+  C->>A: GET /health
+  A-->>C: { status, aztec_version, bb }
+
+  Note over C: Check version compatibility<br/>Fall back to WASM on mismatch
+
+  C->>A: POST /prove (msgpack body)
+
+  A->>BB: bb prove --scheme chonk (temp files)
+  BB-->>A: proof bytes
+
+  A-->>C: { proof: "<base64>" }
+
+  Note over C: Deserialize proof<br/>Return to PXE
+```
+
+If the accelerator is unavailable or returns a version mismatch, the SDK emits a `"fallback"` phase and proves via WASM instead.
+
 ## Package Structure
 
 ```
 tee-rex/
 ├── packages/
-│   ├── sdk/       → @alejoamiras/tee-rex (npm package)
-│   │              Drop-in Aztec prover: local (WASM) or remote (TEE)
-│   ├── server/    → Express server (runs in Nitro Enclave or standalone)
-│   │              Handles /prove, /attestation, /encryption-public-key
-│   └── app/       → Vite frontend demo (local/remote/TEE mode toggle)
-├── infra/         → Deploy scripts, IAM policies, CloudFront config
-└── docs/          → Architecture, CI pipeline, Nitro deployment guide
+│   ├── sdk/          → @alejoamiras/tee-rex (npm package)
+│   │                   Drop-in Aztec prover: local (WASM), remote (TEE), or accelerated (native)
+│   ├── server/       → Express server (runs in Nitro Enclave or standalone)
+│   │                   Handles /prove, /attestation, /encryption-public-key
+│   ├── app/          → Vite frontend demo (local/remote/TEE mode toggle)
+│   └── accelerator/  → Tauri tray app — native proving on localhost:59833
+│                       Runs bb binary natively, auto-detected by SDK
+├── infra/            → Deploy scripts, IAM policies, CloudFront config
+└── docs/             → Architecture, CI pipeline, Nitro deployment guide
 ```
 
 ## Docker Image Strategy
