@@ -143,15 +143,17 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Collect all bundle files
-          FILES=$(find artifacts -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \))
+          # Collect all bundle files into a null-delimited list (handles spaces in filenames)
+          mapfile -d '' FILES < <(find artifacts -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0)
 
-          if [ -z "$FILES" ]; then
+          if [ ${#FILES[@]} -eq 0 ]; then
             echo "No artifacts found!"
             exit 1
           fi
 
-          # shellcheck disable=SC2086
+          echo "Uploading ${#FILES[@]} files:"
+          printf '  %s\n' "${FILES[@]}"
+
           gh release create "$TAG" \
             --title "Accelerator $VERSION" \
             --notes "$(cat <<EOF
@@ -171,4 +173,4 @@ jobs:
           EOF
           )" \
             --prerelease \
-            $FILES
+            "${FILES[@]}"
