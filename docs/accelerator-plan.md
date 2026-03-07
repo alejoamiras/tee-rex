@@ -496,11 +496,14 @@ Implement the bb binary resolution/download/bundling based on the decision.
 - Create GitHub Release with artifacts
 - Auto-updater JSON
 
-### 9C. Integration e2e workflow (future)
+### 9C. Integration e2e workflow — DONE
 
-- Start accelerator in CI
-- Run SDK e2e tests with `ACCELERATOR_URL=http://127.0.0.1:59833`
-- Validate the full flow: SDK → Accelerator → bb → proof
+Headless binary approach (no Xvfb/virtual display needed):
+- Created `lib.rs` (pub mod bb, server, log_dir) + refactored `main.rs` to import from library
+- Created `src/bin/accelerator-server.rs` — minimal `#[tokio::main]` binary using the library's Axum server
+- Added `BB_BINARY_PATH` env var as priority 0 in `find_bb()` — bridges sidecar path in CI
+- `accelerator.yml` e2e job: prebuild bb → set `BB_BINARY_PATH` → build headless binary → start Aztec + tee-rex + accelerator → SDK e2e with `ACCELERATOR_URL`
+- Gate job (`accelerator-status`) updated to include e2e in needs list
 
 ---
 

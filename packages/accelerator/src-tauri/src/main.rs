@@ -1,26 +1,15 @@
 // Prevents additional console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod bb;
-mod server;
-
-use server::AppState;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tee_rex_accelerator::log_dir;
+use tee_rex_accelerator::server::AppState;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-
-/// Returns the log directory: `~/Library/Application Support/tee-rex-accelerator/logs/` (macOS).
-pub fn log_dir() -> PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("tee-rex-accelerator")
-        .join("logs")
-}
 
 fn main() {
     let log_path = log_dir();
@@ -113,7 +102,7 @@ fn main() {
 
             // Spawn the HTTP server on the Tokio runtime
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = server::start(state).await {
+                if let Err(e) = tee_rex_accelerator::server::start(state).await {
                     tracing::error!("Accelerator server error: {e}");
                 }
             });

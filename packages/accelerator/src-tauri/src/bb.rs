@@ -1,10 +1,19 @@
 use std::path::PathBuf;
 
 /// Find the `bb` binary. Search order:
+/// 0. `BB_BINARY_PATH` env var — explicit override (CI, testing, custom installs)
 /// 1. Bundled sidecar (Tauri externalBin) — `binaries/bb-{target-triple}` next to the executable
 /// 2. `~/.bb/bb` — user-installed via `bbup`
 /// 3. `bb` on `$PATH`
 pub fn find_bb() -> Result<PathBuf, String> {
+    // 0. Explicit override via environment variable
+    if let Ok(path) = std::env::var("BB_BINARY_PATH") {
+        let explicit = PathBuf::from(&path);
+        if explicit.exists() {
+            return Ok(explicit);
+        }
+    }
+
     // 1. Sidecar: check next to the current executable
     if let Ok(exe) = std::env::current_exe() {
         let sidecar = exe.parent().unwrap_or(&exe).join("bb");
@@ -126,6 +135,32 @@ mod tests {
 
         assert_eq!(result.len(), 36);
         assert_eq!(&result[0..4], &[0, 0, 0, 1]); // 1 field
+    }
+
+    #[test]
+    fn test_find_bb_respects_bb_binary_path_env() {
+        // Set BB_BINARY_PATH to the current executable (guaranteed to exist)
+        let exe = std::env::current_exe().unwrap();
+        std::env::set_var("BB_BINARY_PATH", exe.to_str().unwrap());
+
+        let result = find_bb();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), exe);
+
+        // Clean up
+        std::env::remove_var("BB_BINARY_PATH");
+    }
+
+    #[test]
+    fn test_find_bb_ignores_nonexistent_bb_binary_path() {
+        std::env::set_var("BB_BINARY_PATH", "/nonexistent/path/to/bb");
+        // Should not return the nonexistent path — falls through to other checks
+        let result = find_bb();
+        match result {
+            Ok(path) => assert_ne!(path, PathBuf::from("/nonexistent/path/to/bb")),
+            Err(_) => {} // Also fine — bb not found via other methods
+        }
+        std::env::remove_var("BB_BINARY_PATH");
     }
 
     #[test]

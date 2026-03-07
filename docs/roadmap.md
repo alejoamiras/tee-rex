@@ -448,12 +448,13 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **Step 7** | BB binary version compatibility: `copy-bb.ts` writes `AZTEC_VERSION` from `@aztec/bb.js` package version, `build.rs` exposes as `AZTEC_BB_VERSION` compile-time env var, `/health` returns `aztec_version` field. SDK `#checkAcceleratorHealth()` parses the response and compares with its own `@aztec/stdlib` dependency version — falls back to WASM on mismatch, proceeds on `"unknown"`. |
 | **Step 8A/C** | Auto-start on login (`tauri-plugin-autostart`, "Start on Login" tray checkbox) + documentation (accelerator README, root README, architecture, how-it-works, ci-pipeline updates) |
 
+| **Step 9** | CI e2e integration — headless binary (`src/bin/accelerator-server.rs`) via lib+bins pattern (no Tauri/GUI deps at runtime). `BB_BINARY_PATH` env var for bb resolution in CI. `accelerator.yml` e2e job: prebuild bb sidecar → build headless binary → start Aztec local network + tee-rex server + accelerator → SDK e2e with `ACCELERATOR_URL`. Gate job updated. |
+
 **Remaining:**
 
 | Part | Summary |
 |------|---------|
 | **Step 7B (backlog)** | Multi-version bb support: bundle or download multiple bb versions for different Aztec networks (mainnet, testnet, devnet, nightly). Health endpoint reports available versions. SDK requests specific version. Research: version discovery, storage strategy, download-on-demand vs pre-bundled. |
-| **Step 9** | Live integration e2e in CI (requires headless display context) |
 
 ---
 
