@@ -194,8 +194,22 @@ describe("TeeRexProver", () => {
   });
 
   describe("Accelerated", () => {
-    const healthOk: RouteHandler = () =>
-      Response.json({ status: "ok", aztec_version: SDK_AZTEC_VERSION });
+    /** Health response with available_versions (multi-version protocol). */
+    const healthMultiVersion: RouteHandler = () =>
+      Response.json({
+        status: "ok",
+        aztec_version: SDK_AZTEC_VERSION,
+        available_versions: [SDK_AZTEC_VERSION],
+      });
+
+    /** Health response where SDK version is NOT in available_versions (triggers download). */
+    const healthNeedsDownload: RouteHandler = () =>
+      Response.json({
+        status: "ok",
+        aztec_version: "5.0.0-nightly.20260101",
+        available_versions: ["5.0.0-nightly.20260101"],
+      });
+
     const fakeMsgpack = Buffer.from([0x93, 0x01, 0x02, 0x03]);
 
     /** Mock serializePrivateExecutionSteps to avoid WASM panic on fake witness data. */
@@ -204,7 +218,7 @@ describe("TeeRexProver", () => {
     }
 
     test("calls accelerator health check and /prove endpoint", async () => {
-      const { fetchedUrls } = mockFetch({ "/health": healthOk });
+      const { fetchedUrls } = mockFetch({ "/health": healthMultiVersion });
       const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
@@ -241,18 +255,20 @@ describe("TeeRexProver", () => {
       wasmSpy.mockRestore();
     });
 
-    test("sends msgpack binary payload to /prove", async () => {
+    test("sends msgpack binary payload with x-aztec-version header to /prove", async () => {
       let capturedContentType: string | null = null;
       let capturedBody: ArrayBuffer | null = null;
+      let capturedVersionHeader: string | null = null;
 
       const serializeSpy = mockSerializer();
 
       mockFetch({
-        "/health": healthOk,
+        "/health": healthMultiVersion,
         "/prove": async (_url, request) => {
           if (typeof request !== "string") {
             capturedContentType = (request as Request).headers.get("content-type");
             capturedBody = await (request as Request).arrayBuffer();
+            capturedVersionHeader = (request as Request).headers.get("x-aztec-version");
           }
           return new Response("not found", { status: 404 });
         },
@@ -271,13 +287,14 @@ describe("TeeRexProver", () => {
       expect(capturedContentType).toBe("application/octet-stream");
       expect(capturedBody).toBeDefined();
       expect(new Uint8Array(capturedBody!)).toEqual(new Uint8Array(fakeMsgpack));
+      expect(capturedVersionHeader).toBe(SDK_AZTEC_VERSION);
 
       serializeSpy.mockRestore();
     });
 
     test("uses configured port for health check", async () => {
       const customPort = 12345;
-      const { fetchedUrls } = mockFetch({ "/health": healthOk });
+      const { fetchedUrls } = mockFetch({ "/health": healthMultiVersion });
       const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
@@ -297,7 +314,7 @@ describe("TeeRexProver", () => {
 
     test("fires phase callbacks in order when accelerator is available", async () => {
       const phases: ProverPhase[] = [];
-      mockFetch({ "/health": healthOk });
+      mockFetch({ "/health": healthMultiVersion });
       const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
@@ -333,8 +350,47 @@ describe("TeeRexProver", () => {
       wasmSpy.mockRestore();
     });
 
+    test("emits downloading phase when version not in available_versions", async () => {
+      const phases: ProverPhase[] = [];
+      mockFetch({ "/health": healthNeedsDownload });
+      const serializeSpy = mockSerializer();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+      prover.setOnPhase((phase) => phases.push(phase));
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected
+      }
+
+      expect(phases).toContain("downloading");
+      expect(phases.indexOf("downloading")).toBeLessThan(phases.indexOf("serialize"));
+      serializeSpy.mockRestore();
+    });
+
+    test("does not emit downloading when version is in available_versions", async () => {
+      const phases: ProverPhase[] = [];
+      mockFetch({ "/health": healthMultiVersion });
+      const serializeSpy = mockSerializer();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+      prover.setOnPhase((phase) => phases.push(phase));
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected
+      }
+
+      expect(phases).not.toContain("downloading");
+      serializeSpy.mockRestore();
+    });
+
     test("does not call remote TEE API or attestation endpoints", async () => {
-      const { fetchedUrls } = mockFetch({ "/health": healthOk });
+      const { fetchedUrls } = mockFetch({ "/health": healthMultiVersion });
       const serializeSpy = mockSerializer();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
@@ -351,7 +407,7 @@ describe("TeeRexProver", () => {
       serializeSpy.mockRestore();
     });
 
-    test("falls back to WASM when accelerator has mismatched Aztec version", async () => {
+    test("falls back to WASM with legacy accelerator on version mismatch", async () => {
       const healthMismatch: RouteHandler = () =>
         Response.json({ status: "ok", aztec_version: "0.0.0-fake" });
       mockFetch({ "/health": healthMismatch });
@@ -367,7 +423,7 @@ describe("TeeRexProver", () => {
       wasmSpy.mockRestore();
     });
 
-    test("proceeds when accelerator reports unknown version", async () => {
+    test("proceeds with legacy accelerator when version is unknown", async () => {
       const healthUnknown: RouteHandler = () =>
         Response.json({ status: "ok", aztec_version: "unknown" });
       mockFetch({ "/health": healthUnknown });
@@ -383,6 +439,26 @@ describe("TeeRexProver", () => {
       }
 
       // Should have called /prove (not fallen back to WASM)
+      serializeSpy.mockRestore();
+    });
+
+    test("multi-version accelerator always proceeds (no WASM fallback on mismatch)", async () => {
+      // When available_versions is present but SDK version not in it,
+      // the SDK should still proceed (accelerator will download on demand)
+      mockFetch({ "/health": healthNeedsDownload });
+      const serializeSpy = mockSerializer();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — mock /prove returns 404
+      }
+
+      // Should have called serialize (not fallen back to WASM)
+      expect(serializeSpy).toHaveBeenCalled();
       serializeSpy.mockRestore();
     });
   });

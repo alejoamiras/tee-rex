@@ -83,7 +83,7 @@ jobs:
       - name: Patch version in Cargo.toml
         run: |
           cd packages/accelerator/src-tauri
-          sed -i.bak 's/^version = "0.0.0"/version = "${{ steps.version.outputs.version }}"/' Cargo.toml
+          sed -i.bak 's/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' Cargo.toml
           rm -f Cargo.toml.bak
 
       - name: Copy bb sidecar

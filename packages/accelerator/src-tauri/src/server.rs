@@ -14,15 +14,18 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 
-use crate::bb;
+use crate::{bb, versions};
 
 const PORT: u16 = 59833;
 
 pub type StatusCallback = Arc<dyn Fn(&str) + Send + Sync>;
+pub type VersionsChangedCallback = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone, Default)]
 pub struct AppState {
     pub on_status: Option<StatusCallback>,
+    pub bundled_version: Option<String>,
+    pub on_versions_changed: Option<VersionsChangedCallback>,
 }
 
 pub async fn start(state: AppState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -38,7 +41,10 @@ pub fn router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([http::header::CONTENT_TYPE]);
+        .allow_headers([
+            http::header::CONTENT_TYPE,
+            http::header::HeaderName::from_static("x-aztec-version"),
+        ]);
 
     Router::new()
         .route("/health", get(health))
@@ -52,12 +58,25 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn health() -> impl IntoResponse {
+async fn health(State(state): State<AppState>) -> impl IntoResponse {
+    let bundled = state
+        .bundled_version
+        .as_deref()
+        .unwrap_or(env!("AZTEC_BB_VERSION"));
+
+    let mut available = vec![bundled.to_string()];
+    for v in versions::list_cached_versions() {
+        if v != bundled {
+            available.push(v);
+        }
+    }
+
     axum::Json(json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
-        "aztec_version": env!("AZTEC_BB_VERSION"),
-        "bb": bb::find_bb().map(|p| p.display().to_string()).ok(),
+        "aztec_version": bundled,
+        "available_versions": available,
+        "bb": bb::find_bb(None).map(|p| p.display().to_string()).ok(),
         "log_dir": crate::log_dir().display().to_string(),
     }))
 }
@@ -78,9 +97,20 @@ impl Drop for StatusGuard {
 
 async fn prove(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     tracing::info!(payload_bytes = body.len(), "Received /prove request");
+
+    // Extract requested Aztec version from header (if any)
+    let requested_version = headers
+        .get("x-aztec-version")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_string());
+
+    if let Some(ref v) = requested_version {
+        tracing::info!(version = %v, "Requested Aztec version");
+    }
 
     if let Some(ref cb) = state.on_status {
         cb("Status: Proving...");
@@ -91,8 +121,55 @@ async fn prove(
         cb: state.on_status.clone(),
     };
 
+    // If a specific version is requested, ensure it's available (download if needed)
+    let version_for_prove = if let Some(ref v) = requested_version {
+        let bundled = state
+            .bundled_version
+            .as_deref()
+            .unwrap_or(env!("AZTEC_BB_VERSION"));
+
+        if v != bundled && !versions::version_bb_path(v).exists() {
+            tracing::info!(version = %v, "Version not cached, downloading");
+            if let Some(ref cb) = state.on_status {
+                cb("Status: Downloading bb...");
+            }
+
+            match versions::download_bb(v).await {
+                Ok(_) => {
+                    tracing::info!(version = %v, "Download complete");
+                    // Cleanup old versions in the background
+                    let bundled_owned = bundled.to_string();
+                    let on_versions_changed = state.on_versions_changed.clone();
+                    tokio::spawn(async move {
+                        versions::cleanup_old_versions(&bundled_owned).await;
+                        if let Some(cb) = on_versions_changed {
+                            cb();
+                        }
+                    });
+                    if let Some(ref cb) = state.on_versions_changed {
+                        cb();
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(version = %v, error = %e, "Failed to download bb");
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to download bb v{v}: {e}"),
+                    ));
+                }
+            }
+
+            if let Some(ref cb) = state.on_status {
+                cb("Status: Proving...");
+            }
+        }
+        Some(v.as_str())
+    } else {
+        None
+    };
+
     let start = std::time::Instant::now();
-    let result = bb::prove(&body).await;
+    let result = bb::prove(&body, version_for_prove).await;
     let elapsed = start.elapsed();
 
     match &result {
@@ -145,6 +222,8 @@ mod tests {
         assert!(json.get("version").is_some());
         assert!(json.get("aztec_version").is_some());
         assert!(json.get("log_dir").is_some());
+        assert!(json.get("available_versions").is_some());
+        assert!(json["available_versions"].is_array());
     }
 
     #[tokio::test]
@@ -170,6 +249,36 @@ mod tests {
                 .get("access-control-allow-origin")
                 .unwrap(),
             "*"
+        );
+    }
+
+    #[tokio::test]
+    async fn cors_allows_aztec_version_header() {
+        let app = router(AppState::default());
+        let response: axum::http::Response<_> = app
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/prove")
+                    .header("origin", "http://localhost:5173")
+                    .header("access-control-request-method", "POST")
+                    .header("access-control-request-headers", "x-aztec-version")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let allow_headers = response
+            .headers()
+            .get("access-control-allow-headers")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(
+            allow_headers.contains("x-aztec-version"),
+            "CORS should allow x-aztec-version header, got: {allow_headers}"
         );
     }
 
@@ -214,5 +323,34 @@ mod tests {
 
         // Should fail because bb is not available in test env
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn health_includes_available_versions() {
+        let state = AppState {
+            bundled_version: Some("5.0.0-nightly.20260307".into()),
+            ..Default::default()
+        };
+        let app = router(state);
+        let response: axum::http::Response<_> = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let versions = json["available_versions"].as_array().unwrap();
+        // At minimum, bundled version should be in available_versions
+        assert!(versions
+            .iter()
+            .any(|v| v.as_str() == Some("5.0.0-nightly.20260307")));
     }
 }

@@ -1,0 +1,18 @@
+{
+  "packages": {
+    "packages/accelerator/src-tauri": {
+      "release-type": "rust",
+      "component": "accelerator",
+      "tag-prefix": "accelerator-v",
+      "prerelease": true,
+      "prerelease-type": "rc",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "../tauri.conf.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

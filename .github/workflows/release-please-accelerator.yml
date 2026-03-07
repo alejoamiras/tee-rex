@@ -1,0 +1,25 @@
+name: Release Please (Accelerator)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/accelerator/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # PAT_TOKEN so tag pushes trigger release-accelerator.yml
+          # (GITHUB_TOKEN tag pushes don't trigger other workflows)
+          token: ${{ secrets.PAT_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

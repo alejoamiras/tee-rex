@@ -1,11 +1,17 @@
 use std::path::PathBuf;
 
-/// Find the `bb` binary. Search order:
+use crate::versions;
+
+/// Find the `bb` binary. When `version` is provided, the version cache is checked
+/// before the standard search chain.
+///
+/// Search order:
 /// 0. `BB_BINARY_PATH` env var — explicit override (CI, testing, custom installs)
-/// 1. Bundled sidecar (Tauri externalBin) — `binaries/bb-{target-triple}` next to the executable
-/// 2. `~/.bb/bb` — user-installed via `bbup`
-/// 3. `bb` on `$PATH`
-pub fn find_bb() -> Result<PathBuf, String> {
+/// 1. Version cache (`~/.tee-rex-accelerator/versions/{version}/bb`) — when version specified
+/// 2. Bundled sidecar (Tauri externalBin) — `binaries/bb-{target-triple}` next to the executable
+/// 3. `~/.bb/bb` — user-installed via `bbup`
+/// 4. `bb` on `$PATH`
+pub fn find_bb(version: Option<&str>) -> Result<PathBuf, String> {
     // 0. Explicit override via environment variable
     if let Ok(path) = std::env::var("BB_BINARY_PATH") {
         let explicit = PathBuf::from(&path);
@@ -14,7 +20,15 @@ pub fn find_bb() -> Result<PathBuf, String> {
         }
     }
 
-    // 1. Sidecar: check next to the current executable
+    // 1. Version cache (only when a specific version is requested)
+    if let Some(v) = version {
+        let cached = versions::version_bb_path(v);
+        if cached.exists() {
+            return Ok(cached);
+        }
+    }
+
+    // 2. Sidecar: check next to the current executable
     if let Ok(exe) = std::env::current_exe() {
         let sidecar = exe.parent().unwrap_or(&exe).join("bb");
         if sidecar.exists() {
@@ -22,7 +36,7 @@ pub fn find_bb() -> Result<PathBuf, String> {
         }
     }
 
-    // 2. ~/.bb/bb (bbup install location)
+    // 3. ~/.bb/bb (bbup install location)
     if let Some(home) = dirs_next().or_else(home_dir_fallback) {
         let bbup_path = home.join(".bb").join("bb");
         if bbup_path.exists() {
@@ -30,7 +44,7 @@ pub fn find_bb() -> Result<PathBuf, String> {
         }
     }
 
-    // 3. bb on $PATH
+    // 4. bb on $PATH
     if let Ok(path) = which::which("bb") {
         return Ok(path);
     }
@@ -48,9 +62,14 @@ fn home_dir_fallback() -> Option<PathBuf> {
 
 /// Run `bb prove` on the given IVC inputs (msgpack bytes) and return the proof
 /// with a 4-byte BE field-count header suitable for `ChonkProofWithPublicInputs.fromBuffer()`.
-pub async fn prove(ivc_inputs: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+///
+/// When `version` is specified, searches the version cache for the matching `bb` binary.
+pub async fn prove(
+    ivc_inputs: &[u8],
+    version: Option<&str>,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     let bb_path =
-        find_bb().map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
+        find_bb(version).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
 
     let tmp_dir = tempfile::tempdir()?;
     let input_path = tmp_dir.path().join("ivc-inputs.msgpack");
@@ -61,6 +80,7 @@ pub async fn prove(ivc_inputs: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Err
     tracing::info!(
         bb = %bb_path.display(),
         input = %input_path.display(),
+        version = version.unwrap_or("bundled"),
         "Starting bb prove"
     );
 
@@ -143,7 +163,7 @@ mod tests {
         let exe = std::env::current_exe().unwrap();
         std::env::set_var("BB_BINARY_PATH", exe.to_str().unwrap());
 
-        let result = find_bb();
+        let result = find_bb(None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), exe);
 
@@ -155,7 +175,7 @@ mod tests {
     fn test_find_bb_ignores_nonexistent_bb_binary_path() {
         std::env::set_var("BB_BINARY_PATH", "/nonexistent/path/to/bb");
         // Should not return the nonexistent path — falls through to other checks
-        let result = find_bb();
+        let result = find_bb(None);
         if let Ok(path) = result {
             assert_ne!(path, PathBuf::from("/nonexistent/path/to/bb"));
         }
@@ -168,9 +188,19 @@ mod tests {
         // This test verifies find_bb returns an error when no bb is available,
         // which is the expected state in CI/test environments.
         // When bb IS available (via PATH or ~/.bb/bb), it should succeed.
-        let result = find_bb();
+        let result = find_bb(None);
         // We can't assert Ok/Err since it depends on the environment,
         // but we can verify the function doesn't panic.
+        match result {
+            Ok(path) => assert!(path.exists()),
+            Err(msg) => assert!(msg.contains("bb binary not found")),
+        }
+    }
+
+    #[test]
+    fn test_find_bb_with_version_checks_cache() {
+        // Verify that find_bb with a version doesn't panic and follows the chain
+        let result = find_bb(Some("99.99.99-nonexistent"));
         match result {
             Ok(path) => assert!(path.exists()),
             Err(msg) => assert!(msg.contains("bb binary not found")),

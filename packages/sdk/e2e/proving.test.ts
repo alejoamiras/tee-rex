@@ -123,6 +123,37 @@ describe("TeeRexProver", () => {
 
       prover.setOnPhase(null);
     }, 600000);
+
+    test.skipIf(!process.env.ACCELERATOR_DOWNLOAD_TEST)(
+      "should download bb for a different version and prove",
+      async () => {
+        expect(wallet).toBeDefined();
+
+        prover.setProvingMode(ProvingMode.accelerated);
+        if (process.env.ACCELERATOR_URL) {
+          const url = new URL(process.env.ACCELERATOR_URL);
+          prover.setAcceleratorConfig({
+            host: url.hostname,
+            port: Number.parseInt(url.port, 10),
+          });
+        }
+
+        const phases: ProverPhase[] = [];
+        prover.setOnPhase((phase) => phases.push(phase));
+
+        const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
+        expect(deployed).toBeDefined();
+
+        // The accelerator may emit "downloading" if the SDK version differs
+        // from the bundled version. Either way, proving should succeed.
+        expect(phases).toContain("detect");
+        expect(phases).not.toContain("fallback");
+        logger.info("Download test phases", { phases });
+
+        prover.setOnPhase(null);
+      },
+      600000,
+    );
   });
 
   describe("Accelerated (fallback)", () => {
