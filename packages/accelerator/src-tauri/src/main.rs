@@ -2,14 +2,46 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Arc;
-use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
+use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
+use tauri::AppHandle;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tee_rex_accelerator::log_dir;
 use tee_rex_accelerator::server::AppState;
+use tee_rex_accelerator::versions;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+
+/// Build a "Versions" submenu listing the bundled + cached bb versions.
+fn build_versions_submenu(
+    app: &AppHandle,
+    bundled_version: &str,
+) -> Result<tauri::menu::Submenu<tauri::Wry>, Box<dyn std::error::Error>> {
+    let mut builder = SubmenuBuilder::with_id(app, "versions", "Versions");
+
+    // Bundled version always first
+    let bundled_item = MenuItemBuilder::with_id(
+        format!("version_{bundled_version}"),
+        format!("{bundled_version} (bundled)"),
+    )
+    .enabled(false)
+    .build(app)?;
+    builder = builder.item(&bundled_item);
+
+    // Cached versions (exclude bundled to avoid duplicate)
+    let cached = versions::list_cached_versions();
+    for v in &cached {
+        if v != bundled_version {
+            let item = MenuItemBuilder::with_id(format!("version_{v}"), v.as_str())
+                .enabled(false)
+                .build(app)?;
+            builder = builder.item(&item);
+        }
+    }
+
+    Ok(builder.build()?)
+}
 
 fn main() {
     let log_path = log_dir();
@@ -31,9 +63,14 @@ fn main() {
             None,
         ))
         .setup(|app| {
+            let bundled_version = env!("AZTEC_BB_VERSION").to_string();
+
             let status = MenuItemBuilder::with_id("status", "Status: Idle")
                 .enabled(false)
                 .build(app)?;
+
+            let versions_submenu = build_versions_submenu(&app.handle().clone(), &bundled_version)?;
+
             let show_logs = MenuItemBuilder::with_id("show_logs", "Show Logs").build(app)?;
 
             let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
@@ -44,7 +81,7 @@ fn main() {
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
 
             let menu = MenuBuilder::new(app)
-                .items(&[&status, &show_logs, &autostart, &quit])
+                .items(&[&status, &versions_submenu, &show_logs, &autostart, &quit])
                 .build()?;
 
             let tray = TrayIconBuilder::new()
@@ -87,17 +124,62 @@ fn main() {
 
             let status_clone = status.clone();
             let tray_clone = tray.clone();
+
+            // Versions changed callback: rebuild the Versions submenu when versions change
+            let app_handle = app.handle().clone();
+            let bundled_for_cb = bundled_version.clone();
+            let tray_for_versions = tray.clone();
+            let on_versions_changed: tee_rex_accelerator::server::VersionsChangedCallback =
+                Arc::new(move || {
+                    match build_versions_submenu(&app_handle, &bundled_for_cb) {
+                        Ok(new_submenu) => {
+                            // Rebuild the full menu with the updated versions submenu
+                            let status_rebuild = status.clone();
+                            let show_logs_rebuild =
+                                MenuItemBuilder::with_id("show_logs", "Show Logs")
+                                    .build(&app_handle)
+                                    .unwrap();
+                            let autostart_enabled =
+                                app_handle.autolaunch().is_enabled().unwrap_or(false);
+                            let autostart_rebuild =
+                                CheckMenuItemBuilder::with_id("toggle_autostart", "Start on Login")
+                                    .checked(autostart_enabled)
+                                    .build(&app_handle)
+                                    .unwrap();
+                            let quit_rebuild = MenuItemBuilder::with_id("quit", "Quit")
+                                .build(&app_handle)
+                                .unwrap();
+                            let new_menu = MenuBuilder::new(&app_handle)
+                                .items(&[
+                                    &status_rebuild,
+                                    &new_submenu,
+                                    &show_logs_rebuild,
+                                    &autostart_rebuild,
+                                    &quit_rebuild,
+                                ])
+                                .build()
+                                .unwrap();
+                            let _ = tray_for_versions.set_menu(Some(new_menu));
+                            tracing::info!("Versions submenu updated");
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to rebuild versions submenu: {e}");
+                        }
+                    }
+                });
+
             let state = AppState {
                 on_status: Some(Arc::new(move |text: &str| {
-                    let _ = status_clone.set_text(text);
-                    let _ = tray_clone.set_tooltip(Some(text));
-                    // macOS: show text next to the tray icon in the menu bar
-                    if text.contains("Proving") {
-                        let _ = tray_clone.set_title(Some("Proving..."));
-                    } else {
-                        let _ = tray_clone.set_title(Some(""));
+                    tracing::info!(text, "on_status callback fired");
+                    if let Err(e) = status_clone.set_text(text) {
+                        tracing::error!("set_text failed: {e}");
+                    }
+                    if let Err(e) = tray_clone.set_tooltip(Some(text)) {
+                        tracing::error!("set_tooltip failed: {e}");
                     }
                 })),
+                bundled_version: Some(bundled_version),
+                on_versions_changed: Some(on_versions_changed),
             };
 
             // Spawn the HTTP server on the Tokio runtime

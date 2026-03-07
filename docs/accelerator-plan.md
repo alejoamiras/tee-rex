@@ -555,6 +555,46 @@ Step 9 (CI pipeline)
 
 ---
 
+## Step 7B: Multi-Version bb + Semver + Auto-Release ✅
+
+### Summary
+
+Download-on-demand: accelerator fetches the correct `bb` version at runtime if the SDK's Aztec version differs from the bundled one.
+
+### New files
+- `src-tauri/src/versions.rs` — NetworkTier enum, retention policy (nightly: 2, devnet: 3, testnet/rc: 5, mainnet: all), download from GitHub Releases, tar.gz extraction, atomic caching to `~/.tee-rex-accelerator/versions/{version}/bb`, cleanup after prove
+
+### Modified files
+- `bb.rs` — `find_bb(version: Option<&str>)` with version cache lookup before sidecar/PATH chain
+- `server.rs` — Reads `X-Aztec-Version` header, downloads bb on demand, `/health` returns `available_versions` array, CORS allows version header
+- `main.rs` — "Versions" tray submenu (bundled + cached), `on_versions_changed` callback rebuilds submenu
+- `accelerator-server.rs` — Updated for new `AppState` fields
+- `tee-rex-prover.ts` — `#checkAcceleratorHealth` returns `{ available, needsDownload }`, emits `"downloading"` phase, sends `x-aztec-version` header, legacy exact-match preserved
+- `tee-rex-prover.test.ts` — Multi-version protocol tests, downloading phase tests, header tests
+- `proving.test.ts` — Download path e2e test (gated by `ACCELERATOR_DOWNLOAD_TEST`)
+- `_e2e-sdk.yml` — Sets `ACCELERATOR_DOWNLOAD_TEST` env var
+- `release-accelerator.yml` — Generic version sed pattern (was hardcoded `0.0.0`)
+
+### New release infrastructure
+- `.release-please-manifest.json` + `release-please-config.json` — release-please manifest for `packages/accelerator/src-tauri`
+- `.github/workflows/release-please-accelerator.yml` — On push to main, creates/updates Release PR. Uses `PAT_TOKEN` so tag pushes trigger `release-accelerator.yml`
+- Version: `0.0.0` → `1.0.0-rc.1`
+
+### Protocol
+- SDK sends `X-Aztec-Version` header on `/prove`
+- Health returns `available_versions` array (bundled + cached)
+- If SDK version not in `available_versions`: SDK emits `"downloading"` phase, then sends `/prove` (accelerator downloads on demand)
+- If `available_versions` present: SDK always proceeds (no WASM fallback)
+- Legacy accelerators (no `available_versions`): existing exact-match behavior preserved
+
+### Tests
+- 12 unit tests in `versions.rs` (tier classification, retention, eviction, bundled protection, tar extraction, cleanup)
+- 7 unit tests in `bb.rs` (resolution chain, version cache lookup)
+- 6 unit tests in `server.rs` (health, CORS, available_versions)
+- 18 unit tests in SDK (multi-version health, downloading phase, header, legacy fallback)
+
+---
+
 ## Risk Register
 
 | Risk | Likelihood | Impact | Mitigation |

@@ -7,8 +7,8 @@ How the tee-rex CI/CD system works. Last updated: 2026-03-07.
 ## Overview
 
 ```
-15 workflow files total:
-  10 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet, release-accelerator)
+16 workflow files total:
+  11 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet, release-accelerator, release-please-accelerator)
    5 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
@@ -219,6 +219,17 @@ graph LR
 Trigger: tag push matching `accelerator-v*`. Each matrix job runs `cargo tauri build` with the appropriate target, then uploads the artifacts to the GitHub Release created by the tag.
 
 Note: macOS code signing is deferred (TODO). Windows is not supported (no `bb` binary from Aztec).
+
+### `release-please-accelerator.yml`
+
+Automated version bumping and changelog generation via [release-please](https://github.com/googleapis/release-please-action).
+
+- Trigger: push to `main` with changes in `packages/accelerator/**`
+- On push: creates/updates a "Release PR" with version bump in `Cargo.toml` + `tauri.conf.json` + CHANGELOG
+- When Release PR is merged: creates a git tag `accelerator-v{version}` which triggers `release-accelerator.yml`
+- Uses `PAT_TOKEN` (not `GITHUB_TOKEN`) so tag pushes trigger other workflows
+- Config: `release-please-config.json` (Rust release type, `accelerator-v` tag prefix, RC prerelease)
+- Manifest: `.release-please-manifest.json` (tracks current version)
 
 ---
 

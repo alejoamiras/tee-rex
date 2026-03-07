@@ -30,7 +30,8 @@ export type ProverPhase =
   | "transmit"
   | "proving"
   | "receive"
-  | "fallback";
+  | "fallback"
+  | "downloading";
 
 export interface TeeRexAttestationConfig {
   /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
@@ -50,6 +51,11 @@ export interface TeeRexAcceleratorConfig {
 
 const DEFAULT_ACCELERATOR_PORT = 59833;
 const DEFAULT_ACCELERATOR_HOST = "127.0.0.1";
+
+interface AcceleratorHealthResult {
+  available: boolean;
+  needsDownload: boolean;
+}
 
 /**
  * Aztec private kernel prover that can generate proofs locally (WASM), on a remote
@@ -185,15 +191,20 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
     this.#onPhase?.("detect");
-    const isAvailable = await this.#checkAcceleratorHealth();
+    const health = await this.#checkAcceleratorHealth();
 
-    if (!isAvailable) {
+    if (!health.available) {
       logger.info("Accelerator not available, falling back to WASM");
       this.#onPhase?.("fallback");
       this.#onPhase?.("proving");
       const proof = await super.createChonkProof(executionSteps);
       this.#onPhase?.("receive");
       return proof;
+    }
+
+    if (health.needsDownload) {
+      logger.info("Accelerator needs to download bb for this version");
+      this.#onPhase?.("downloading");
     }
 
     logger.info("Accelerator available, proving natively", {
@@ -203,6 +214,8 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#onPhase?.("serialize");
     const msgpack = serializePrivateExecutionSteps(executionSteps);
 
+    const aztecVersion = this.#getAztecVersion();
+
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
     const response = await ky
@@ -210,7 +223,10 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         body: new Uint8Array(msgpack),
         timeout: ms("10 min"),
         retry: 0,
-        headers: { "content-type": "application/octet-stream" },
+        headers: {
+          "content-type": "application/octet-stream",
+          ...(aztecVersion ? { "x-aztec-version": aztecVersion } : {}),
+        },
       })
       .json<{ proof: string }>();
 
@@ -219,14 +235,35 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     return ChonkProofWithPublicInputs.fromBuffer(proofBuffer);
   }
 
-  async #checkAcceleratorHealth(): Promise<boolean> {
+  async #checkAcceleratorHealth(): Promise<AcceleratorHealthResult> {
     try {
       const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
         signal: AbortSignal.timeout(2000),
       });
-      if (!response.ok) return false;
+      if (!response.ok) return { available: false, needsDownload: false };
 
-      const data = (await response.json()) as { aztec_version?: string };
+      const data = (await response.json()) as {
+        aztec_version?: string;
+        available_versions?: string[];
+      };
+
+      // New multi-version protocol: check available_versions array
+      if (data.available_versions) {
+        const sdkVersion = this.#getAztecVersion();
+        if (sdkVersion) {
+          const needsDownload = !data.available_versions.includes(sdkVersion);
+          logger.info("Multi-version health check", {
+            sdkVersion,
+            availableVersions: data.available_versions,
+            needsDownload,
+          });
+          return { available: true, needsDownload };
+        }
+        // No SDK version to check — proceed without download
+        return { available: true, needsDownload: false };
+      }
+
+      // Legacy protocol: exact version match
       const acceleratorVersion = data.aztec_version;
       if (acceleratorVersion && acceleratorVersion !== "unknown") {
         const sdkVersion = this.#getAztecVersion();
@@ -235,12 +272,12 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
             accelerator: acceleratorVersion,
             sdk: sdkVersion,
           });
-          return false;
+          return { available: false, needsDownload: false };
         }
       }
-      return true;
+      return { available: true, needsDownload: false };
     } catch {
-      return false;
+      return { available: false, needsDownload: false };
     }
   }
 

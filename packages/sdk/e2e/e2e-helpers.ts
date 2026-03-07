@@ -28,7 +28,7 @@ export async function deploySchnorrAccount(
 
   const startTime = Date.now();
   const deployMethod = await accountManager.getDeployMethod();
-  const deployedContract = await deployMethod.send({
+  const { contract: deployedContract } = await deployMethod.send({
     from: AztecAddress.ZERO,
     skipClassPublication: true,
     fee: { paymentMethod: feePaymentMethod },

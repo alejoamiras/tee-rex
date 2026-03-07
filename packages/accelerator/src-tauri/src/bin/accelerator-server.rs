@@ -16,7 +16,7 @@ async fn main() {
 
     tracing::info!("Starting headless accelerator server");
 
-    let state = AppState { on_status: None };
+    let state = AppState::default();
 
     if let Err(e) = start(state).await {
         tracing::error!("Accelerator server error: {e}");

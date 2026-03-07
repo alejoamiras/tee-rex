@@ -450,11 +450,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 | **Step 9** | CI e2e integration — headless binary (`src/bin/accelerator-server.rs`) via lib+bins pattern (no Tauri/GUI deps at runtime). `BB_BINARY_PATH` env var for bb resolution in CI. `accelerator.yml` e2e job: prebuild bb sidecar → build headless binary → start Aztec local network + tee-rex server + accelerator → SDK e2e with `ACCELERATOR_URL`. Gate job updated. |
 
-**Remaining:**
-
-| Part | Summary |
-|------|---------|
-| **Step 7B (backlog)** | Multi-version bb support: bundle or download multiple bb versions for different Aztec networks (mainnet, testnet, devnet, nightly). Health endpoint reports available versions. SDK requests specific version. Research: version discovery, storage strategy, download-on-demand vs pre-bundled. |
+| **Step 7B** | Multi-version bb support + semver + auto-release. `versions.rs`: NetworkTier enum (Nightly/Devnet/Testnet/Mainnet), retention policy (2/3/5/all), download-on-demand from GitHub Releases, tar.gz extraction, atomic caching to `~/.tee-rex-accelerator/versions/{version}/bb`, cleanup on prove. `bb.rs`: version-aware `find_bb(version)` adds cache lookup before sidecar chain. `server.rs`: reads `X-Aztec-Version` header, downloads bb on demand, `/health` returns `available_versions` array, CORS allows version header. Tray: "Versions" submenu showing bundled + cached versions, rebuilt after download/cleanup. SDK: `#checkAcceleratorHealth` returns `{ available, needsDownload }` from `available_versions`, emits `"downloading"` phase, sends `x-aztec-version` header on `/prove`, legacy exact-match preserved for old accelerators. Version bump `0.0.0` → `1.0.0-rc.1`. release-please automation: manifest + config + workflow, `PAT_TOKEN` for tag-triggered releases. |
 
 ---
 

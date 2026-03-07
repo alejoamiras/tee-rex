@@ -1,5 +1,6 @@
 pub mod bb;
 pub mod server;
+pub mod versions;
 
 use std::path::PathBuf;
 

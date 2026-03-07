@@ -1,6 +1,6 @@
 [package]
 name = "tee-rex-accelerator"
-version = "0.0.0"
+version = "1.0.0-rc.1"
 description = "Native proving accelerator for Aztec transactions"
 edition = "2021"
 rust-version = "1.77.2"
@@ -22,6 +22,9 @@ which = "7"
 tower-http = { version = "0.6", features = ["cors", "set-header"] }
 http = "1"
 tauri-plugin-autostart = "2"
+reqwest = { version = "0.12", features = ["stream"] }
+flate2 = "1"
+tar = "0.4"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
