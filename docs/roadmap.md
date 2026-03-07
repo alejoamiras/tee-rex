@@ -445,12 +445,13 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **Step 5B** | `"fallback"` ProverPhase — SDK emits `fallback` before WASM fallback so apps can inform users. Frontend: fallback ASCII animation, accelerator status update + warning log on mid-session fallback. ACCEL button always enabled (was permanently disabled — `checkEmbeddedServices` never set `disabled=false`). |
 | **Step 5C** | Accelerated mode e2e tests — phase tracking on happy path (`detect`+`serialize`, no `fallback`), fallback test (dead port → WASM, `detect`+`fallback`, no `serialize`), accelerator health check in `connectivity.test.ts`, accelerated mode transitions in `mode-switching.test.ts` (Remote→Accelerated→Local). Fallback test always runs (no skipIf). |
 | **Step 6** | CI pipeline: `accelerator.yml` PR gate (changes → clippy + rust tests + lint → gate), `release-accelerator.yml` release pipeline (tag-triggered matrix build: macOS arm64/x86_64 + Linux x86_64, GitHub Releases). Branch protection updated with "Accelerator Status" gate. Windows blocked (no `bb` binary from Aztec). macOS code signing deferred (TODO in workflow). |
+| **Step 7** | BB binary version compatibility: `copy-bb.ts` writes `AZTEC_VERSION` from `@aztec/bb.js` package version, `build.rs` exposes as `AZTEC_BB_VERSION` compile-time env var, `/health` returns `aztec_version` field. SDK `#checkAcceleratorHealth()` parses the response and compares with its own `@aztec/stdlib` dependency version — falls back to WASM on mismatch, proceeds on `"unknown"`. |
 
 **Remaining:**
 
 | Part | Summary |
 |------|---------|
-| **Step 7** | bb binary distribution strategy: bundle vs download vs expect pre-installed |
+| **Step 7B (backlog)** | Multi-version bb support: bundle or download multiple bb versions for different Aztec networks (mainnet, testnet, devnet, nightly). Health endpoint reports available versions. SDK requests specific version. Research: version discovery, storage strategy, download-on-demand vs pre-bundled. |
 | **Step 8A/C** | Auto-start on login, README/docs updates |
 | **Step 9** | Live integration e2e in CI (requires headless display context) |
 

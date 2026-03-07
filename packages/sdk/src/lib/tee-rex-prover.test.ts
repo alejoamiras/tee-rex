@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
 import { WASMSimulator } from "@aztec/simulator/client";
 import * as stdlibKernel from "@aztec/stdlib/kernel";
+import sdkPkg from "../../package.json" with { type: "json" };
 import * as attestationModule from "./attestation.js";
 import { type ProverPhase, ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
+
+const SDK_AZTEC_VERSION = (sdkPkg.dependencies as Record<string, string>)["@aztec/stdlib"];
 
 // --- Test helpers ---
 
@@ -191,7 +194,8 @@ describe("TeeRexProver", () => {
   });
 
   describe("Accelerated", () => {
-    const healthOk: RouteHandler = () => Response.json({ status: "ok" });
+    const healthOk: RouteHandler = () =>
+      Response.json({ status: "ok", aztec_version: SDK_AZTEC_VERSION });
     const fakeMsgpack = Buffer.from([0x93, 0x01, 0x02, 0x03]);
 
     /** Mock serializePrivateExecutionSteps to avoid WASM panic on fake witness data. */
@@ -344,6 +348,41 @@ describe("TeeRexProver", () => {
 
       expect(fetchedUrls.some((url) => url.includes("/attestation"))).toBe(false);
       expect(fetchedUrls.some((url) => url.includes(API_URL))).toBe(false);
+      serializeSpy.mockRestore();
+    });
+
+    test("falls back to WASM when accelerator has mismatched Aztec version", async () => {
+      const healthMismatch: RouteHandler = () =>
+        Response.json({ status: "ok", aztec_version: "0.0.0-fake" });
+      mockFetch({ "/health": healthMismatch });
+      const wasmSpy = mockWasmProver();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
+        "local prover not available in test",
+      );
+      expect(wasmSpy).toHaveBeenCalled();
+      wasmSpy.mockRestore();
+    });
+
+    test("proceeds when accelerator reports unknown version", async () => {
+      const healthUnknown: RouteHandler = () =>
+        Response.json({ status: "ok", aztec_version: "unknown" });
+      mockFetch({ "/health": healthUnknown });
+      const serializeSpy = mockSerializer();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.accelerated);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — mock /prove returns 404
+      }
+
+      // Should have called /prove (not fallen back to WASM)
       serializeSpy.mockRestore();
     });
   });

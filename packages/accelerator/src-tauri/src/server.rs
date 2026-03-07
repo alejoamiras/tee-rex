@@ -56,6 +56,7 @@ async fn health() -> impl IntoResponse {
     axum::Json(json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
+        "aztec_version": env!("AZTEC_BB_VERSION"),
         "bb": bb::find_bb().map(|p| p.display().to_string()).ok(),
         "log_dir": crate::log_dir().display().to_string(),
     }))
@@ -142,6 +143,7 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "ok");
         assert!(json.get("version").is_some());
+        assert!(json.get("aztec_version").is_some());
         assert!(json.get("log_dir").is_some());
     }
 

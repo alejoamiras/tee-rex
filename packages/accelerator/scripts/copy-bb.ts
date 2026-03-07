@@ -5,7 +5,14 @@
  * Tauri expects sidecars at `binaries/<name>-<target-triple>`.
  */
 import { execSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 // --- Resolve bb binary from @aztec/bb.js ---
@@ -59,4 +66,10 @@ if (process.platform === "darwin") {
   }
 }
 
+// --- Write Aztec version for build.rs ---
+const bbJsPkg = JSON.parse(readFileSync(join(bbJsRoot, "package.json"), "utf8"));
+const aztecVersion: string = bbJsPkg.version;
+writeFileSync(join(import.meta.dirname!, "..", "src-tauri", "AZTEC_VERSION"), aztecVersion);
+
 console.log(`Copied bb -> ${dest} (from ${bbJsRoot})`);
+console.log(`Aztec bb version: ${aztecVersion}`);
