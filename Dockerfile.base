@@ -10,6 +10,7 @@ COPY package.json bun.lock ./
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/server/package.json ./packages/server/
 COPY packages/app/package.json ./packages/app/
+COPY packages/accelerator/package.json ./packages/accelerator/
 
 # Install dependencies (heaviest layer — ~2.4GB with Aztec packages)
 RUN bun install --frozen-lockfile
