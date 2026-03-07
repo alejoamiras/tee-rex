@@ -1,6 +1,6 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-02-27.
+How the tee-rex CI/CD system works. Last updated: 2026-03-07.
 
 ---
 
@@ -55,8 +55,9 @@ graph LR
     accel_changes -->|yes| accel_clippy["Clippy"]
     accel_changes -->|yes| accel_test["Rust Tests"]
     accel_changes -->|yes| accel_fmt["Rust Fmt"]
+    accel_changes -->|yes| accel_e2e["E2E\n(headless + local network)"]
     accel_changes -->|no| accel_skip["Skip all"]
-    accel_clippy & accel_test & accel_fmt & accel_skip --> accel_gate["Accelerator Status\n(gate)"]
+    accel_clippy & accel_test & accel_fmt & accel_e2e & accel_skip --> accel_gate["Accelerator Status\n(gate)"]
 ```
 
 ### Change detection paths

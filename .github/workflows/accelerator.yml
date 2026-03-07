@@ -20,10 +20,13 @@ jobs:
           filters: |
             relevant:
               - 'packages/accelerator/**'
+              - 'packages/sdk/src/**'
               - 'biome.json'
               - 'package.json'
               - 'bun.lock'
               - '.github/workflows/accelerator.yml'
+              - '.github/workflows/_e2e-sdk.yml'
+              - '.github/actions/**'
       - name: Override for manual dispatch
         if: github.event_name == 'workflow_dispatch'
         id: override
@@ -119,16 +122,25 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
 
+  e2e:
+    name: E2E
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
+    uses: ./.github/workflows/_e2e-sdk.yml
+    secrets: inherit
+    with:
+      build_accelerator: true
+
   accelerator-status:
     name: Accelerator Status
     if: always()
-    needs: [changes, clippy, test, lint]
+    needs: [changes, clippy, test, lint, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Check results
         run: |
-          results="${{ needs.changes.result }} ${{ needs.clippy.result }} ${{ needs.test.result }} ${{ needs.lint.result }}"
+          results="${{ needs.changes.result }} ${{ needs.clippy.result }} ${{ needs.test.result }} ${{ needs.lint.result }} ${{ needs.e2e.result }}"
           for r in $results; do
             if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
               echo "Job failed or was cancelled: $r"

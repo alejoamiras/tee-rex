@@ -28,12 +28,17 @@ on:
         required: false
         type: boolean
         default: false
+      build_accelerator:
+        description: Build and start headless accelerator server for accelerated proving tests
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   e2e-sdk:
     name: SDK E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,11 +109,62 @@ jobs:
           aztec_node_url: ${{ inputs.aztec_node_url }}
           prover_url: ${{ inputs.prover_url }}
 
+      # ── Accelerator (optional) ──────────────────────────────────────
+      - name: Install system dependencies (accelerator)
+        if: inputs.build_accelerator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+
+      - name: Copy bb sidecar
+        if: inputs.build_accelerator
+        run: bun run --cwd packages/accelerator prebuild
+
+      - name: Set BB_BINARY_PATH
+        if: inputs.build_accelerator
+        run: echo "BB_BINARY_PATH=$(pwd)/packages/accelerator/src-tauri/binaries/bb-x86_64-unknown-linux-gnu" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: inputs.build_accelerator
+
+      - uses: Swatinem/rust-cache@v2
+        if: inputs.build_accelerator
+        with:
+          workspaces: packages/accelerator/src-tauri -> target
+
+      - name: Build headless accelerator server
+        if: inputs.build_accelerator
+        working-directory: packages/accelerator/src-tauri
+        run: cargo build --bin accelerator-server
+
+      - name: Start headless accelerator server
+        if: inputs.build_accelerator
+        run: |
+          cd packages/accelerator/src-tauri
+          cargo run --bin accelerator-server > /tmp/accelerator.log 2>&1 &
+          echo "ACCELERATOR_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for accelerator
+        if: inputs.build_accelerator
+        run: |
+          for i in $(seq 1 15); do
+            if curl -sf http://127.0.0.1:59833/health > /dev/null 2>&1; then
+              echo "Accelerator ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Accelerator failed to respond within 30s"
+          cat /tmp/accelerator.log 2>/dev/null || true
+          exit 1
+
+      # ── Run tests ───────────────────────────────────────────────────
       - name: Run SDK E2E tests
         env:
           TEE_URL: ${{ inputs.tee_url }}
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
           PROVER_URL: ${{ inputs.prover_url }}
+          ACCELERATOR_URL: ${{ inputs.build_accelerator && 'http://127.0.0.1:59833' || '' }}
         run: bun run --cwd packages/sdk test:e2e
 
       - name: Upload Aztec logs
@@ -120,8 +176,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Cleanup SSM tunnels
+      - name: Upload accelerator logs
+        if: failure() && inputs.build_accelerator
+        uses: actions/upload-artifact@v4
+        with:
+          name: accelerator-logs
+          path: /tmp/accelerator.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup
         if: always()
         run: |
           kill "$TEE_TUNNEL_PID" 2>/dev/null || true
           kill "$PROVER_TUNNEL_PID" 2>/dev/null || true
+          kill "$ACCELERATOR_PID" 2>/dev/null || true
