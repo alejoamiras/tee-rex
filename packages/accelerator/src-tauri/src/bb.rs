@@ -156,10 +156,10 @@ mod tests {
         std::env::set_var("BB_BINARY_PATH", "/nonexistent/path/to/bb");
         // Should not return the nonexistent path — falls through to other checks
         let result = find_bb();
-        match result {
-            Ok(path) => assert_ne!(path, PathBuf::from("/nonexistent/path/to/bb")),
-            Err(_) => {} // Also fine — bb not found via other methods
+        if let Ok(path) = result {
+            assert_ne!(path, PathBuf::from("/nonexistent/path/to/bb"));
         }
+        // Err is also fine — bb not found via other methods
         std::env::remove_var("BB_BINARY_PATH");
     }
 
