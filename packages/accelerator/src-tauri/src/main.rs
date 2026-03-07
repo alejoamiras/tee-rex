@@ -170,17 +170,12 @@ fn main() {
 
             let state = AppState {
                 on_status: Some(Arc::new(move |text: &str| {
-                    let _ = status_clone.set_text(text);
-                    let _ = tray_clone.set_tooltip(Some(text));
-                    // macOS: show text next to the tray icon in the menu bar
-                    if text.contains("Proving") || text.contains("Downloading") {
-                        let _ = tray_clone.set_title(Some(if text.contains("Downloading") {
-                            "Downloading..."
-                        } else {
-                            "Proving..."
-                        }));
-                    } else {
-                        let _ = tray_clone.set_title(Some(""));
+                    tracing::info!(text, "on_status callback fired");
+                    if let Err(e) = status_clone.set_text(text) {
+                        tracing::error!("set_text failed: {e}");
+                    }
+                    if let Err(e) = tray_clone.set_tooltip(Some(text)) {
+                        tracing::error!("set_tooltip failed: {e}");
                     }
                 })),
                 bundled_version: Some(bundled_version),

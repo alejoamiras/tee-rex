@@ -445,7 +445,8 @@ async function sendWithRetry(
         log(`Retrying (attempt ${attempt}/${maxAttempts}) — refreshing block header...`, "warn");
         await method.simulate(sendOpts);
       }
-      return await method.send({ ...sendOpts, wait: NO_WAIT });
+      const { txHash } = await method.send({ ...sendOpts, wait: NO_WAIT });
+      return txHash;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt < maxAttempts && msg.includes(BLOCK_HEADER_NOT_FOUND)) {
@@ -754,7 +755,7 @@ export async function runTokenFlow(
     onStep("checking balances");
     log("Checking balances...");
     const balanceStart = Date.now();
-    const [aliceBalance, bobBalance] = await Promise.all([
+    const [{ result: aliceBalance }, { result: bobBalance }] = await Promise.all([
       token.methods.balance_of_private(alice).simulate({ from: alice }),
       token.methods.balance_of_private(bob).simulate({ from: bob }),
     ]);

@@ -67,19 +67,19 @@ pub fn version_bb_path(version: &str) -> PathBuf {
 
 /// Returns the current platform identifier for download URLs.
 ///
-/// Format: `{ARCH}-{PLATFORM}` matching Aztec release naming:
-/// - `aarch64-apple-darwin` → `arm64-macos`
-/// - `x86_64-apple-darwin`  → `amd64-macos`
+/// Format: `{ARCH}-{OS}` matching Aztec release naming:
+/// - `aarch64-apple-darwin` → `arm64-darwin`
+/// - `x86_64-apple-darwin`  → `amd64-darwin`
 /// - `x86_64-unknown-linux-gnu` → `amd64-linux`
 /// - `aarch64-unknown-linux-gnu` → `arm64-linux`
 pub fn current_platform() -> &'static str {
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     {
-        "arm64-macos"
+        "arm64-darwin"
     }
     #[cfg(all(target_arch = "x86_64", target_os = "macos"))]
     {
-        "amd64-macos"
+        "amd64-darwin"
     }
     #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
     {
@@ -212,6 +212,23 @@ pub async fn download_bb(version: &str) -> Result<PathBuf, Box<dyn Error + Send 
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&final_path, std::fs::Permissions::from_mode(0o755))?;
+    }
+
+    // macOS: clear extended attributes (quarantine, provenance) and re-sign
+    // so Gatekeeper doesn't SIGKILL the binary.
+    // - `xattr -cr` clears all xattrs recursively (quarantine, provenance, etc.)
+    // - `codesign --force --sign -` applies ad-hoc signing (fixes "invalid signature"
+    //   caused by chmod modifying the binary after the original signature was applied)
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("xattr")
+            .args(["-cr"])
+            .arg(&final_path)
+            .output();
+        let _ = std::process::Command::new("codesign")
+            .args(["--force", "--sign", "-"])
+            .arg(&final_path)
+            .output();
     }
 
     tracing::info!(version, path = %final_path.display(), "bb cached successfully");
@@ -355,6 +372,44 @@ mod tests {
         let url = download_url("5.0.0-nightly.20260307");
         assert!(url.starts_with("https://github.com/AztecProtocol/aztec-packages/releases/download/v5.0.0-nightly.20260307/barretenberg-"));
         assert!(url.ends_with(".tar.gz"));
+    }
+
+    #[test]
+    fn current_platform_matches_aztec_naming() {
+        // Aztec releases use "darwin" (not "macos") and "linux"
+        let valid = ["arm64-darwin", "amd64-darwin", "amd64-linux", "arm64-linux"];
+        let platform = current_platform();
+        assert!(
+            valid.contains(&platform),
+            "current_platform() returned '{platform}', expected one of {valid:?}. \
+             Check Aztec release assets at https://github.com/AztecProtocol/aztec-packages/releases"
+        );
+    }
+
+    /// Smoke test: verify the download URL for a known release actually resolves (HTTP HEAD).
+    /// Gated behind ACCELERATOR_DOWNLOAD_TEST to avoid network calls in regular CI.
+    #[tokio::test]
+    async fn download_url_resolves() {
+        if std::env::var("ACCELERATOR_DOWNLOAD_TEST").is_err() {
+            eprintln!("Skipping download_url_resolves (set ACCELERATOR_DOWNLOAD_TEST=1 to enable)");
+            return;
+        }
+        // Use a known stable version that will always exist
+        let version = std::env::var("AZTEC_BB_VERSION").unwrap_or("5.0.0-nightly.20260307".into());
+        let url = download_url(&version);
+        let client = reqwest::Client::new();
+        let resp = client
+            .head(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("HEAD {url} failed: {e}"));
+        assert!(
+            resp.status().is_success() || resp.status().is_redirection(),
+            "HEAD {url} returned {}, expected 2xx/3xx. \
+             The download URL pattern may have changed — check Aztec release assets.",
+            resp.status()
+        );
     }
 
     #[test]
