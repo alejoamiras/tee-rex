@@ -18,7 +18,7 @@ import type { WalletProvider } from "./wallet-connect";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
-export type UiMode = "local" | "remote" | "tee";
+export type UiMode = "local" | "remote" | "tee" | "accelerated";
 
 const AZTEC_NODE_URL = process.env.AZTEC_NODE_URL || "/aztec";
 /** Vite dev server / CloudFront proxy path for the prover (not the actual URL). */
@@ -101,6 +101,17 @@ export const state: AztecState = {
   proofsRequired: false,
   feePaymentMethod: undefined,
 };
+
+export async function checkAccelerator(): Promise<boolean> {
+  try {
+    const res = await fetch("http://127.0.0.1:59833/health", {
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export async function checkAztecNode(): Promise<boolean> {
   try {
@@ -348,6 +359,10 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
       state.prover.setProvingMode("remote");
       state.prover.setApiUrl(state.teeServerUrl);
       state.prover.setAttestationConfig({ requireAttestation: true });
+      break;
+    case "accelerated":
+      state.provingMode = "accelerated";
+      state.prover.setProvingMode("accelerated");
       break;
   }
 }

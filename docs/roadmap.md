@@ -30,6 +30,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **18C** | Attribution update — "made with ♥ by alejo · inspired by nemi.fi" across all READMEs and app footer |
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 | **30** | **Wallet SDK integration** — `@aztec/wallet-sdk` for external wallet (browser extension) support. Dual-path: embedded wallet auto-inits as before + "Connect External" button triggers SDK discovery → emoji verification → capability request. External wallet replaces embedded for all operations; proving mode grayed out ("handled by wallet"); deploy disabled (wallet provides accounts). `?wallet=embedded` URL param bypasses external UI for e2e tests. New files: `wallet-connect.ts` (pure logic), UI section in `index.html`, wiring in `main.ts`. `AztecState` extended with `walletType`, `embeddedWallet`, `externalProvider`. |
+| **31** *(in progress)* | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics. See Phase 31 section for details. |
 
 ---
 
@@ -39,7 +40,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 - AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. S3 permissions split: `S3AppDeploy` (put/list) and `S3AppCleanup` (delete, object-level ARNs only). Setup: `infra/iam/README.md`
 - **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
 - SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
-- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
+- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/Accelerated/Accelerated fallback/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
 - SDK e2e tests are network-agnostic: always use Sponsored FPC + `from: AztecAddress.ZERO` (no `registerInitialLocalNetworkAccountsInWallet`)
 - CI test workflows (`sdk.yml`, `app.yml`, `server.yml`) only trigger on PRs + manual dispatch — no push-to-main triggers (deploy-prod.yml handles post-merge)
 - **SDK publish pipeline**: `npm version` doesn't work in Bun workspaces (`workspace:*` protocol error) — use `node -e` to set version. `npm publish --provenance` requires `repository.url` in package.json matching the GitHub repo. YAML `if:` expressions with colons must be double-quoted. `workflow_dispatch` can trigger `_publish-sdk.yml` directly for retries. Uses `NPM_TOKEN` automation token — OIDC trusted publishing only supports one workflow per package (see `lessons/npm-trusted-publishing.md`). npm package-level 2FA must be set to "Authorization only" (not "Authorization and publishing") for automation tokens to work.
@@ -416,6 +417,42 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - Enclave takes 2 CPU + 8GB hugepages, leaving 2 CPU + 8GB for prover container. Tight but workable. Upgrade path: m5.2xlarge (8 vCPU, 32GB, $0.384/hr).
 - Prover deployed AFTER enclave is healthy — Docker wipe during enclave build can't affect running enclave.
 - Old `_deploy-tee.yml`, `_deploy-prover.yml`, `ci-deploy-prover.sh` preserved for rollback.
+
+---
+
+## Phase 31: Local Native Accelerator — IN PROGRESS
+
+**Goal**: Bypass browser WASM throttling by routing proving to a native `bb` binary on the user's machine via a lightweight desktop app.
+
+**Key decisions**: Tauri 2.0 (not Electron), localhost HTTP on port 59833 (no extension), no encryption in v1. See [accelerator-decision.md](./accelerator-decision.md) for full rationale and rollback paths. See [accelerator-plan.md](./accelerator-plan.md) for step-by-step implementation plan.
+
+**SDK change**: Add `ProvingMode.accelerated` to `TeeRexProver` — tries `http://127.0.0.1:59833/prove`, auto-falls back to WASM if unavailable. Emits `"fallback"` phase before WASM fallback so apps can inform users.
+
+**New package**: `packages/accelerator` — Tauri tray app that listens on localhost and runs the `bb` proving binary natively.
+
+**Completed parts:**
+
+| Part | Summary |
+|------|---------|
+| **Step 0** | Branch setup, Rust toolchain, workspace entry for `packages/accelerator` |
+| **Step 1** | SDK: `ProvingMode.accelerated`, `#acceleratedCreateChonkProof` with msgpack serialization, `detect` phase, auto-fallback to WASM, unit tests, accelerator health check in frontend |
+| **Step 2** | Tauri scaffold: tray-only app (no window), system tray with status + quit menu items, tee-rex icon |
+| **Step 3** | bb execution: `bb::find_bb()` resolution (sidecar → `~/.bb/bb` → PATH), `bb::prove()` spawns `bb prove --scheme chonk`, temp file I/O, field-count header prepend |
+| **Step 4** | HTTP server: Axum on `127.0.0.1:59833`, `GET /health`, `POST /prove` (msgpack body → bb → base64 proof), CORS headers, 50MB body limit, tray status updates during proving |
+| **Step 5A** | Manual end-to-end integration test: SDK ↔ accelerator with real Aztec proving — confirmed working |
+| **Diagnostics** | Crash diagnostics for `DataCloneError` / OOM investigation: frontend ring buffer (Worker postMessage sizes, WASM Memory allocations, global error handlers, memory snapshots, JSON export), accelerator file-based logging (daily-rotating via `tracing-appender`, "Show Logs" tray menu), enriched `/health` with version + bb path + log_dir |
+| **Bugfix** | `StatusGuard` drop guard ensures tray resets to Idle on any exit (success, error, client disconnect). Fixed `set_title(None)` not clearing macOS menu bar text — use `set_title(Some(""))` |
+| **Step 5B** | `"fallback"` ProverPhase — SDK emits `fallback` before WASM fallback so apps can inform users. Frontend: fallback ASCII animation, accelerator status update + warning log on mid-session fallback. ACCEL button always enabled (was permanently disabled — `checkEmbeddedServices` never set `disabled=false`). |
+| **Step 5C** | Accelerated mode e2e tests — phase tracking on happy path (`detect`+`serialize`, no `fallback`), fallback test (dead port → WASM, `detect`+`fallback`, no `serialize`), accelerator health check in `connectivity.test.ts`, accelerated mode transitions in `mode-switching.test.ts` (Remote→Accelerated→Local). Fallback test always runs (no skipIf). |
+| **Step 6** | CI pipeline: `accelerator.yml` PR gate (changes → clippy + rust tests + lint → gate), `release-accelerator.yml` release pipeline (tag-triggered matrix build: macOS arm64/x86_64 + Linux x86_64, GitHub Releases). Branch protection updated with "Accelerator Status" gate. Windows blocked (no `bb` binary from Aztec). macOS code signing deferred (TODO in workflow). |
+
+**Remaining:**
+
+| Part | Summary |
+|------|---------|
+| **Step 7** | bb binary distribution strategy: bundle vs download vs expect pre-installed |
+| **Step 8A/C** | Auto-start on login, README/docs updates |
+| **Step 9** | Live integration e2e in CI (requires headless display context) |
 
 ---
 

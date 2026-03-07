@@ -40,7 +40,7 @@
             <a id="env-switch" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors" href="#"></a>
           </div>
           <p class="mt-1.5 text-xs tracking-wide text-gray-500 uppercase">
-            Compare local, remote &amp; TEE zero-knowledge proving
+            Compare local, remote, TEE &amp; accelerated zero-knowledge proving
           </p>
         </div>
       </header>
@@ -113,6 +113,12 @@
               <span id="teerex-url" class="text-gray-600 ml-auto font-light"></span>
             </div>
             <div class="flex items-center gap-3 text-xs">
+              <span id="accelerator-status" class="status-dot status-unknown"></span>
+              <span class="text-gray-400 w-28">Accelerator</span>
+              <span id="accelerator-label" class="text-[10px] text-gray-600">checking...</span>
+              <span class="text-gray-600 ml-auto font-light">localhost:59833</span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
               <span id="tee-status" class="status-dot status-unknown"></span>
               <span class="text-gray-400 w-28">TEE Enclave</span>
               <span id="tee-attestation-label" class="text-[10px] text-gray-600">not configured</span>
@@ -141,6 +147,14 @@
                 class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
               >
                 ▸ Local <span class="normal-case tracking-normal opacity-80">(wasm)</span>
+              </button>
+              <button
+                id="mode-accelerated"
+                disabled
+                title="Accelerator not detected"
+                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+              >
+                ▸ Accel <span class="text-gray-600 normal-case tracking-normal">(native)</span>
               </button>
               <button
                 id="mode-remote"
@@ -193,12 +207,18 @@
           <div class="border-b border-gray-800 px-4 py-1.5">
             <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
           </div>
-          <div class="p-3 grid grid-cols-3 gap-2">
+          <div class="p-3 grid grid-cols-4 gap-2">
             <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
               <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
               <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
               <div id="tag-local" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
               <div id="steps-local" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            </div>
+            <div id="result-accelerated" class="border border-gray-800 p-4 text-center transition-colors">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Accel (native)</div>
+              <div id="time-accelerated" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+              <div id="tag-accelerated" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+              <div id="steps-accelerated" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
             </div>
             <div id="result-remote" class="border border-gray-800 p-4 text-center transition-colors">
               <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (server)</div>
@@ -297,6 +317,7 @@
         <div class="border-b border-gray-800 px-4 py-1.5 flex items-center">
           <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">log</span>
           <span id="log-count" class="ml-auto text-[10px] text-gray-700 tabular-nums">0 entries</span>
+          <button id="export-diagnostics-btn" class="ml-2 text-[10px] text-gray-700 hover:text-emerald-400 transition-colors uppercase tracking-wider" title="Download diagnostic log as JSON">Export</button>
         </div>
         <div
           id="log"

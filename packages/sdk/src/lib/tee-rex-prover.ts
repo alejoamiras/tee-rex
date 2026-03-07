@@ -1,5 +1,5 @@
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
-import type { PrivateExecutionStep } from "@aztec/stdlib/kernel";
+import { type PrivateExecutionStep, serializePrivateExecutionSteps } from "@aztec/stdlib/kernel";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
 import ky from "ky";
@@ -12,21 +12,24 @@ import { type AttestationVerifyOptions, verifyNitroAttestation } from "./attesta
 import { encrypt } from "./encrypt.js";
 import { logger } from "./logger.js";
 
-/** Whether proofs are generated locally (WASM) or on a remote tee-rex server. */
+/** Whether proofs are generated locally (WASM), on a remote tee-rex server, or via a local native accelerator. */
 export type ProvingMode = ValueOf<typeof ProvingMode>;
 export const ProvingMode = {
   local: "local",
   remote: "remote",
+  accelerated: "accelerated",
 } as const;
 
 /** Sub-phases emitted during proof generation for UI animation. */
 export type ProverPhase =
+  | "detect"
   | "serialize"
   | "fetch-attestation"
   | "encrypt"
   | "transmit"
   | "proving"
-  | "receive";
+  | "receive"
+  | "fallback";
 
 export interface TeeRexAttestationConfig {
   /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
@@ -37,26 +40,45 @@ export interface TeeRexAttestationConfig {
   maxAgeMs?: number;
 }
 
+export interface TeeRexAcceleratorConfig {
+  /** Port the accelerator listens on. Default: 59833. */
+  port?: number;
+  /** Host the accelerator binds to. Default: "127.0.0.1". */
+  host?: string;
+}
+
+const DEFAULT_ACCELERATOR_PORT = 59833;
+const DEFAULT_ACCELERATOR_HOST = "127.0.0.1";
+
 /**
- * Aztec private kernel prover that can generate proofs locally or on a remote
- * tee-rex server running inside an AWS Nitro Enclave.
+ * Aztec private kernel prover that can generate proofs locally (WASM), on a remote
+ * tee-rex server (Nitro Enclave), or via a local native accelerator.
  *
  * In remote mode, witness data is encrypted with the server's attested public
  * key (curve25519 + AES-256-GCM) before being sent over the network.
+ *
+ * In accelerated mode, proving is routed to a native `bb` binary running on the
+ * user's machine via `http://127.0.0.1:59833`. Falls back to WASM if unavailable.
  */
 export class TeeRexProver extends BBLazyPrivateKernelProver {
   #provingMode: ProvingMode = ProvingMode.remote;
   #attestationConfig: TeeRexAttestationConfig = {};
   #onPhase: ((phase: ProverPhase) => void) | null = null;
+  #acceleratorPort: number;
+  #acceleratorHost: string;
 
   constructor(
     private apiUrl: string,
     ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>
   ) {
     super(...args);
+    const envPort =
+      typeof process !== "undefined" ? process.env?.TEE_REX_ACCELERATOR_PORT : undefined;
+    this.#acceleratorPort = envPort ? Number.parseInt(envPort, 10) : DEFAULT_ACCELERATOR_PORT;
+    this.#acceleratorHost = DEFAULT_ACCELERATOR_HOST;
   }
 
-  /** Switch between local WASM proving and remote TEE proving. */
+  /** Switch between local WASM, remote TEE, or accelerated (native) proving. */
   setProvingMode(mode: ProvingMode) {
     this.#provingMode = mode;
   }
@@ -71,9 +93,19 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#attestationConfig = config;
   }
 
+  /** Configure the local accelerator connection (port, host). */
+  setAcceleratorConfig(config: TeeRexAcceleratorConfig) {
+    if (config.port !== undefined) this.#acceleratorPort = config.port;
+    if (config.host !== undefined) this.#acceleratorHost = config.host;
+  }
+
   /** Register a callback for proof generation sub-phase transitions (for UI animation). */
   setOnPhase(callback: ((phase: ProverPhase) => void) | null) {
     this.#onPhase = callback;
+  }
+
+  get #acceleratorBaseUrl(): string {
+    return `http://${this.#acceleratorHost}:${this.#acceleratorPort}`;
   }
 
   async createChonkProof(
@@ -97,6 +129,10 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       case "remote": {
         logger.info("Using remote prover");
         return this.#remoteCreateChonkProof(executionSteps);
+      }
+      case "accelerated": {
+        logger.info("Using accelerated prover");
+        return this.#acceleratedCreateChonkProof(executionSteps);
       }
       default: {
         throw new UnreachableCaseError(this.#provingMode);
@@ -142,6 +178,55 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       })
       .parse(response);
     return ChonkProofWithPublicInputs.fromBuffer(data.proof);
+  }
+
+  async #acceleratedCreateChonkProof(
+    executionSteps: PrivateExecutionStep[],
+  ): Promise<ChonkProofWithPublicInputs> {
+    this.#onPhase?.("detect");
+    const isAvailable = await this.#checkAcceleratorHealth();
+
+    if (!isAvailable) {
+      logger.info("Accelerator not available, falling back to WASM");
+      this.#onPhase?.("fallback");
+      this.#onPhase?.("proving");
+      const proof = await super.createChonkProof(executionSteps);
+      this.#onPhase?.("receive");
+      return proof;
+    }
+
+    logger.info("Accelerator available, proving natively", {
+      url: this.#acceleratorBaseUrl,
+    });
+
+    this.#onPhase?.("serialize");
+    const msgpack = serializePrivateExecutionSteps(executionSteps);
+
+    this.#onPhase?.("transmit");
+    this.#onPhase?.("proving");
+    const response = await ky
+      .post(joinURL(this.#acceleratorBaseUrl, "prove"), {
+        body: new Uint8Array(msgpack),
+        timeout: ms("10 min"),
+        retry: 0,
+        headers: { "content-type": "application/octet-stream" },
+      })
+      .json<{ proof: string }>();
+
+    this.#onPhase?.("receive");
+    const proofBuffer = Buffer.from(response.proof, "base64");
+    return ChonkProofWithPublicInputs.fromBuffer(proofBuffer);
+  }
+
+  async #checkAcceleratorHealth(): Promise<boolean> {
+    try {
+      const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
+        signal: AbortSignal.timeout(2000),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   async #fetchEncryptionPublicKey() {

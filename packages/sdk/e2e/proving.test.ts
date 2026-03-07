@@ -5,6 +5,8 @@
  * in each mode:
  *   - Remote: standard tee-rex server
  *   - Local: WASM fallback
+ *   - Accelerated: native accelerator with phase tracking (skipped when ACCELERATOR_URL not set)
+ *   - Accelerated (fallback): dead port triggers WASM fallback (always runs)
  *   - TEE: real Nitro Enclave (skipped when TEE_URL is not set)
  *
  * Network-agnostic: always uses Sponsored FPC + from: AztecAddress.ZERO.
@@ -12,7 +14,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
+import { type ProverPhase, ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { Fr } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
@@ -92,6 +94,57 @@ describe("TeeRexProver", () => {
 
       const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
       expect(deployed).toBeDefined();
+    }, 600000);
+  });
+
+  describe.skipIf(!process.env.ACCELERATOR_URL)("Accelerated", () => {
+    test("should deploy account with accelerated proving and track phases", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setProvingMode(ProvingMode.accelerated);
+      if (process.env.ACCELERATOR_URL) {
+        const url = new URL(process.env.ACCELERATOR_URL);
+        prover.setAcceleratorConfig({
+          host: url.hostname,
+          port: Number.parseInt(url.port, 10),
+        });
+      }
+
+      const phases: ProverPhase[] = [];
+      prover.setOnPhase((phase) => phases.push(phase));
+
+      const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
+      expect(deployed).toBeDefined();
+
+      expect(phases).toContain("detect");
+      expect(phases).toContain("serialize");
+      expect(phases).not.toContain("fallback");
+      logger.info("Accelerated phases", { phases });
+
+      prover.setOnPhase(null);
+    }, 600000);
+  });
+
+  describe("Accelerated (fallback)", () => {
+    test("should fall back to WASM when accelerator is unreachable", async () => {
+      expect(wallet).toBeDefined();
+
+      prover.setProvingMode(ProvingMode.accelerated);
+      prover.setAcceleratorConfig({ port: 1 });
+
+      const phases: ProverPhase[] = [];
+      prover.setOnPhase((phase) => phases.push(phase));
+
+      const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
+      expect(deployed).toBeDefined();
+
+      expect(phases).toContain("detect");
+      expect(phases).toContain("fallback");
+      expect(phases).not.toContain("serialize");
+      logger.info("Fallback phases", { phases });
+
+      prover.setAcceleratorConfig({ port: 59833 });
+      prover.setOnPhase(null);
     }, 600000);
   });
 

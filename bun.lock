@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "devDependencies": {
@@ -13,6 +12,10 @@
         "sort-package-json": "^3.6.1",
         "typescript": "^5.9.3",
       },
+    },
+    "packages/accelerator": {
+      "name": "@alejoamiras/tee-rex-accelerator",
+      "version": "0.0.0",
     },
     "packages/app": {
       "name": "@alejoamiras/tee-rex-app",
@@ -104,6 +107,8 @@
     "@adraffy/ens-normalize": ["@adraffy/ens-normalize@1.11.1", "", {}, "sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ=="],
 
     "@alejoamiras/tee-rex": ["@alejoamiras/tee-rex@workspace:packages/sdk"],
+
+    "@alejoamiras/tee-rex-accelerator": ["@alejoamiras/tee-rex-accelerator@workspace:packages/accelerator"],
 
     "@alejoamiras/tee-rex-app": ["@alejoamiras/tee-rex-app@workspace:packages/app"],
 

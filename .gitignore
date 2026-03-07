@@ -34,3 +34,8 @@ infra/tofu/*.tfstate
 infra/tofu/*.tfstate.*
 infra/tofu/terraform.tfvars
 infra/tofu/.snapshot/
+
+# Yarn (not used — this is a Bun workspace)
+.pnp.*
+.yarn/
+yarn.lock

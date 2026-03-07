@@ -2,6 +2,7 @@ import "./style.css";
 import { AsciiController } from "./ascii-animation";
 import {
   AZTEC_DISPLAY_URL,
+  checkAccelerator,
   checkAztecNode,
   checkTeeAttestation,
   checkTeeRexServer,
@@ -23,6 +24,13 @@ import {
   TEE_DISPLAY_URL,
   type UiMode,
 } from "./aztec";
+import {
+  diagMemory,
+  downloadDiagnostics,
+  installErrorHandlers,
+  installWasmDiagnostics,
+  installWorkerDiagnostics,
+} from "./diagnostics";
 import {
   type AccountEntry,
   hideExternalUI,
@@ -79,6 +87,15 @@ async function checkEmbeddedServices(): Promise<void> {
     }
   }
 
+  const accel = await checkAccelerator();
+  $btn("mode-accelerated").disabled = false;
+  updateAcceleratorLabel(accel);
+  if (accel) {
+    appendLog("Native accelerator detected on localhost:59833", "success");
+  } else {
+    appendLog("Accelerator not detected — ACCEL mode will fall back to WASM", "warn");
+  }
+
   if (TEE_CONFIGURED) {
     $("tee-url").textContent = TEE_DISPLAY_URL;
     appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
@@ -111,6 +128,7 @@ const ACTIVE_BTN =
 function updateModeUI(mode: UiMode): void {
   const buttons: Record<UiMode, HTMLElement> = {
     local: $("mode-local"),
+    accelerated: $("mode-accelerated"),
     remote: $("mode-remote"),
     tee: $("mode-tee"),
   };
@@ -141,7 +159,30 @@ $("mode-tee").addEventListener("click", () => {
   appendLog("Switched to TEE proving mode");
 });
 
+$("mode-accelerated").addEventListener("click", () => {
+  if (deploying || $btn("mode-accelerated").disabled) return;
+  setUiMode("accelerated");
+  updateModeUI("accelerated");
+  appendLog("Switched to accelerated proving mode");
+});
+
 // ── Shared helpers ──
+
+/** Update the accelerator service label and button state. */
+function updateAcceleratorLabel(available: boolean): void {
+  setStatus("accelerator-status", available);
+  $("accelerator-label").textContent = available ? "available" : "not detected — fallback: wasm";
+}
+
+/** Handle a prover phase: feed the animation and react to fallback. */
+function handleProverPhase(ascii: AsciiController, phase: string): void {
+  ascii.pushPhase(phase as Parameters<typeof ascii.pushPhase>[0]);
+  if (phase === "fallback") {
+    updateAcceleratorLabel(false);
+    appendLog("Accelerator offline — falling back to WASM (this will be slower)", "warn");
+  }
+}
+
 function setActionButtonsDisabled(disabled: boolean): void {
   $btn("deploy-btn").disabled = disabled;
   $btn("token-flow-btn").disabled = disabled;
@@ -162,6 +203,7 @@ $("deploy-btn").addEventListener("click", async () => {
   ascii.start(state.uiMode);
 
   try {
+    diagMemory("deploy-start");
     const result = await deployTestAccount(
       appendLog,
       () => {},
@@ -169,8 +211,9 @@ $("deploy-btn").addEventListener("click", async () => {
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
-      (phase) => ascii.pushPhase(phase),
+      (phase) => handleProverPhase(ascii, phase),
     );
+    diagMemory("deploy-end");
 
     appendLog("--- step breakdown ---");
     for (const step of result.steps) {
@@ -180,6 +223,7 @@ $("deploy-btn").addEventListener("click", async () => {
 
     showResult("", result.mode, result.totalDurationMs, undefined, result.steps);
   } catch (err) {
+    diagMemory("deploy-error");
     appendLog(`Deploy failed: ${err}`, "error");
   } finally {
     ascii.stop();
@@ -205,6 +249,7 @@ $("token-flow-btn").addEventListener("click", async () => {
   ascii.start(state.uiMode);
 
   try {
+    diagMemory("token-flow-start");
     const result = await runTokenFlow(
       appendLog,
       () => {},
@@ -212,8 +257,9 @@ $("token-flow-btn").addEventListener("click", async () => {
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
-      (phase) => ascii.pushPhase(phase),
+      (phase) => handleProverPhase(ascii, phase),
     );
+    diagMemory("token-flow-end");
 
     appendLog("--- step breakdown ---");
     for (const step of result.steps) {
@@ -223,6 +269,7 @@ $("token-flow-btn").addEventListener("click", async () => {
 
     showResult("", result.mode, result.totalDurationMs, "token flow", result.steps);
   } catch (err) {
+    diagMemory("token-flow-error");
     appendLog(`Token flow failed: ${err}`, "error");
   } finally {
     ascii.stop();
@@ -370,10 +417,18 @@ async function initEmbeddedWallet(): Promise<void> {
 
 // ── Init ──
 async function init(): Promise<void> {
+  // Install diagnostics BEFORE any Worker/WASM is created
+  installWorkerDiagnostics();
+  installWasmDiagnostics();
+  installErrorHandlers();
+
   $("aztec-url").textContent = AZTEC_DISPLAY_URL;
   if (PROVER_CONFIGURED) {
     $("teerex-url").textContent = PROVER_DISPLAY_URL;
   }
+
+  // Wire diagnostics export
+  $("export-diagnostics-btn").addEventListener("click", downloadDiagnostics);
 
   // Wire up wallet selection listeners once
   wireWalletSelectionListeners();
