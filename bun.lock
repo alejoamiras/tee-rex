@@ -22,20 +22,20 @@
       "name": "@alejoamiras/tee-rex-app",
       "dependencies": {
         "@alejoamiras/tee-rex": "workspace:*",
-        "@aztec/accounts": "5.0.0-nightly.20260307",
-        "@aztec/aztec.js": "5.0.0-nightly.20260307",
-        "@aztec/bb-prover": "5.0.0-nightly.20260307",
-        "@aztec/foundation": "5.0.0-nightly.20260307",
-        "@aztec/kv-store": "5.0.0-nightly.20260307",
-        "@aztec/noir-acvm_js": "5.0.0-nightly.20260307",
-        "@aztec/noir-contracts.js": "5.0.0-nightly.20260307",
-        "@aztec/noir-noirc_abi": "5.0.0-nightly.20260307",
-        "@aztec/protocol-contracts": "5.0.0-nightly.20260307",
-        "@aztec/pxe": "5.0.0-nightly.20260307",
-        "@aztec/simulator": "5.0.0-nightly.20260307",
-        "@aztec/stdlib": "5.0.0-nightly.20260307",
-        "@aztec/wallet-sdk": "5.0.0-nightly.20260307",
-        "@aztec/wallets": "5.0.0-nightly.20260307",
+        "@aztec/accounts": "5.0.0-nightly.20260308",
+        "@aztec/aztec.js": "5.0.0-nightly.20260308",
+        "@aztec/bb-prover": "5.0.0-nightly.20260308",
+        "@aztec/foundation": "5.0.0-nightly.20260308",
+        "@aztec/kv-store": "5.0.0-nightly.20260308",
+        "@aztec/noir-acvm_js": "5.0.0-nightly.20260308",
+        "@aztec/noir-contracts.js": "5.0.0-nightly.20260308",
+        "@aztec/noir-noirc_abi": "5.0.0-nightly.20260308",
+        "@aztec/protocol-contracts": "5.0.0-nightly.20260308",
+        "@aztec/pxe": "5.0.0-nightly.20260308",
+        "@aztec/simulator": "5.0.0-nightly.20260308",
+        "@aztec/stdlib": "5.0.0-nightly.20260308",
+        "@aztec/wallet-sdk": "5.0.0-nightly.20260308",
+        "@aztec/wallets": "5.0.0-nightly.20260308",
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.6.1",
@@ -53,11 +53,11 @@
       "name": "@alejoamiras/tee-rex",
       "version": "0.0.0",
       "dependencies": {
-        "@aztec/bb-prover": "5.0.0-nightly.20260307",
-        "@aztec/foundation": "5.0.0-nightly.20260307",
-        "@aztec/noir-acvm_js": "5.0.0-nightly.20260307",
-        "@aztec/noir-noirc_abi": "5.0.0-nightly.20260307",
-        "@aztec/stdlib": "5.0.0-nightly.20260307",
+        "@aztec/bb-prover": "5.0.0-nightly.20260308",
+        "@aztec/foundation": "5.0.0-nightly.20260308",
+        "@aztec/noir-acvm_js": "5.0.0-nightly.20260308",
+        "@aztec/noir-noirc_abi": "5.0.0-nightly.20260308",
+        "@aztec/stdlib": "5.0.0-nightly.20260308",
         "@logtape/logtape": "^2.0",
         "@peculiar/x509": "^1.12.0",
         "cbor-x": "^1.6.0",
@@ -70,21 +70,21 @@
         "zod": "^3.23.8",
       },
       "devDependencies": {
-        "@aztec/accounts": "5.0.0-nightly.20260307",
-        "@aztec/aztec.js": "5.0.0-nightly.20260307",
-        "@aztec/noir-contracts.js": "5.0.0-nightly.20260307",
-        "@aztec/pxe": "5.0.0-nightly.20260307",
-        "@aztec/simulator": "5.0.0-nightly.20260307",
-        "@aztec/wallets": "5.0.0-nightly.20260307",
+        "@aztec/accounts": "5.0.0-nightly.20260308",
+        "@aztec/aztec.js": "5.0.0-nightly.20260308",
+        "@aztec/noir-contracts.js": "5.0.0-nightly.20260308",
+        "@aztec/pxe": "5.0.0-nightly.20260308",
+        "@aztec/simulator": "5.0.0-nightly.20260308",
+        "@aztec/wallets": "5.0.0-nightly.20260308",
         "@types/ms": "^2.1.0",
       },
     },
     "packages/server": {
       "name": "@alejoamiras/tee-rex-server",
       "dependencies": {
-        "@aztec/bb-prover": "5.0.0-nightly.20260307",
-        "@aztec/simulator": "5.0.0-nightly.20260307",
-        "@aztec/stdlib": "5.0.0-nightly.20260307",
+        "@aztec/bb-prover": "5.0.0-nightly.20260308",
+        "@aztec/simulator": "5.0.0-nightly.20260308",
+        "@aztec/stdlib": "5.0.0-nightly.20260308",
         "@logtape/express": "^2.0",
         "@logtape/logtape": "^2.0",
         "cors": "^2.8.6",
@@ -199,63 +199,63 @@
 
     "@aws/lambda-invoke-store": ["@aws/lambda-invoke-store@0.2.3", "", {}, "sha512-oLvsaPMTBejkkmHhjf09xTgk71mOqyr/409NKhRIL08If7AhVfUsJhVsx386uJaqNd42v9kWamQ9lFbkoC2dYw=="],
 
-    "@aztec/accounts": ["@aztec/accounts@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/aztec.js": "5.0.0-nightly.20260307", "@aztec/entrypoints": "5.0.0-nightly.20260307", "@aztec/ethereum": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "tslib": "^2.4.0" } }, "sha512-yNwB3MelOvM41osGJEXIRGY5FmD1L/WLD2iDdhwdslwbvDb/IzocvFIQH9m6UQAFPhVV346R6Bf4FcyUvi2eTQ=="],
+    "@aztec/accounts": ["@aztec/accounts@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/aztec.js": "5.0.0-nightly.20260308", "@aztec/entrypoints": "5.0.0-nightly.20260308", "@aztec/ethereum": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "tslib": "^2.4.0" } }, "sha512-AMGGCJ3FYFVYZZ522X3MConbaZSVLXmUpzrqYTquDogEcnDk2lr3fRkS8vZaWOU6tj/15ZTZpv4Cg2IzpkXTPA=="],
 
-    "@aztec/aztec.js": ["@aztec/aztec.js@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/entrypoints": "5.0.0-nightly.20260307", "@aztec/ethereum": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/l1-artifacts": "5.0.0-nightly.20260307", "@aztec/protocol-contracts": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "axios": "^1.13.5", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2", "zod": "^3.23.8" } }, "sha512-QBruHw2F3w0sYEIEJ7rcD2rPaC9WQUBIkejCmHaUed5Ib+VNfBqO4R6r4rYH0ylUcrOa+7iukApA2AC/UYCUtw=="],
+    "@aztec/aztec.js": ["@aztec/aztec.js@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/entrypoints": "5.0.0-nightly.20260308", "@aztec/ethereum": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/l1-artifacts": "5.0.0-nightly.20260308", "@aztec/protocol-contracts": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "axios": "^1.13.5", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2", "zod": "^3.23.8" } }, "sha512-eDgIN0XjJKDpfSiB33DeIoCiLAJEQFrD508rR3cqHISzB1OMi27z3FhAJs0UXFGxFrKGIbkDL66lMY9+/J9GDw=="],
 
-    "@aztec/bb-prover": ["@aztec/bb-prover@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260307", "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260307", "@aztec/noir-protocol-circuits-types": "5.0.0-nightly.20260307", "@aztec/noir-types": "5.0.0-nightly.20260307", "@aztec/simulator": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "@aztec/telemetry-client": "5.0.0-nightly.20260307", "@aztec/world-state": "5.0.0-nightly.20260307", "commander": "^12.1.0", "pako": "^2.1.0", "source-map-support": "^0.5.21", "tslib": "^2.4.0" }, "bin": { "bb-cli": "dest/bb/index.js" } }, "sha512-SiT1TPm5iDD7c8xPyDbiOI7rkdvZuiAMKT44uoHGdQHb5M2xkXtQpDt/+Om9MrdIxJo4hXJa3AlgcIq8f/K4mA=="],
+    "@aztec/bb-prover": ["@aztec/bb-prover@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260308", "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260308", "@aztec/noir-protocol-circuits-types": "5.0.0-nightly.20260308", "@aztec/noir-types": "5.0.0-nightly.20260308", "@aztec/simulator": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "@aztec/telemetry-client": "5.0.0-nightly.20260308", "@aztec/world-state": "5.0.0-nightly.20260308", "commander": "^12.1.0", "pako": "^2.1.0", "source-map-support": "^0.5.21", "tslib": "^2.4.0" }, "bin": { "bb-cli": "dest/bb/index.js" } }, "sha512-ah71LR4GUct1VrRicTk52++BHk88ec644Q76sXx85A3obfU/6umc7G3tQUnv1Ifw+jcNgEmyZvOkrQT+I7PeLQ=="],
 
-    "@aztec/bb.js": ["@aztec/bb.js@5.0.0-nightly.20260307", "", { "dependencies": { "comlink": "^4.4.1", "commander": "^12.1.0", "idb-keyval": "^6.2.1", "msgpackr": "^1.11.2", "pako": "^2.1.0", "tslib": "^2.4.0" }, "bin": { "bb": "dest/node/bin/index.js" } }, "sha512-9a31BtyfyVBSTr8bLo2e8IsXFV8aQ75YIJ30IgnWcsq5EuS6ZJQ8NIsLv4FMV13jVFNfIUFFcnwtjRUKn53COg=="],
+    "@aztec/bb.js": ["@aztec/bb.js@5.0.0-nightly.20260308", "", { "dependencies": { "comlink": "^4.4.1", "commander": "^12.1.0", "idb-keyval": "^6.2.1", "msgpackr": "^1.11.2", "pako": "^2.1.0", "tslib": "^2.4.0" }, "bin": { "bb": "dest/node/bin/index.js" } }, "sha512-rHt/aBbVIgMtPuTXudKy9ifothCKEF8XfUVourjyOx9QkC2qn8o9//2hqA+8DVebBT/LqVxsP5LzB3XJvJF6vw=="],
 
-    "@aztec/blob-lib": ["@aztec/blob-lib@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@crate-crypto/node-eth-kzg": "^0.10.0", "tslib": "^2.4.0" } }, "sha512-IpH3dkcpzuJhoDeUVR438l5SqKLL5v7ms3qDK7FQ0eZlVcKnQFYhQQ6ZnWQnO+gw2czWuqh12jNz9bNASI3DMw=="],
+    "@aztec/blob-lib": ["@aztec/blob-lib@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@crate-crypto/node-eth-kzg": "^0.10.0", "tslib": "^2.4.0" } }, "sha512-QGG40RR9dkAcV1DVbWqYLixfbeheWJnTm2FBV+QsyCkPhUvyXuJBBIXkyrSV+gGhEMtpQ1bAcyDvWmDUrHRJ7Q=="],
 
-    "@aztec/builder": ["@aztec/builder@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "commander": "^12.1.0" } }, "sha512-JcyyGvlkTdgCuKZgHp6Btkn/A+8t5w0Yq0zr4ZLXf8ctuugjHmiN5dU9RuSA9HsM65CSjO3eM8CfqanP1UDKfg=="],
+    "@aztec/builder": ["@aztec/builder@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "commander": "^12.1.0" } }, "sha512-LNC6lleZg1rvTnHn+LuGzEi+KpkllI0SmkDsR13MqmLdhTZyt8z7meiriagf78bXO+ZuKEwgX6sTQKoN1+Aqtg=="],
 
-    "@aztec/constants": ["@aztec/constants@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260307", "tslib": "^2.4.0" } }, "sha512-YETU64EascL3/rdgGPRiYXiXDgiU+6TG5NrPoJ/qlmBcL1RiHMt2avdP6MC26FBMB4WMIXf4Uwpcp25eO9n0vQ=="],
+    "@aztec/constants": ["@aztec/constants@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260308", "tslib": "^2.4.0" } }, "sha512-48nkvcAcUVL/6+FYDaZs0i/1WAUqYcTdZo6ZLw9ynYZVeL5DNvMysXOr5ukqtmdw6PfdPse+LPYw6nop3ReqDw=="],
 
-    "@aztec/entrypoints": ["@aztec/entrypoints@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/protocol-contracts": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "tslib": "^2.4.0", "zod": "^3.23.8" } }, "sha512-s5iwoNBARPYunf4wP1/L9ySQsg/DBfll7cMt15ia4zLe2oh4T+cSRa3KZRPg5NHa899NRjW66KD+gjoVBfHS8Q=="],
+    "@aztec/entrypoints": ["@aztec/entrypoints@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/protocol-contracts": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "tslib": "^2.4.0", "zod": "^3.23.8" } }, "sha512-ecyrrhnq9LJ9QQWImL/EactKeERSrWhAvsaugbyO1wgApV8eoFlDM1iW8ar6RTpIm8xo5Mqe6581vy3ICF8gCQ=="],
 
-    "@aztec/ethereum": ["@aztec/ethereum@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/blob-lib": "5.0.0-nightly.20260307", "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/l1-artifacts": "5.0.0-nightly.20260307", "dotenv": "^16.0.3", "lodash.chunk": "^4.2.0", "lodash.pickby": "^4.5.0", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2", "zod": "^3.23.8" } }, "sha512-Ge/EI/gxunaPE3V3WCNJIggbKMvZNKbTwE646hPdQVXNOMXDpeMxIdQ2HQkIP8+ZDFAtjbApdU0PQrV/qak6jQ=="],
+    "@aztec/ethereum": ["@aztec/ethereum@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/blob-lib": "5.0.0-nightly.20260308", "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/l1-artifacts": "5.0.0-nightly.20260308", "dotenv": "^16.0.3", "lodash.chunk": "^4.2.0", "lodash.pickby": "^4.5.0", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2", "zod": "^3.23.8" } }, "sha512-554Uoj7IKHHxoTnwjtbEVJFQuCsFrJJeri6Oz26ln9cK8o6PvafsMtbSMY++Aqyl2opXMSNR7bcboXD+SJH7ow=="],
 
-    "@aztec/foundation": ["@aztec/foundation@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260307", "@koa/cors": "^5.0.0", "@noble/curves": "=1.7.0", "@noble/hashes": "^1.6.1", "@scure/bip39": "^2.0.1", "bn.js": "^5.2.1", "colorette": "^2.0.20", "detect-node": "^2.1.0", "hash.js": "^1.1.7", "koa": "^2.16.1", "koa-bodyparser": "^4.4.0", "koa-compress": "^5.1.0", "koa-router": "^13.1.1", "leveldown": "^6.1.1", "lodash.chunk": "^4.2.0", "lodash.clonedeepwith": "^4.5.0", "pako": "^2.1.0", "pino": "^9.5.0", "pino-pretty": "^13.0.0", "sha3": "^2.1.4", "undici": "^5.28.5", "zod": "^3.23.8" } }, "sha512-o7w9tOOzxaoGeZL+DGNauuw9tLwTC/ZCmUnicLeQbXGfmc+44F6rV86QpPLs1C7agJS3um6cfonnAtaBHpK++w=="],
+    "@aztec/foundation": ["@aztec/foundation@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260308", "@koa/cors": "^5.0.0", "@noble/curves": "=1.7.0", "@noble/hashes": "^1.6.1", "@scure/bip39": "^2.0.1", "bn.js": "^5.2.1", "colorette": "^2.0.20", "detect-node": "^2.1.0", "hash.js": "^1.1.7", "koa": "^2.16.1", "koa-bodyparser": "^4.4.0", "koa-compress": "^5.1.0", "koa-router": "^13.1.1", "leveldown": "^6.1.1", "lodash.chunk": "^4.2.0", "lodash.clonedeepwith": "^4.5.0", "pako": "^2.1.0", "pino": "^9.5.0", "pino-pretty": "^13.0.0", "sha3": "^2.1.4", "undici": "^5.28.5", "zod": "^3.23.8" } }, "sha512-2XfRnrwbR8HsnVs4MG+qK/LO+oZSf2MVucTNzhz9k4XKT/868YUBkQ6fywrJJ1qwAg7N0zksuQ/SoIPJPNqKyQ=="],
 
-    "@aztec/key-store": ["@aztec/key-store@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/kv-store": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "tslib": "^2.4.0" } }, "sha512-UJ7FPQjgYa8P0/aowy2n/hB7kNMN1uoEIM88qWFvn/t1o7RnJbOzbt9dAFaWyx5iKDCF0Xq6K984d55wt/RfBQ=="],
+    "@aztec/key-store": ["@aztec/key-store@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/kv-store": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "tslib": "^2.4.0" } }, "sha512-/598d1htor/p2xSYiXGRGlNrq1sPKkSz9WxqapUkGU91pZbjVPBJYVzGXUaeiwYSQ8wGWBNbBX8y7HjBNskKLw=="],
 
-    "@aztec/kv-store": ["@aztec/kv-store@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/ethereum": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/native": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "idb": "^8.0.0", "lmdb": "^3.2.0", "msgpackr": "^1.11.2", "ohash": "^2.0.11", "ordered-binary": "^1.5.3" } }, "sha512-F8vap+5PROsNvv7OB3Yo924aHdEWb9bTKA1RWqqCmlGYu1CSCCD2d6LgLfAF7VHNLLQ9SL8ga01F++4vxmxkbg=="],
+    "@aztec/kv-store": ["@aztec/kv-store@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/ethereum": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/native": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "idb": "^8.0.0", "lmdb": "^3.2.0", "msgpackr": "^1.11.2", "ohash": "^2.0.11", "ordered-binary": "^1.5.3" } }, "sha512-ZPkIcOmuM6Zvlc+JbDNQt69soXpJpcYQmN58hs6rgnu+UKbvwHbwShqMWc8dxgG2SAucNCqqDxbV+b5ZtvSJ+g=="],
 
-    "@aztec/l1-artifacts": ["@aztec/l1-artifacts@5.0.0-nightly.20260307", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-YzZPMpTXdbbxE0Qk4LKhy+mDi5B0s/Zjvsgx1khc8RkrWLGrA+K/s/BYqDpN0N2SbEMyzW9sxZKiWXe6U6oWEA=="],
+    "@aztec/l1-artifacts": ["@aztec/l1-artifacts@5.0.0-nightly.20260308", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-/zEZx0ZJ69ARYshr4MWVe1KzeVdXV0Xjf0gOTK03y47j20d3wkgeybUxtS23WKwWOItpoSerRZo5MXvNydVO9Q=="],
 
-    "@aztec/merkle-tree": ["@aztec/merkle-tree@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/kv-store": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "sha256": "^0.2.0", "tslib": "^2.4.0" } }, "sha512-9jn7LmoWfuJdZGaN2y29aBPYfl5seYcARAZVCygBTjmLVbQQTVNn0ghT+4pKDvE93Bpfwp3n47twzJqDKSxS+A=="],
+    "@aztec/merkle-tree": ["@aztec/merkle-tree@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/kv-store": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "sha256": "^0.2.0", "tslib": "^2.4.0" } }, "sha512-HudUaToIUPh/eONn61QmKaB57YqZxJGQpXQWIFO5cC/jAOy1Nv32TWs+vKyrUwFWceS+1a/fVQMHPjAXJtN5HA=="],
 
-    "@aztec/native": ["@aztec/native@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "msgpackr": "^1.11.2" } }, "sha512-O9pMiE0+WT737z4jm9zK9VJRGe3go008CCTeOAKSEuoxeCtwwyVYEte4qvecqNBgpf2ESMvEZU7r43Fn+g5r1A=="],
+    "@aztec/native": ["@aztec/native@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "msgpackr": "^1.11.2" } }, "sha512-3xO7KuxOqZkWT3+BEMQqbyGpLWsLEwJUa8UpA8yNvMO0BEQka10vP5P+Tnht+lh1Dcmu0Un97mFQdxxSel0N0g=="],
 
-    "@aztec/noir-acvm_js": ["@aztec/noir-acvm_js@5.0.0-nightly.20260307", "", {}, "sha512-sg6mXmBGTt1pRUjYTOWwFKUNxu3nohzlHw6E3RsalVt/YRQiOOjZnemHzhQD5t5rwPGpZa0Mfb4XyHjNf+sFRg=="],
+    "@aztec/noir-acvm_js": ["@aztec/noir-acvm_js@5.0.0-nightly.20260308", "", {}, "sha512-+Qw6zrAEXN4e65LQqPHJRHUse2bEpSxxtb/e8To7wmDaSts6xUIzyNJkvy3XlvWdK/0CEylq3j+JhOaQwkd9TQ=="],
 
-    "@aztec/noir-contracts.js": ["@aztec/noir-contracts.js@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/aztec.js": "5.0.0-nightly.20260307", "tslib": "^2.4.0" } }, "sha512-4YmYUIkmD3qjQenTn0H3me0rSuAHXnXAOnMpAQHcp1MpO8K4XyAK5DyeSH43Md4a8+ZHUc5vjC5p6SFaxm3BeA=="],
+    "@aztec/noir-contracts.js": ["@aztec/noir-contracts.js@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/aztec.js": "5.0.0-nightly.20260308", "tslib": "^2.4.0" } }, "sha512-t5KPr6ShbEXic9mi5WEtBT1jAh9rtCy1y2z76YhbrvcuB6eS8JitaE131r+Iesy+r6rEemfLLCwwU0RBcOHxNw=="],
 
-    "@aztec/noir-noir_codegen": ["@aztec/noir-noir_codegen@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/noir-types": "5.0.0-nightly.20260307", "glob": "^13.0.0", "ts-command-line-args": "^2.5.1" }, "bin": { "noir-codegen": "lib/main.js" } }, "sha512-FJJFdui+p27TLAEiO+wtqWrfSCBdl5+IaXAUeIWN3cfCtyI9hgHYoZCa0zDqbvy+nBBUEdMbln+14ZcyG+K3uQ=="],
+    "@aztec/noir-noir_codegen": ["@aztec/noir-noir_codegen@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/noir-types": "5.0.0-nightly.20260308", "glob": "^13.0.0", "ts-command-line-args": "^2.5.1" }, "bin": { "noir-codegen": "lib/main.js" } }, "sha512-sE7Aezls//CtSfm/5BgSQfOec2GdTHasnvMRlekzvJBqTMmLYLQRJy9Qe4OsYdthiQi7LyUQYRu/FDQzKO0PQg=="],
 
-    "@aztec/noir-noirc_abi": ["@aztec/noir-noirc_abi@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/noir-types": "5.0.0-nightly.20260307" } }, "sha512-YFtFhmiuTod4GAu8Xd8ETMP3oqDiegcGLJMkOjbSKE+h5bCApgLl2hi0Z1d2jZkkKmp50mdLRzLq1Bua0ZbSLQ=="],
+    "@aztec/noir-noirc_abi": ["@aztec/noir-noirc_abi@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/noir-types": "5.0.0-nightly.20260308" } }, "sha512-fHQK21t2Me/63fLhCH4nPmOp+951ICOfYaJlluQU9HgQhWRAs2fOJYtZaKaV870lMLNNLKj28VFqTTfpkrOyGg=="],
 
-    "@aztec/noir-protocol-circuits-types": ["@aztec/noir-protocol-circuits-types@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/blob-lib": "5.0.0-nightly.20260307", "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/noir-acvm_js": "5.0.0-nightly.20260307", "@aztec/noir-noir_codegen": "5.0.0-nightly.20260307", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260307", "@aztec/noir-types": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "change-case": "^5.4.4", "tslib": "^2.4.0" } }, "sha512-f3aW4ROt27eGZUc9rCH1SdKwdgeDsvxzS0Qe/OogWXk0pXVCsRW8nPF6sdG17XptvuKTn/A/Uf48OjD8eMc9ew=="],
+    "@aztec/noir-protocol-circuits-types": ["@aztec/noir-protocol-circuits-types@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/blob-lib": "5.0.0-nightly.20260308", "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/noir-acvm_js": "5.0.0-nightly.20260308", "@aztec/noir-noir_codegen": "5.0.0-nightly.20260308", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260308", "@aztec/noir-types": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "change-case": "^5.4.4", "tslib": "^2.4.0" } }, "sha512-Fzv5qL8B3vTl1tvtRDFtHoYP6Z4WLqe44HReUQKTBGhxcizx2L6VMPa1SQhDoINN5umESoGlOFw3F5fOyeVNkg=="],
 
-    "@aztec/noir-types": ["@aztec/noir-types@5.0.0-nightly.20260307", "", {}, "sha512-BkjrhK9azL65Xs2Wm7Ty9Ype9ZrwhF0KYb4aciWrL0Of0dyUiy8UEv251xoYP1xQ/9LBYOta7ZGBM2wUMEeLdg=="],
+    "@aztec/noir-types": ["@aztec/noir-types@5.0.0-nightly.20260308", "", {}, "sha512-4EWX4JftOuqLeykPRuv0h1T0lHff7fKONc35tIHpDNTCuqJkRe2Nfma3E/AQ+CFxu6YZqjOIPIOSnR/FzdqRmw=="],
 
-    "@aztec/protocol-contracts": ["@aztec/protocol-contracts@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "lodash.chunk": "^4.2.0", "lodash.omit": "^4.5.0", "tslib": "^2.4.0" } }, "sha512-AB2nL0zd04bbVfSaHagGGDbpVK+/wTyYJAOqwTOKxZ6JaCTA91Fj3ST3uivENUOOyBQcwlctFJOdCLAWCBAj9Q=="],
+    "@aztec/protocol-contracts": ["@aztec/protocol-contracts@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "lodash.chunk": "^4.2.0", "lodash.omit": "^4.5.0", "tslib": "^2.4.0" } }, "sha512-RvI+PJDBMgEwYwjivykcyddtuE4g61abiWnZJtIB0GCstwUfY77Qz4UsjPsxDA1ajiUqIHCBnm1x2J0ZyJO3Xw=="],
 
-    "@aztec/pxe": ["@aztec/pxe@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/bb-prover": "5.0.0-nightly.20260307", "@aztec/bb.js": "5.0.0-nightly.20260307", "@aztec/builder": "5.0.0-nightly.20260307", "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/ethereum": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/key-store": "5.0.0-nightly.20260307", "@aztec/kv-store": "5.0.0-nightly.20260307", "@aztec/noir-protocol-circuits-types": "5.0.0-nightly.20260307", "@aztec/noir-types": "5.0.0-nightly.20260307", "@aztec/protocol-contracts": "5.0.0-nightly.20260307", "@aztec/simulator": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "koa": "^2.16.1", "koa-router": "^13.1.1", "lodash.omit": "^4.5.0", "sha3": "^2.1.4", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2" }, "bin": { "pxe": "dest/bin/index.js" } }, "sha512-bLM1vu0WydLc5JeScoWtPksw4/iruGfXwWp841Ixux6EKoslitxIOD7XcjPHKpYJ4TKAOuwlReRnMniYxC2OMA=="],
+    "@aztec/pxe": ["@aztec/pxe@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/bb-prover": "5.0.0-nightly.20260308", "@aztec/bb.js": "5.0.0-nightly.20260308", "@aztec/builder": "5.0.0-nightly.20260308", "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/ethereum": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/key-store": "5.0.0-nightly.20260308", "@aztec/kv-store": "5.0.0-nightly.20260308", "@aztec/noir-protocol-circuits-types": "5.0.0-nightly.20260308", "@aztec/noir-types": "5.0.0-nightly.20260308", "@aztec/protocol-contracts": "5.0.0-nightly.20260308", "@aztec/simulator": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "koa": "^2.16.1", "koa-router": "^13.1.1", "lodash.omit": "^4.5.0", "sha3": "^2.1.4", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2" }, "bin": { "pxe": "dest/bin/index.js" } }, "sha512-KAyP24QY2V7jHz54RXC6a1udn5l5abhorPIR5QY4z808jgtKE2yiynunYH+w1rqvtP0c4PO9usFY4Llih2WDBQ=="],
 
-    "@aztec/simulator": ["@aztec/simulator@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/native": "5.0.0-nightly.20260307", "@aztec/noir-acvm_js": "5.0.0-nightly.20260307", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260307", "@aztec/noir-protocol-circuits-types": "5.0.0-nightly.20260307", "@aztec/noir-types": "5.0.0-nightly.20260307", "@aztec/protocol-contracts": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "@aztec/telemetry-client": "5.0.0-nightly.20260307", "@aztec/world-state": "5.0.0-nightly.20260307", "lodash.clonedeep": "^4.5.0", "lodash.merge": "^4.6.2", "tslib": "^2.4.0" } }, "sha512-WuuqJ5zlrwO5mGlJhK3S83mlrDhxlDo3tkNTRc/zvH4cx4etiTmMPJPQT2xNrBo958VRY+3VktzGvujeF+uIUw=="],
+    "@aztec/simulator": ["@aztec/simulator@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/native": "5.0.0-nightly.20260308", "@aztec/noir-acvm_js": "5.0.0-nightly.20260308", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260308", "@aztec/noir-protocol-circuits-types": "5.0.0-nightly.20260308", "@aztec/noir-types": "5.0.0-nightly.20260308", "@aztec/protocol-contracts": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "@aztec/telemetry-client": "5.0.0-nightly.20260308", "@aztec/world-state": "5.0.0-nightly.20260308", "lodash.clonedeep": "^4.5.0", "lodash.merge": "^4.6.2", "tslib": "^2.4.0" } }, "sha512-V1SPT8kpeoQxRKWYMF7KPrPJFbIGflkyzhqD8OXkt+yCuzxl1VpsgJEZdbPjorOTOo+KKIK/lhXzOu5t888etQ=="],
 
-    "@aztec/stdlib": ["@aztec/stdlib@5.0.0-nightly.20260307", "", { "dependencies": { "@aws-sdk/client-s3": "^3.892.0", "@aztec/bb.js": "5.0.0-nightly.20260307", "@aztec/blob-lib": "5.0.0-nightly.20260307", "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/ethereum": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/l1-artifacts": "5.0.0-nightly.20260307", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260307", "@google-cloud/storage": "^7.15.0", "axios": "^1.13.5", "json-stringify-deterministic": "1.0.12", "lodash.chunk": "^4.2.0", "lodash.isequal": "^4.5.0", "lodash.omit": "^4.5.0", "lodash.times": "^4.3.2", "msgpackr": "^1.11.2", "pako": "^2.1.0", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2", "zod": "^3.23.8" } }, "sha512-o/k5kcPid1h+/NkmYvdwYjMVch2tuyJFFDcQgD43tpSTfnzuiGj82DX2IkuKExiHIzMGA+2IUZvIOPCsApwUwA=="],
+    "@aztec/stdlib": ["@aztec/stdlib@5.0.0-nightly.20260308", "", { "dependencies": { "@aws-sdk/client-s3": "^3.892.0", "@aztec/bb.js": "5.0.0-nightly.20260308", "@aztec/blob-lib": "5.0.0-nightly.20260308", "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/ethereum": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/l1-artifacts": "5.0.0-nightly.20260308", "@aztec/noir-noirc_abi": "5.0.0-nightly.20260308", "@google-cloud/storage": "^7.15.0", "axios": "^1.13.5", "json-stringify-deterministic": "1.0.12", "lodash.chunk": "^4.2.0", "lodash.isequal": "^4.5.0", "lodash.omit": "^4.5.0", "lodash.times": "^4.3.2", "msgpackr": "^1.11.2", "pako": "^2.1.0", "tslib": "^2.4.0", "viem": "npm:@aztec/viem@2.38.2", "zod": "^3.23.8" } }, "sha512-tRfGCBXOb/XEXT+5tzBwcWBf2qCLoLkz0BnyZ/H+zYfQpyGNFbuk/Fkfh2V5j4ONdaS7IiNLMp8gEhN5zxqy8w=="],
 
-    "@aztec/telemetry-client": ["@aztec/telemetry-client@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "@opentelemetry/api": "^1.9.0", "@opentelemetry/api-logs": "^0.55.0", "@opentelemetry/core": "^1.28.0", "@opentelemetry/exporter-logs-otlp-http": "^0.55.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.55.0", "@opentelemetry/exporter-trace-otlp-http": "^0.55.0", "@opentelemetry/host-metrics": "^0.36.2", "@opentelemetry/otlp-exporter-base": "^0.55.0", "@opentelemetry/resource-detector-gcp": "^0.32.0", "@opentelemetry/resources": "^1.28.0", "@opentelemetry/sdk-logs": "^0.55.0", "@opentelemetry/sdk-metrics": "^1.28.0", "@opentelemetry/sdk-trace-node": "^1.28.0", "@opentelemetry/semantic-conventions": "^1.28.0", "prom-client": "^15.1.3", "viem": "npm:@aztec/viem@2.38.2" } }, "sha512-8JoQ2jQD7BFVeojp74blG20WvUgkiajq00FtHCeHwgVV6p6k7PlzNKgLC4NCxigycjMiyhkanAN7zyP038xgUw=="],
+    "@aztec/telemetry-client": ["@aztec/telemetry-client@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "@opentelemetry/api": "^1.9.0", "@opentelemetry/api-logs": "^0.55.0", "@opentelemetry/core": "^1.28.0", "@opentelemetry/exporter-logs-otlp-http": "^0.55.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.55.0", "@opentelemetry/exporter-trace-otlp-http": "^0.55.0", "@opentelemetry/host-metrics": "^0.36.2", "@opentelemetry/otlp-exporter-base": "^0.55.0", "@opentelemetry/resource-detector-gcp": "^0.32.0", "@opentelemetry/resources": "^1.28.0", "@opentelemetry/sdk-logs": "^0.55.0", "@opentelemetry/sdk-metrics": "^1.28.0", "@opentelemetry/sdk-trace-node": "^1.28.0", "@opentelemetry/semantic-conventions": "^1.28.0", "prom-client": "^15.1.3", "viem": "npm:@aztec/viem@2.38.2" } }, "sha512-Ncwls6linCv0lReDb2SsSa5yB2gcrQuaoT0w4KxDPP0j9m8UYuWWra3sHpSMGhhvB20A+qY6FBAxOCQVPPCXqw=="],
 
-    "@aztec/wallet-sdk": ["@aztec/wallet-sdk@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/aztec.js": "5.0.0-nightly.20260307", "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/entrypoints": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/pxe": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307" } }, "sha512-LBYRImTNlb+lqLW15bUaW/cZTMSspOmKye8qdeyXspl3RMTZ6QCuPFge1hpuw+PYW3zS2MXt6stATv5jQw+Zng=="],
+    "@aztec/wallet-sdk": ["@aztec/wallet-sdk@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/aztec.js": "5.0.0-nightly.20260308", "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/entrypoints": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/pxe": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308" } }, "sha512-rJVp/EDf3VzAE83qp80eW2NebA+Fv82HXHE4vA/XEF5+oPhek411iU0wpO+hLzSqlqGDXL12O/dKvDr4a8qTBQ=="],
 
-    "@aztec/wallets": ["@aztec/wallets@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/accounts": "5.0.0-nightly.20260307", "@aztec/aztec.js": "5.0.0-nightly.20260307", "@aztec/entrypoints": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/kv-store": "5.0.0-nightly.20260307", "@aztec/protocol-contracts": "5.0.0-nightly.20260307", "@aztec/pxe": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "@aztec/wallet-sdk": "5.0.0-nightly.20260307" } }, "sha512-Kto5hmUfvNxhs2lCO/IfFX9iEaxWd9q2Si2uOoUZDw9YEUm97E8yWW8dDtItsP2eY7yL4KfKf56GMLG8lR/x4Q=="],
+    "@aztec/wallets": ["@aztec/wallets@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/accounts": "5.0.0-nightly.20260308", "@aztec/aztec.js": "5.0.0-nightly.20260308", "@aztec/entrypoints": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/kv-store": "5.0.0-nightly.20260308", "@aztec/protocol-contracts": "5.0.0-nightly.20260308", "@aztec/pxe": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "@aztec/wallet-sdk": "5.0.0-nightly.20260308" } }, "sha512-RKEB7jCRq5v3jQAkZnQa46OXC/FKtiNH5yJGqqiIuUlU5VDK+jkOI7NEfWKTouZ5/9sOFfmMSGXWtv/Vz+S4TQ=="],
 
-    "@aztec/world-state": ["@aztec/world-state@5.0.0-nightly.20260307", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260307", "@aztec/foundation": "5.0.0-nightly.20260307", "@aztec/kv-store": "5.0.0-nightly.20260307", "@aztec/merkle-tree": "5.0.0-nightly.20260307", "@aztec/native": "5.0.0-nightly.20260307", "@aztec/protocol-contracts": "5.0.0-nightly.20260307", "@aztec/stdlib": "5.0.0-nightly.20260307", "@aztec/telemetry-client": "5.0.0-nightly.20260307", "tslib": "^2.4.0", "zod": "^3.23.8" } }, "sha512-BSuM/XMlz6zCgjzsAK/9EarvQXOUFtGkgfvZ2mPWEJEtsK2H/IthkDRgq7pRI86R1HbPFpkL9nZftSpwr9127w=="],
+    "@aztec/world-state": ["@aztec/world-state@5.0.0-nightly.20260308", "", { "dependencies": { "@aztec/constants": "5.0.0-nightly.20260308", "@aztec/foundation": "5.0.0-nightly.20260308", "@aztec/kv-store": "5.0.0-nightly.20260308", "@aztec/merkle-tree": "5.0.0-nightly.20260308", "@aztec/native": "5.0.0-nightly.20260308", "@aztec/protocol-contracts": "5.0.0-nightly.20260308", "@aztec/stdlib": "5.0.0-nightly.20260308", "@aztec/telemetry-client": "5.0.0-nightly.20260308", "tslib": "^2.4.0", "zod": "^3.23.8" } }, "sha512-AePT58h9oG19IbrdPMNSeP3NSzV5OG9TUmyiXpmtLIKHh4szKFu217k6o2aeKfKEwsJqWXqCKRZR+pX6r7XOUg=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 
