@@ -154,9 +154,15 @@ jobs:
           echo "Uploading ${#FILES[@]} files:"
           printf '  %s\n' "${FILES[@]}"
 
-          gh release create "$TAG" \
-            --title "Accelerator $VERSION" \
-            --notes "$(cat <<EOF
+          # Release Please may have already created the release — upload assets if so
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists, uploading assets..."
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" \
+              --title "Accelerator $VERSION" \
+              --notes "$(cat <<EOF
           ## TeeRex Accelerator $VERSION
 
           Native proving accelerator for Aztec transactions.
@@ -172,5 +178,6 @@ jobs:
           This release is built against Aztec \`$VERSION\`.
           EOF
           )" \
-            --prerelease \
-            "${FILES[@]}"
+              --prerelease \
+              "${FILES[@]}"
+          fi
