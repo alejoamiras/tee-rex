@@ -76,8 +76,7 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         "version": env!("CARGO_PKG_VERSION"),
         "aztec_version": bundled,
         "available_versions": available,
-        "bb": bb::find_bb(None).map(|p| p.display().to_string()).ok(),
-        "log_dir": crate::log_dir().display().to_string(),
+        "bb_available": bb::find_bb(None).is_ok(),
     }))
 }
 
@@ -100,7 +99,8 @@ async fn prove(
     headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    tracing::info!(payload_bytes = body.len(), "Received /prove request");
+    tracing::info!("Received /prove request");
+    tracing::debug!(payload_bytes = body.len(), "Prove request payload size");
 
     // Extract requested Aztec version from header (if any)
     let requested_version = headers
@@ -174,16 +174,18 @@ async fn prove(
 
     match &result {
         Ok(proof) => {
-            tracing::info!(
+            tracing::info!("Proving succeeded");
+            tracing::debug!(
                 elapsed_ms = elapsed.as_millis() as u64,
                 proof_bytes = proof.len(),
-                "Proving succeeded"
+                "Proving timing and size"
             );
         }
         Err(e) => {
-            tracing::error!(
+            tracing::error!("Proving failed: {e}");
+            tracing::debug!(
                 elapsed_ms = elapsed.as_millis() as u64,
-                "Proving failed: {e}"
+                "Failed prove timing"
             );
         }
     }
@@ -221,7 +223,7 @@ mod tests {
         assert_eq!(json["status"], "ok");
         assert!(json.get("version").is_some());
         assert!(json.get("aztec_version").is_some());
-        assert!(json.get("log_dir").is_some());
+        assert!(json.get("bb_available").is_some());
         assert!(json.get("available_versions").is_some());
         assert!(json["available_versions"].is_array());
     }

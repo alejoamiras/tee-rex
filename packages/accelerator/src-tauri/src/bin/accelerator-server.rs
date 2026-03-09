@@ -7,10 +7,14 @@ use tee_rex_accelerator::server::{start, AppState};
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
     tracing_subscriber::registry()
+        .with(env_filter)
         .with(fmt::layer().with_writer(std::io::stdout))
         .init();
 

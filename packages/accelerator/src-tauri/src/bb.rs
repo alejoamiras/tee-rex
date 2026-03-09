@@ -99,7 +99,16 @@ pub async fn prove(
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !stderr.is_empty() {
-        tracing::info!("bb stderr:\n{stderr}");
+        let truncated = if stderr.len() > 500 {
+            format!(
+                "{}... [truncated, {} bytes total]",
+                &stderr[..500],
+                stderr.len()
+            )
+        } else {
+            stderr.to_string()
+        };
+        tracing::warn!("bb stderr:\n{truncated}");
     }
 
     if !output.status.success() {
@@ -109,7 +118,7 @@ pub async fn prove(
     let proof_path = output_dir.join("proof");
     let raw_proof = std::fs::read(&proof_path)?;
 
-    tracing::info!(proof_bytes = raw_proof.len(), "bb prove completed");
+    tracing::debug!(proof_bytes = raw_proof.len(), "bb prove completed");
 
     Ok(prepend_field_count_header(&raw_proof))
 }
