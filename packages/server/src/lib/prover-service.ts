@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
@@ -13,10 +12,8 @@ const logger = getLogger(["tee-rex", "server", "prover"]);
  * Throws if the binary can't be found (msgpack proving requires the native binary).
  */
 export function resolveBbPath(): string {
-  const require = createRequire(import.meta.url);
-  const bbProverPath = require.resolve("@aztec/bb-prover");
-  const bbProverRequire = createRequire(bbProverPath);
-  const bbJsEntry = bbProverRequire.resolve("@aztec/bb.js");
+  const bbProverEntry = Bun.resolveSync("@aztec/bb-prover", ".");
+  const bbJsEntry = Bun.resolveSync("@aztec/bb.js", bbProverEntry);
   const bbJsRoot = join(dirname(bbJsEntry), "..", "..");
   const arch = process.arch === "arm64" ? "arm64" : "amd64";
   const os = process.platform === "darwin" ? "macos" : "linux";
