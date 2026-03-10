@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import * as openpgp from "openpgp";
-import { Base64, Bytes } from "ox";
+import { Base64 } from "ox";
 import { type AppDependencies, createApp } from "./index.js";
 import { StandardAttestationService } from "./lib/attestation-service.js";
 import { EncryptionService } from "./lib/encryption-service.js";
@@ -282,23 +282,9 @@ describe("POST /prove", () => {
     try {
       const publicKey = await encryption.getEncryptionPublicKey();
 
-      // Build a minimal valid payload matching the zod schema
-      // witness: mapSchema expects Array<[key, value]> (JSON-serialized Map)
-      // bytecode/vk: schemas.Buffer accepts { type: 'Buffer', data: number[] }
-      const payload = {
-        executionSteps: [
-          {
-            functionName: "test_function",
-            witness: [[0, "value0"]],
-            bytecode: { type: "Buffer", data: [0, 1, 2] },
-            vk: { type: "Buffer", data: [3, 4, 5] },
-            timings: { witgen: 100 },
-          },
-        ],
-      };
-
-      const plaintext = Bytes.fromString(JSON.stringify(payload));
-      const encrypted = await encryptForKey(plaintext, publicKey);
+      // Simulate msgpack-encoded execution steps (from serializePrivateExecutionSteps)
+      const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
+      const encrypted = await encryptForKey(fakeMsgpack, publicKey);
       const encryptedBase64 = Base64.fromBytes(encrypted);
 
       const res = await fetch(`${url}/prove`, {
@@ -312,6 +298,10 @@ describe("POST /prove", () => {
       expect(body.proof).toBeDefined();
       expect(typeof body.proof).toBe("string");
       expect(prover.createChonkProof).toHaveBeenCalledTimes(1);
+
+      // Verify the prover received the raw msgpack bytes, not parsed JSON
+      const calledWith = (prover.createChonkProof as any).mock.calls[0][0] as Uint8Array;
+      expect(new Uint8Array(calledWith)).toEqual(fakeMsgpack);
     } finally {
       close();
     }

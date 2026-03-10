@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { PrivateExecutionStepSchema } from "@aztec/stdlib/kernel";
 import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import ms from "ms";
-import { Base64, Bytes } from "ox";
+import { Base64 } from "ox";
 import { z } from "zod";
 import {
   type AttestationService,
@@ -82,18 +81,12 @@ export function createApp(deps: AppDependencies): express.Express {
           .json({ error: "Invalid request body: expected { data: string }", requestId: req.id });
         return;
       }
-      let decryptedData: unknown;
+      let decryptedData: Uint8Array;
       try {
         const encryptedData = Base64.toBytes(body.data.data);
-        decryptedData = JSON.parse(
-          Bytes.toString(
-            await deps.encryption.decrypt({
-              data: encryptedData,
-            }),
-          ),
-        );
+        decryptedData = await deps.encryption.decrypt({ data: encryptedData });
       } catch (err) {
-        logger.warn("Failed to decrypt/parse prove payload", {
+        logger.warn("Failed to decrypt prove payload", {
           requestId: req.id,
           error: err instanceof Error ? err.message : String(err),
         });
@@ -101,10 +94,7 @@ export function createApp(deps: AppDependencies): express.Express {
         return;
       }
 
-      const data = z
-        .object({ executionSteps: z.array(PrivateExecutionStepSchema) })
-        .parse(decryptedData);
-      const proof = await deps.prover.createChonkProof(data.executionSteps);
+      const proof = await deps.prover.createChonkProof(decryptedData);
       logger.info("Prove request completed", { requestId: req.id });
       res.json({
         proof: Base64.fromBytes(proof.toBuffer()), // proof will be publicly posted on chain, so no need to encrypt

@@ -4,7 +4,7 @@ import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
 import ky from "ky";
 import ms from "ms";
-import { Base64, Bytes } from "ox";
+import { Base64 } from "ox";
 import { UnreachableCaseError, type ValueOf } from "ts-essentials";
 import { joinURL } from "ufo";
 import { z } from "zod";
@@ -217,23 +217,17 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   ): Promise<ChonkProofWithPublicInputs> {
     logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
     this.#onPhase?.("serialize");
-    const executionStepsSerialized = executionSteps.map((step) => ({
-      functionName: step.functionName,
-      witness: Array.from(step.witness.entries()),
-      bytecode: Base64.fromBytes(step.bytecode),
-      vk: Base64.fromBytes(step.vk),
-      timings: step.timings,
-    }));
-    logger.debug("Serialized payload", { chars: JSON.stringify(executionStepsSerialized).length });
+    const msgpack = serializePrivateExecutionSteps(executionSteps);
+    logger.debug("Serialized payload", { bytes: msgpack.byteLength });
     this.#onPhase?.("fetch-attestation");
     const encryptionPublicKey = await this.#fetchEncryptionPublicKey();
     this.#onPhase?.("encrypt");
     const encryptedData = Base64.fromBytes(
       await encrypt({
-        data: Bytes.fromString(JSON.stringify({ executionSteps: executionStepsSerialized })),
+        data: new Uint8Array(msgpack),
         encryptionPublicKey,
       }),
-    ); // TODO(perf): serialize executionSteps -> bytes without intermediate encoding. Needs Aztec to support serialization of the PrivateExecutionStep class.
+    );
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
     const response = await ky
