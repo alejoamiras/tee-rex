@@ -87,6 +87,9 @@ ifconfig lo 127.0.0.1 2>/dev/null || {
 # WORKDIR not preserved by enclave init
 cd /app/packages/server
 
+# Tell barretenberg to use all available CPUs (default caps at 32)
+export HARDWARE_CONCURRENCY=$(nproc)
+
 # The server and socat write to /dev/null instead of /dev/console.
 # In non-debug mode, nobody reads from the serial port so the kernel's
 # tty buffer (~4KB) fills from log output and write() blocks, deadlocking
