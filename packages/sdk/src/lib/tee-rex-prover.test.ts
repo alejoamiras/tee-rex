@@ -4,7 +4,12 @@ import { WASMSimulator } from "@aztec/simulator/client";
 import * as stdlibKernel from "@aztec/stdlib/kernel";
 import sdkPkg from "../../package.json" with { type: "json" };
 import * as attestationModule from "./attestation.js";
-import { type ProverPhase, ProvingMode, TeeRexProver } from "./tee-rex-prover.js";
+import {
+  type AcceleratorStatus,
+  type ProverPhase,
+  ProvingMode,
+  TeeRexProver,
+} from "./tee-rex-prover.js";
 
 const SDK_AZTEC_VERSION = (sdkPkg.dependencies as Record<string, string>)["@aztec/stdlib"];
 
@@ -460,6 +465,89 @@ describe("TeeRexProver", () => {
       // Should have called serialize (not fallen back to WASM)
       expect(serializeSpy).toHaveBeenCalled();
       serializeSpy.mockRestore();
+    });
+  });
+
+  describe("checkAcceleratorStatus", () => {
+    test("returns available + version info when healthy (multi-version)", async () => {
+      mockFetch({
+        "/health": () =>
+          Response.json({
+            status: "ok",
+            aztec_version: SDK_AZTEC_VERSION,
+            available_versions: [SDK_AZTEC_VERSION, "5.0.0-nightly.20260101"],
+          }),
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      const status: AcceleratorStatus = await prover.checkAcceleratorStatus();
+
+      expect(status.available).toBe(true);
+      expect(status.needsDownload).toBe(false);
+      expect(status.acceleratorVersion).toBe(SDK_AZTEC_VERSION);
+      expect(status.availableVersions).toEqual([SDK_AZTEC_VERSION, "5.0.0-nightly.20260101"]);
+      expect(status.sdkAztecVersion).toBe(SDK_AZTEC_VERSION);
+    });
+
+    test("returns needsDownload when SDK version not in available_versions", async () => {
+      mockFetch({
+        "/health": () =>
+          Response.json({
+            status: "ok",
+            aztec_version: "5.0.0-nightly.20260101",
+            available_versions: ["5.0.0-nightly.20260101"],
+          }),
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      const status = await prover.checkAcceleratorStatus();
+
+      expect(status.available).toBe(true);
+      expect(status.needsDownload).toBe(true);
+      expect(status.availableVersions).toEqual(["5.0.0-nightly.20260101"]);
+    });
+
+    test("returns available: false when fetch fails (connection refused)", async () => {
+      mockFetchOffline();
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      const status = await prover.checkAcceleratorStatus();
+
+      expect(status.available).toBe(false);
+      expect(status.needsDownload).toBe(false);
+      expect(status.sdkAztecVersion).toBe(SDK_AZTEC_VERSION);
+    });
+
+    test("returns available: false on legacy version mismatch", async () => {
+      mockFetch({
+        "/health": () => Response.json({ status: "ok", aztec_version: "0.0.0-fake" }),
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      const status = await prover.checkAcceleratorStatus();
+
+      expect(status.available).toBe(false);
+      expect(status.acceleratorVersion).toBe("0.0.0-fake");
+      expect(status.sdkAztecVersion).toBe(SDK_AZTEC_VERSION);
+    });
+
+    test("works regardless of current ProvingMode", async () => {
+      mockFetch({
+        "/health": () =>
+          Response.json({
+            status: "ok",
+            aztec_version: SDK_AZTEC_VERSION,
+            available_versions: [SDK_AZTEC_VERSION],
+          }),
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.local);
+
+      const status = await prover.checkAcceleratorStatus();
+
+      expect(status.available).toBe(true);
+      expect(status.needsDownload).toBe(false);
     });
   });
 });

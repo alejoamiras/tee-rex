@@ -2,6 +2,8 @@
 
 Native proving accelerator for Aztec transactions. Bypasses browser WASM throttling by running the `bb` proving binary natively on your machine, exposed via a localhost HTTP server that the SDK auto-detects.
 
+If every dApp in the ecosystem uses `TeeRexProver` with accelerated mode, a single install of this app gives users native-speed proving across all of them — no per-app setup, no downside.
+
 [![Accelerator](https://github.com/alejoamiras/tee-rex/actions/workflows/accelerator.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/accelerator.yml)
 
 ## Installation
@@ -47,42 +49,76 @@ The SDK auto-detects the accelerator on port 59833 when set to `ProvingMode.acce
 
 The default port is `59833`. Override it with the `TEE_REX_ACCELERATOR_PORT` environment variable (must match on both SDK and accelerator sides).
 
+### Automatic Version Management
+
+The accelerator automatically downloads and caches `bb` binaries on demand. When the SDK sends a prove request for an Aztec version the accelerator doesn't have yet, it downloads the correct binary from Aztec's GitHub releases, caches it, and uses it immediately.
+
+Cached binaries are stored in `~/.tee-rex-accelerator/versions/` with a retention policy per network tier:
+
+| Tier | Example | Kept |
+|------|---------|------|
+| Nightly | `5.0.0-nightly.20260309` | 2 |
+| Devnet | `5.0.0-devnet.20260309` | 3 |
+| Testnet | `5.0.0-rc.1` | 5 |
+| Mainnet | `5.0.0` | all |
+
+Old versions are evicted automatically — no manual cleanup needed.
+
 ### bb Binary Resolution
 
-The accelerator looks for the `bb` proving binary in this order:
+When no specific version is requested, the accelerator looks for the `bb` binary in this order:
 
-1. **Sidecar** — bundled with the app (`binaries/bb`)
-2. **`~/.bb/bb`** — user-installed via the Aztec CLI
-3. **`PATH`** — system-wide installation
+1. **`BB_BINARY_PATH` env var** — explicit override (CI, testing)
+2. **Sidecar** — bundled with the app (`binaries/bb`)
+3. **`~/.bb/bb`** — user-installed via the Aztec CLI
+4. **`PATH`** — system-wide installation
 
-The `/health` endpoint reports which `bb` binary is in use.
+## Tray Menu
 
-## Auto-Start on Login
+The tray menu adapts based on the build profile:
 
-Enable automatic startup via the tray menu:
-
+**Production** (release builds):
 ```
-Status: Idle
-Show Logs
-Start on Login  ✓   ← toggle this checkbox
+Start on Login
+─────────────
+v1.1.0 · Aztec 5.0.0-nightly.20260309
+GitHub
 Quit
 ```
+
+**Development** (debug builds via `cargo tauri dev`):
+```
+Status: Idle
+▸ Versions
+  Show Logs
+  Start on Login
+─────────────
+v1.1.0 · Aztec 5.0.0-nightly.20260309
+GitHub
+Quit
+```
+
+Dev builds include **Status** text, the **Versions** submenu (lists bundled + cached `bb` binaries), and **Show Logs** (opens the log directory). In production, the tray icon tooltip still updates during proving. Logs are accessible at the paths listed in [Troubleshooting → Logs](#logs).
+
+### Auto-Start on Login
 
 When enabled, the accelerator launches automatically when you log in to your computer. Uses platform-native mechanisms (LaunchAgent on macOS, autostart on Linux).
 
 ## Version Compatibility
 
-The accelerator and SDK must use the same Aztec version. The accelerator embeds the Aztec version of its bundled `bb` binary and reports it via `/health`:
+The accelerator supports multiple Aztec versions simultaneously. The `/health` endpoint reports the bundled version and all cached versions:
 
 ```json
 {
   "status": "ok",
-  "aztec_version": "0.87.4",
-  "bb": "/Users/you/.bb/bb"
+  "version": "1.1.0",
+  "aztec_version": "5.0.0-nightly.20260309",
+  "available_versions": ["5.0.0-nightly.20260309", "5.0.0-nightly.20260308"],
+  "bb_available": true
 }
 ```
 
-The SDK compares this with its own `@aztec/stdlib` dependency version. On mismatch, the SDK falls back to WASM proving and logs a warning. On `"unknown"` version, the SDK proceeds optimistically.
+When the SDK requests a version that isn't cached, the accelerator downloads it automatically. If the download fails, the SDK falls back to WASM proving.
 
 ## Troubleshooting
 
@@ -105,7 +141,7 @@ lsof -i :59833
 
 ### bb Binary Not Found
 
-If no `bb` binary is found, the `/health` endpoint returns `"bb": null` and `/prove` requests return a 500 error. Install the Aztec CLI to get the `bb` binary:
+If no `bb` binary is found, the `/health` endpoint returns `"bb_available": false` and `/prove` requests return a 500 error. The accelerator will attempt to download the binary automatically when a versioned prove request arrives. To install manually:
 
 ```sh
 curl -s https://install.aztec.network | bash
@@ -121,13 +157,16 @@ cargo install tauri-cli
 # Copy bb binary for sidecar (reads version from @aztec/bb.js)
 bun run --filter accelerator prebuild
 
-# Run in development mode
+# Run in development mode (debug build — includes Versions + Show Logs in menu)
 cd packages/accelerator/src-tauri
 cargo tauri dev
 
 # Run tests
 cargo test
 
-# Build release
+# Build release bundle (.dmg / .deb / .AppImage)
 cargo tauri build
+
+# Quick-run the production menu locally (release build, no bundling)
+cargo run --release
 ```

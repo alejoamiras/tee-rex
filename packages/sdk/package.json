@@ -48,12 +48,6 @@
     "@types/ms": "^2.1.0"
   },
   "publishConfig": {
-    "access": "public",
-    "exports": {
-      ".": {
-        "default": "./dist/index.js",
-        "types": "./dist/index.d.ts"
-      }
-    }
+    "access": "public"
   }
 }

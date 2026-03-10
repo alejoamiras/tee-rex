@@ -1,8 +1,11 @@
 // Prevents additional console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::path::Path;
 use std::sync::Arc;
-use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{
+    CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
+};
 use tauri::tray::TrayIconBuilder;
 use tauri::AppHandle;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
@@ -13,6 +16,33 @@ use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+
+/// Returns true in debug builds (`cargo tauri dev`), false in release.
+fn is_dev_mode() -> bool {
+    cfg!(debug_assertions)
+}
+
+/// Open a path or URL in the platform's default handler.
+fn open_in_browser(target: &impl AsRef<Path>) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg(target.as_ref())
+            .spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg(target.as_ref())
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer")
+            .arg(target.as_ref())
+            .spawn();
+    }
+}
 
 /// Build a "Versions" submenu listing the bundled + cached bb versions.
 fn build_versions_submenu(
@@ -67,12 +97,17 @@ fn main() {
 
     tracing::info!(log_dir = %log_path.display(), "Logging initialized");
 
+    let dev_mode = is_dev_mode();
+    if dev_mode {
+        tracing::info!("Developer mode enabled");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .setup(|app| {
+        .setup(move |app| {
             // Hide from Dock — tray-only app
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -82,10 +117,6 @@ fn main() {
                 .enabled(false)
                 .build(app)?;
 
-            let versions_submenu = build_versions_submenu(&app.handle().clone(), &bundled_version)?;
-
-            let show_logs = MenuItemBuilder::with_id("show_logs", "Show Logs").build(app)?;
-
             let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
             if autostart_enabled {
                 tee_rex_accelerator::crash_recovery::enable_crash_recovery();
@@ -94,11 +125,45 @@ fn main() {
                 .checked(autostart_enabled)
                 .build(app)?;
 
+            // About section: version info + GitHub link (always shown)
+            let app_version = env!("CARGO_PKG_VERSION");
+            let aztec_bb_version = env!("AZTEC_BB_VERSION");
+            let version_text = MenuItemBuilder::with_id(
+                "version_info",
+                format!("v{app_version} · Aztec {aztec_bb_version}"),
+            )
+            .enabled(false)
+            .build(app)?;
+
+            let github = MenuItemBuilder::with_id("open_github", "GitHub").build(app)?;
+
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
 
-            let menu = MenuBuilder::new(app)
-                .items(&[&status, &versions_submenu, &show_logs, &autostart, &quit])
-                .build()?;
+            let menu = if dev_mode {
+                let versions_submenu =
+                    build_versions_submenu(&app.handle().clone(), &bundled_version)?;
+                let show_logs = MenuItemBuilder::with_id("show_logs", "Show Logs").build(app)?;
+                let separator = PredefinedMenuItem::separator(app)?;
+
+                MenuBuilder::new(app)
+                    .items(&[
+                        &status,
+                        &versions_submenu,
+                        &show_logs,
+                        &autostart,
+                        &separator,
+                        &version_text,
+                        &github,
+                        &quit,
+                    ])
+                    .build()?
+            } else {
+                let separator = PredefinedMenuItem::separator(app)?;
+
+                MenuBuilder::new(app)
+                    .items(&[&autostart, &separator, &version_text, &github, &quit])
+                    .build()?
+            };
 
             let tray_icon = {
                 let bytes = include_bytes!("../icons/tray-icon.png");
@@ -113,19 +178,10 @@ fn main() {
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "quit" => app.exit(0),
                     "show_logs" => {
-                        let dir = log_dir();
-                        #[cfg(target_os = "macos")]
-                        {
-                            let _ = std::process::Command::new("open").arg(&dir).spawn();
-                        }
-                        #[cfg(target_os = "linux")]
-                        {
-                            let _ = std::process::Command::new("xdg-open").arg(&dir).spawn();
-                        }
-                        #[cfg(target_os = "windows")]
-                        {
-                            let _ = std::process::Command::new("explorer").arg(&dir).spawn();
-                        }
+                        open_in_browser(&log_dir());
+                    }
+                    "open_github" => {
+                        open_in_browser(&"https://github.com/AztecProtocol/tee-rex");
                     }
                     "toggle_autostart" => {
                         let manager = app.autolaunch();
@@ -149,12 +205,16 @@ fn main() {
             let status_clone = status.clone();
             let tray_clone = tray.clone();
 
-            // Versions changed callback: rebuild the Versions submenu when versions change
+            // Versions changed callback: rebuild the Versions submenu when versions change.
+            // Only needed in dev mode (production menu has no Versions submenu).
             let app_handle = app.handle().clone();
             let bundled_for_cb = bundled_version.clone();
             let tray_for_versions = tray.clone();
             let on_versions_changed: tee_rex_accelerator::server::VersionsChangedCallback =
                 Arc::new(move || {
+                    if !dev_mode {
+                        return;
+                    }
                     match build_versions_submenu(&app_handle, &bundled_for_cb) {
                         Ok(new_submenu) => {
                             // Rebuild the full menu with the updated versions submenu
@@ -173,12 +233,31 @@ fn main() {
                             let quit_rebuild = MenuItemBuilder::with_id("quit", "Quit")
                                 .build(&app_handle)
                                 .unwrap();
+
+                            let app_version = env!("CARGO_PKG_VERSION");
+                            let aztec_bb_version = env!("AZTEC_BB_VERSION");
+                            let version_text_rebuild = MenuItemBuilder::with_id(
+                                "version_info",
+                                format!("v{app_version} · Aztec {aztec_bb_version}"),
+                            )
+                            .enabled(false)
+                            .build(&app_handle)
+                            .unwrap();
+                            let github_rebuild = MenuItemBuilder::with_id("open_github", "GitHub")
+                                .build(&app_handle)
+                                .unwrap();
+                            let separator_rebuild =
+                                PredefinedMenuItem::separator(&app_handle).unwrap();
+
                             let new_menu = MenuBuilder::new(&app_handle)
                                 .items(&[
                                     &status_rebuild,
                                     &new_submenu,
                                     &show_logs_rebuild,
                                     &autostart_rebuild,
+                                    &separator_rebuild,
+                                    &version_text_rebuild,
+                                    &github_rebuild,
                                     &quit_rebuild,
                                 ])
                                 .build()

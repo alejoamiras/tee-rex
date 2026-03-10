@@ -52,9 +52,18 @@ export interface TeeRexAcceleratorConfig {
 const DEFAULT_ACCELERATOR_PORT = 59833;
 const DEFAULT_ACCELERATOR_HOST = "127.0.0.1";
 
-interface AcceleratorHealthResult {
+/** Status of the local native accelerator, returned by {@link TeeRexProver.checkAcceleratorStatus}. */
+export interface AcceleratorStatus {
+  /** Whether the accelerator is reachable and compatible. */
   available: boolean;
+  /** Whether the accelerator needs to download `bb` for the SDK's Aztec version. */
   needsDownload: boolean;
+  /** Accelerator version string from the `/health` endpoint (legacy `aztec_version` field). */
+  acceleratorVersion?: string;
+  /** Aztec versions the accelerator already has cached. */
+  availableVersions?: string[];
+  /** The Aztec version this SDK expects (from its `@aztec/stdlib` dependency). */
+  sdkAztecVersion?: string;
 }
 
 /**
@@ -113,6 +122,62 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
 
   get #acceleratorBaseUrl(): string {
     return `http://${this.#acceleratorHost}:${this.#acceleratorPort}`;
+  }
+
+  /**
+   * Probe the local accelerator's `/health` endpoint and return its status.
+   * Works regardless of the current {@link ProvingMode} — use it to show
+   * "Accelerator connected" / "Offline" in your UI before a prove call.
+   */
+  async checkAcceleratorStatus(): Promise<AcceleratorStatus> {
+    const sdkAztecVersion = this.#getAztecVersion();
+    try {
+      const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!response.ok) return { available: false, needsDownload: false, sdkAztecVersion };
+
+      const data = (await response.json()) as {
+        aztec_version?: string;
+        available_versions?: string[];
+      };
+
+      const acceleratorVersion = data.aztec_version;
+      const availableVersions = data.available_versions;
+
+      // New multi-version protocol: check available_versions array
+      if (availableVersions) {
+        const needsDownload = sdkAztecVersion
+          ? !availableVersions.includes(sdkAztecVersion)
+          : false;
+        logger.info("Multi-version health check", {
+          sdkAztecVersion,
+          availableVersions,
+          needsDownload,
+        });
+        return {
+          available: true,
+          needsDownload,
+          acceleratorVersion,
+          availableVersions,
+          sdkAztecVersion,
+        };
+      }
+
+      // Legacy protocol: exact version match
+      if (acceleratorVersion && acceleratorVersion !== "unknown") {
+        if (sdkAztecVersion && acceleratorVersion !== sdkAztecVersion) {
+          logger.warn("Accelerator Aztec version mismatch", {
+            accelerator: acceleratorVersion,
+            sdk: sdkAztecVersion,
+          });
+          return { available: false, needsDownload: false, acceleratorVersion, sdkAztecVersion };
+        }
+      }
+      return { available: true, needsDownload: false, acceleratorVersion, sdkAztecVersion };
+    } catch {
+      return { available: false, needsDownload: false, sdkAztecVersion };
+    }
   }
 
   async createChonkProof(
@@ -191,9 +256,9 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
     this.#onPhase?.("detect");
-    const health = await this.#checkAcceleratorHealth();
+    const { available, needsDownload } = await this.checkAcceleratorStatus();
 
-    if (!health.available) {
+    if (!available) {
       logger.info("Accelerator not available, falling back to WASM");
       this.#onPhase?.("fallback");
       this.#onPhase?.("proving");
@@ -202,7 +267,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       return proof;
     }
 
-    if (health.needsDownload) {
+    if (needsDownload) {
       logger.info("Accelerator needs to download bb for this version");
       this.#onPhase?.("downloading");
     }
@@ -233,52 +298,6 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#onPhase?.("receive");
     const proofBuffer = Buffer.from(response.proof, "base64");
     return ChonkProofWithPublicInputs.fromBuffer(proofBuffer);
-  }
-
-  async #checkAcceleratorHealth(): Promise<AcceleratorHealthResult> {
-    try {
-      const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
-        signal: AbortSignal.timeout(2000),
-      });
-      if (!response.ok) return { available: false, needsDownload: false };
-
-      const data = (await response.json()) as {
-        aztec_version?: string;
-        available_versions?: string[];
-      };
-
-      // New multi-version protocol: check available_versions array
-      if (data.available_versions) {
-        const sdkVersion = this.#getAztecVersion();
-        if (sdkVersion) {
-          const needsDownload = !data.available_versions.includes(sdkVersion);
-          logger.info("Multi-version health check", {
-            sdkVersion,
-            availableVersions: data.available_versions,
-            needsDownload,
-          });
-          return { available: true, needsDownload };
-        }
-        // No SDK version to check — proceed without download
-        return { available: true, needsDownload: false };
-      }
-
-      // Legacy protocol: exact version match
-      const acceleratorVersion = data.aztec_version;
-      if (acceleratorVersion && acceleratorVersion !== "unknown") {
-        const sdkVersion = this.#getAztecVersion();
-        if (sdkVersion && acceleratorVersion !== sdkVersion) {
-          logger.warn("Accelerator Aztec version mismatch", {
-            accelerator: acceleratorVersion,
-            sdk: sdkVersion,
-          });
-          return { available: false, needsDownload: false };
-        }
-      }
-      return { available: true, needsDownload: false };
-    } catch {
-      return { available: false, needsDownload: false };
-    }
   }
 
   #getAztecVersion(): string | undefined {

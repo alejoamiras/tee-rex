@@ -78,9 +78,18 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "SDK publish version: $VERSION"
 
-      - name: Set SDK version
+      - name: Set SDK version and fix exports for npm
         working-directory: packages/sdk
-        run: node -e "const p=require('./package.json');p.version='${{ steps.sdk-version.outputs.version }}';require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+        run: |
+          node -e "
+            const p = require('./package.json');
+            p.version = '${{ steps.sdk-version.outputs.version }}';
+            p.main = './dist/index.js';
+            p.types = './dist/index.d.ts';
+            p.exports = { '.': { types: './dist/index.d.ts', default: './dist/index.js' } };
+            delete p.publishConfig.exports;
+            require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          "
 
       - name: Publish to npm
         working-directory: packages/sdk

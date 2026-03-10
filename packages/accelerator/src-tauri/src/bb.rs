@@ -77,12 +77,7 @@ pub async fn prove(
     std::fs::create_dir_all(&output_dir)?;
     std::fs::write(&input_path, ivc_inputs)?;
 
-    tracing::info!(
-        bb = %bb_path.display(),
-        input = %input_path.display(),
-        version = version.unwrap_or("bundled"),
-        "Starting bb prove"
-    );
+    tracing::info!(version = version.unwrap_or("bundled"), "Starting bb prove");
 
     let output = tokio::process::Command::new(&bb_path)
         .args([
