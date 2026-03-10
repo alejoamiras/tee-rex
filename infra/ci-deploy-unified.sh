@@ -22,7 +22,7 @@ ENCLAVE_CID=16
 PROVER_CONTAINER_NAME="tee-rex-prover"
 
 # Auto-detect host resources, reserve minimum for host OS + prover container
-TOTAL_VCPUS=$(nproc)
+TOTAL_VCPUS=$(nproc --all)
 TOTAL_MEM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
 CPU_COUNT=$(( TOTAL_VCPUS - 2 ))           # Reserve 2 vCPUs for host
 MEMORY_MB=$(( TOTAL_MEM_MB - 16384 ))      # Reserve 16GB for host
@@ -118,9 +118,13 @@ else
   DEFER_2M_HUGEPAGES=true
 fi
 
-# Configure allocator for the enclave
+# Configure allocator for the enclave and restart to reserve CPUs + acknowledge hugepages.
+# Without restart, nitro-cli rejects run-enclave because the CPU pool is stale.
 sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
 sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
+echo "Restarting allocator with cpu_count=${CPU_COUNT}, memory_mib=${MEMORY_MB}"
+systemctl restart nitro-enclaves-allocator.service
+sleep 3
 
 # ── 2. Disk space check ──────────────────────────────────────────
 AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
