@@ -4,8 +4,6 @@
 //!   so launchd restarts the app if it crashes.
 //! - **Linux**: Manages a systemd user service with `Restart=on-failure`.
 
-use std::path::PathBuf;
-
 const APP_NAME: &str = "tee-rex-accelerator";
 
 /// Patch the LaunchAgent plist created by tauri-plugin-autostart to add crash recovery keys.
@@ -56,9 +54,9 @@ pub fn disable_crash_recovery() {
 }
 
 #[cfg(target_os = "macos")]
-fn macos_plist_path() -> PathBuf {
+fn macos_plist_path() -> std::path::PathBuf {
     dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("~"))
+        .unwrap_or_else(|| std::path::PathBuf::from("~"))
         .join("Library/LaunchAgents")
         .join(format!("{APP_NAME}.plist"))
 }
