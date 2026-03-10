@@ -1,13 +1,10 @@
-import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { promisify } from "node:util";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { getLogger } from "@logtape/logtape";
-
-const execFileAsync = promisify(execFile);
 
 const logger = getLogger(["tee-rex", "server", "prover"]);
 
@@ -24,8 +21,7 @@ export function resolveBbPath(): string {
   const arch = process.arch === "arm64" ? "arm64" : "amd64";
   const os = process.platform === "darwin" ? "macos" : "linux";
   const bbPath = join(bbJsRoot, "build", `${arch}-${os}`, "bb");
-  const fs = require("node:fs");
-  if (!fs.existsSync(bbPath)) {
+  if (!existsSync(bbPath)) {
     throw new Error(`Native bb binary not found at ${bbPath}`);
   }
   logger.info("Resolved native Barretenberg", { bbPath });
@@ -49,20 +45,31 @@ export class ProverService {
       const inputPath = join(tmpDir, "ivc-inputs.msgpack");
       const outputDir = join(tmpDir, "output");
       await mkdir(outputDir, { recursive: true });
-      await writeFile(inputPath, data);
+      await Bun.write(inputPath, data);
 
-      await execFileAsync(this.#bbPath, [
-        "prove",
-        "--scheme",
-        "chonk",
-        "--ivc_inputs_path",
-        inputPath,
-        "-o",
-        outputDir,
-      ]);
+      const proc = Bun.spawn(
+        [
+          this.#bbPath,
+          "prove",
+          "--scheme",
+          "chonk",
+          "--ivc_inputs_path",
+          inputPath,
+          "-o",
+          outputDir,
+        ],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        const stderr = await new Response(proc.stderr).text();
+        throw new Error(`bb prove failed (exit ${exitCode}): ${stderr}`);
+      }
 
-      const proofPath = join(outputDir, "proof");
-      const rawProof = await readFile(proofPath);
+      const rawProof = new Uint8Array(await Bun.file(join(outputDir, "proof")).arrayBuffer());
 
       // Prepend 4-byte field count header (big-endian u32) — same format as
       // ChonkProofWithPublicInputs.toBuffer() and the accelerator.
