@@ -106,7 +106,13 @@ prover.setProvingMode(ProvingMode.local);
 
 ### Accelerated Mode
 
-Accelerated mode routes proving to a native `bb` binary running on your machine via `http://127.0.0.1:59833`. If the accelerator is not running, it automatically falls back to WASM.
+Accelerated mode routes proving to a native `bb` binary running on your machine via the [TeeRex Accelerator](../accelerator/) — a lightweight desktop app that sits in your system tray.
+
+**Why it matters for the ecosystem**: if every dApp uses `TeeRexProver` with accelerated mode, then any user who installs the accelerator gets instant proving across all apps — no per-app configuration, no WASM overhead, just native speed. The more apps that adopt it, the more value the single install provides.
+
+- **Zero config** — just set `ProvingMode.accelerated`; the SDK auto-detects the accelerator on `127.0.0.1:59833`
+- **Auto-download** — the accelerator automatically downloads the correct `bb` binary version when needed, matching the SDK's Aztec version
+- **Transparent fallback** — if the accelerator isn't running or has a version mismatch, the SDK silently falls back to WASM proving. No errors, no broken UX
 
 ```ts
 // custom port (default: 59833)
@@ -115,8 +121,6 @@ prover.setAcceleratorConfig({ port: 51337 });
 // or via environment variable (read at construction time)
 // TEE_REX_ACCELERATOR_PORT=51337
 ```
-
-The accelerator is a lightweight desktop app (TeeRex Accelerator) that runs the Barretenberg proving binary natively — no browser WASM throttling. See [packages/accelerator](../accelerator/) for setup.
 
 ## Attestation Configuration
 

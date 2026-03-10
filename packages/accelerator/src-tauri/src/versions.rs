@@ -231,7 +231,7 @@ pub async fn download_bb(version: &str) -> Result<PathBuf, Box<dyn Error + Send 
             .output();
     }
 
-    tracing::info!(version, path = %final_path.display(), "bb cached successfully");
+    tracing::info!(version, "bb cached successfully");
     Ok(final_path)
 }
 
