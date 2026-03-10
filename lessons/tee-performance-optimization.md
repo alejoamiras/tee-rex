@@ -46,12 +46,28 @@ TEE proving on remote server was not significantly faster than local macOS lapto
 | **Recovery** | Reverted prod to m5.xlarge via `tofu apply`. Prod restored and running. |
 | **Pending** | vCPU quota increase request for 200 vCPUs (opened 2026-03-02, status: CASE_OPENED). Once approved, can retry. |
 
+### Attempt 2 (2026-03-10): Swap devnet ↔ prod — SUCCESS
+
+Workaround for 64 vCPU limit: downsize devnet to m5.xlarge (4 vCPU), upsize prod to c7i.12xlarge (48 vCPU). Total = 52 vCPUs, under 64 limit.
+
+| Step | Result |
+|------|--------|
+| `tofu apply` (swap instance types) | Success — both instances resized in-place |
+| Deploy #171 (PR merge → deploy-prod.yml) | **Failed** — enclave CPU pool error E22 (`Insufficient CPUs available in the pool`) |
+| Root cause | Two issues: (1) `nproc` returns 46 not 48 because old allocator reserved 2 CPUs — fixed with `nproc --all`. (2) Allocator never restarted after config update in 1GB hugepage path — CPU pool stayed at 2. |
+| Fix PR #172 | Added `systemctl restart nitro-enclaves-allocator.service` + `sleep 3` after updating allocator.yaml, before EIF build |
+| Deploy #172 | **Success** — enclave healthy (nitro mode, attestation doc), prover healthy (standard mode) |
+| E2E validation | Timed out at 30min — nextnet not confirming blocks (unrelated to deploy) |
+
 ### Lessons Learned
 
 - Instance type change is **in-place** (stop → resize → start), NOT destroy+recreate. Instance ID stays the same.
 - Devnet instance was already c7i.12xlarge in AWS but code on main said m5.xlarge — fixed code to match.
 - CloudFront `origin_read_timeout` max is 60s by default, 120s with quota increase. Account has 120s. 180s needs another support request.
 - Always check `aws service-quotas get-service-quota` before resizing.
+- **`nproc` vs `nproc --all`**: After the nitro-enclaves-allocator reserves CPUs, `nproc` excludes them. Use `nproc --all` to get the true host CPU count for resource calculations.
+- **Allocator restart is mandatory**: After updating `/etc/nitro_enclaves/allocator.yaml`, you MUST `systemctl restart nitro-enclaves-allocator.service` before `nitro-cli run-enclave`. Otherwise the CPU pool stays stale and you get E22 errors.
+- **vCPU quota workaround**: When quota limits block having two large instances, temporarily downsize the less-important environment.
 
 ## Deployment Notes
 
@@ -59,4 +75,4 @@ TEE proving on remote server was not significantly faster than local macOS lapto
 - EIP stays associated
 - Requires `tofu apply` then deploy workflow
 - Cost: ~$1.50/hr (c7i.12xlarge) vs ~$0.19/hr (m5.xlarge) — intentional for benchmarking
-- **Blocker**: vCPU quota increase pending (200 vCPUs requested, 64 current limit)
+- **Resolved**: Prod running on c7i.12xlarge, devnet on m5.xlarge. vCPU quota increase still pending (will allow both to be large).
