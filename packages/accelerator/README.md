@@ -73,16 +73,34 @@ When no specific version is requested, the accelerator looks for the `bb` binary
 3. **`~/.bb/bb`** — user-installed via the Aztec CLI
 4. **`PATH`** — system-wide installation
 
-## Auto-Start on Login
+## Tray Menu
 
-Enable automatic startup via the tray menu:
+The tray menu adapts based on the build profile:
 
+**Production** (release builds):
 ```
-Status: Idle
-Show Logs
-Start on Login  ✓   ← toggle this checkbox
+Start on Login
+─────────────
+v1.1.0 · Aztec 5.0.0-nightly.20260309
+GitHub
 Quit
 ```
+
+**Development** (debug builds via `cargo tauri dev`):
+```
+Status: Idle
+▸ Versions
+  Show Logs
+  Start on Login
+─────────────
+v1.1.0 · Aztec 5.0.0-nightly.20260309
+GitHub
+Quit
+```
+
+Dev builds include **Status** text, the **Versions** submenu (lists bundled + cached `bb` binaries), and **Show Logs** (opens the log directory). In production, the tray icon tooltip still updates during proving. Logs are accessible at the paths listed in [Troubleshooting → Logs](#logs).
+
+### Auto-Start on Login
 
 When enabled, the accelerator launches automatically when you log in to your computer. Uses platform-native mechanisms (LaunchAgent on macOS, autostart on Linux).
 
@@ -139,13 +157,16 @@ cargo install tauri-cli
 # Copy bb binary for sidecar (reads version from @aztec/bb.js)
 bun run --filter accelerator prebuild
 
-# Run in development mode
+# Run in development mode (debug build — includes Versions + Show Logs in menu)
 cd packages/accelerator/src-tauri
 cargo tauri dev
 
 # Run tests
 cargo test
 
-# Build release
+# Build release bundle (.dmg / .deb / .AppImage)
 cargo tauri build
+
+# Quick-run the production menu locally (release build, no bundling)
+cargo run --release
 ```
