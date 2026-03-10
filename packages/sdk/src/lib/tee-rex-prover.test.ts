@@ -94,7 +94,34 @@ describe("TeeRexProver", () => {
   });
 
   describe("Remote", () => {
+    /** Mock serializePrivateExecutionSteps to avoid WASM panic on fake witness data. */
+    function mockRemoteSerializer() {
+      return spyOn(stdlibKernel, "serializePrivateExecutionSteps").mockReturnValue(
+        Buffer.from([0xde, 0xad]),
+      );
+    }
+
+    test("uses serializePrivateExecutionSteps for payload serialization", async () => {
+      const serializeSpy = mockRemoteSerializer();
+      mockFetch({
+        "/attestation": () => Response.json({ mode: "standard", publicKey: "fake-key" }),
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.remote);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — mock /prove returns 404
+      }
+
+      expect(serializeSpy).toHaveBeenCalledWith([fakeStep]);
+      serializeSpy.mockRestore();
+    });
+
     test("calls the API's attestation endpoint", async () => {
+      const serializeSpy = mockRemoteSerializer();
       const { fetchedUrls } = mockFetch();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
@@ -107,9 +134,11 @@ describe("TeeRexProver", () => {
       }
 
       expect(fetchedUrls.some((url) => url.includes(`${API_URL}/attestation`))).toBe(true);
+      serializeSpy.mockRestore();
     });
 
     test("requireAttestation rejects standard mode servers", async () => {
+      const serializeSpy = mockRemoteSerializer();
       mockFetch({
         "/attestation": () => Response.json({ mode: "standard", publicKey: "fake-key" }),
       });
@@ -121,9 +150,11 @@ describe("TeeRexProver", () => {
       await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
         "requireAttestation is enabled",
       );
+      serializeSpy.mockRestore();
     });
 
     test("nitro mode falls back to server-provided key when node:crypto unavailable", async () => {
+      const serializeSpy = mockRemoteSerializer();
       mockFetch({
         "/attestation": () =>
           Response.json({
@@ -148,9 +179,11 @@ describe("TeeRexProver", () => {
 
       expect(verifySpy).toHaveBeenCalledTimes(1);
       verifySpy.mockRestore();
+      serializeSpy.mockRestore();
     });
 
     test("nitro mode re-throws real verification errors", async () => {
+      const serializeSpy = mockRemoteSerializer();
       mockFetch({
         "/attestation": () =>
           Response.json({
@@ -170,6 +203,7 @@ describe("TeeRexProver", () => {
       await expect(prover.createChonkProof([fakeStep])).rejects.toThrow("PCR0 mismatch");
 
       verifySpy.mockRestore();
+      serializeSpy.mockRestore();
     });
   });
 
