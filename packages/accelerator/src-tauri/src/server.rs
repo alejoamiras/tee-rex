@@ -38,13 +38,18 @@ pub async fn start(state: AppState) -> Result<(), Box<dyn std::error::Error + Se
 }
 
 pub fn router(state: AppState) -> Router {
-    let cors = CorsLayer::new()
+    let mut cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
         .allow_headers([
             http::header::CONTENT_TYPE,
             http::header::HeaderName::from_static("x-aztec-version"),
         ]);
+
+    #[cfg(debug_assertions)]
+    {
+        cors = cors.expose_headers([http::header::HeaderName::from_static("x-prove-duration-ms")]);
+    }
 
     Router::new()
         .route("/health", get(health))
@@ -71,13 +76,23 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         }
     }
 
-    axum::Json(json!({
+    let mut body = json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
         "aztec_version": bundled,
         "available_versions": available,
         "bb_available": bb::find_bb(None).is_ok(),
-    }))
+    });
+
+    // Runtime diagnostics only in debug builds — avoid leaking user hardware info in production
+    #[cfg(debug_assertions)]
+    {
+        body["runtime"] = json!({
+            "available_parallelism": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
+        });
+    }
+
+    axum::Json(body)
 }
 
 /// Drop guard that resets tray status to Idle when the prove handler exits for any reason
@@ -192,7 +207,21 @@ async fn prove(
 
     let proof = result.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &proof);
-    Ok(axum::Json(json!({ "proof": encoded })))
+
+    // Timing header only in debug builds — avoid leaking user hardware performance info
+    #[cfg(debug_assertions)]
+    let response = {
+        let mut r = axum::Json(json!({ "proof": encoded })).into_response();
+        r.headers_mut().insert(
+            "x-prove-duration-ms",
+            HeaderValue::from_str(&elapsed.as_millis().to_string()).unwrap(),
+        );
+        r
+    };
+    #[cfg(not(debug_assertions))]
+    let response = axum::Json(json!({ "proof": encoded })).into_response();
+
+    Ok(response)
 }
 
 #[cfg(test)]
@@ -325,6 +354,37 @@ mod tests {
 
         // Should fail because bb is not available in test env
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn health_includes_runtime_diagnostics_in_debug() {
+        let app = router(AppState::default());
+        let response: axum::http::Response<_> = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        // Tests always run in debug mode, so runtime should be present
+        let runtime = &json["runtime"];
+        assert!(
+            runtime.is_object(),
+            "runtime should be present in debug builds"
+        );
+        assert!(
+            runtime["available_parallelism"].as_u64().unwrap() > 0,
+            "available_parallelism should be > 0"
+        );
     }
 
     #[tokio::test]

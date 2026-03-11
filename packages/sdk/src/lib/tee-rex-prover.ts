@@ -231,14 +231,21 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
     const aztecVersion = this.#getAztecVersion();
-    const response = await ky
-      .post(joinURL(this.apiUrl, "prove"), {
-        json: { data: encryptedData },
-        timeout: ms("5 min"),
-        retry: 2,
-        headers: aztecVersion ? { "x-aztec-version": aztecVersion } : {},
-      })
-      .json();
+    const res = await ky.post(joinURL(this.apiUrl, "prove"), {
+      json: { data: encryptedData },
+      timeout: ms("5 min"),
+      retry: 2,
+      headers: aztecVersion ? { "x-aztec-version": aztecVersion } : {},
+    });
+    const proveDurationMs = res.headers.get("x-prove-duration-ms");
+    const decryptDurationMs = res.headers.get("x-decrypt-duration-ms");
+    if (proveDurationMs || decryptDurationMs) {
+      logger.info("Server-side timing", {
+        proveDurationMs: proveDurationMs ? Number(proveDurationMs) : undefined,
+        decryptDurationMs: decryptDurationMs ? Number(decryptDurationMs) : undefined,
+      });
+    }
+    const response = await res.json();
     this.#onPhase?.("receive");
     const data = z
       .object({
@@ -279,17 +286,20 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
 
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
-    const response = await ky
-      .post(joinURL(this.#acceleratorBaseUrl, "prove"), {
-        body: new Uint8Array(msgpack),
-        timeout: ms("10 min"),
-        retry: 0,
-        headers: {
-          "content-type": "application/octet-stream",
-          ...(aztecVersion ? { "x-aztec-version": aztecVersion } : {}),
-        },
-      })
-      .json<{ proof: string }>();
+    const res = await ky.post(joinURL(this.#acceleratorBaseUrl, "prove"), {
+      body: new Uint8Array(msgpack),
+      timeout: ms("10 min"),
+      retry: 0,
+      headers: {
+        "content-type": "application/octet-stream",
+        ...(aztecVersion ? { "x-aztec-version": aztecVersion } : {}),
+      },
+    });
+    const proveDurationMs = res.headers.get("x-prove-duration-ms");
+    if (proveDurationMs) {
+      logger.info("Accelerator server-side timing", { proveDurationMs: Number(proveDurationMs) });
+    }
+    const response = await res.json<{ proof: string }>();
 
     this.#onPhase?.("receive");
     const proofBuffer = Buffer.from(response.proof, "base64");
