@@ -105,9 +105,12 @@ async function downloadBb(version: string): Promise<void> {
 
   chmodSync(bbPath, 0o755);
 
-  // macOS: clear quarantine attribute
+  // macOS: clear quarantine attribute and ad-hoc re-sign.
+  // GitHub release binaries have ad-hoc signatures that get invalidated during
+  // download/extraction, causing Gatekeeper to silently block execution (hang).
   if (process.platform === "darwin") {
     Bun.spawnSync(["xattr", "-d", "com.apple.quarantine", bbPath]);
+    Bun.spawnSync(["codesign", "--force", "--sign", "-", bbPath]);
   }
 
   const stat = Bun.file(bbPath);
