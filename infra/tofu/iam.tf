@@ -189,7 +189,7 @@ resource "aws_iam_role_policy" "ci_inline" {
         Resource = "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/*"
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/Environment" = ["ci", "prod", "devnet"]
+            "aws:ResourceTag/Environment" = ["ci", "prod"]
           }
         }
       },
@@ -209,7 +209,7 @@ resource "aws_iam_role_policy" "ci_inline" {
         Resource = "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/*"
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/Environment" = ["ci", "prod", "devnet"]
+            "aws:ResourceTag/Environment" = ["ci", "prod"]
           }
         }
       },
@@ -229,7 +229,7 @@ resource "aws_iam_role_policy" "ci_inline" {
         Resource = "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/*"
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/Environment" = ["ci", "prod", "devnet"]
+            "aws:ResourceTag/Environment" = ["ci", "prod"]
           }
         }
       },

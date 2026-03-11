@@ -185,9 +185,9 @@ resource "aws_cloudfront_distribution" "devnet" {
     origin_access_control_id = aws_cloudfront_origin_access_control.app.id
   }
 
-  # Prover EC2 origin (HTTP, port 80) — same instance as TEE (consolidated)
+  # Prover EC2 origin (HTTP, port 80) — shared prod instance (multi-version bb)
   origin {
-    domain_name = aws_eip.devnet_tee.public_dns
+    domain_name = aws_eip.prod_tee.public_dns
     origin_id   = "prover-ec2"
 
     custom_origin_config {
@@ -195,14 +195,14 @@ resource "aws_cloudfront_distribution" "devnet" {
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 60
+      origin_read_timeout      = 120
       origin_keepalive_timeout = 5
     }
   }
 
-  # TEE EC2 origin (HTTP, port 4000)
+  # TEE EC2 origin (HTTP, port 4000) — shared prod instance
   origin {
-    domain_name = aws_eip.devnet_tee.public_dns
+    domain_name = aws_eip.prod_tee.public_dns
     origin_id   = "tee-ec2"
 
     custom_origin_config {
@@ -210,7 +210,7 @@ resource "aws_cloudfront_distribution" "devnet" {
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 60
+      origin_read_timeout      = 120
       origin_keepalive_timeout = 5
     }
   }

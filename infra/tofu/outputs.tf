@@ -14,12 +14,6 @@ output "prod_tee_instance_id" {
   sensitive   = true
 }
 
-output "devnet_tee_instance_id" {
-  description = "Devnet TEE EC2 instance ID"
-  value       = aws_instance.devnet_tee.id
-  sensitive   = true
-}
-
 # -----------------------------------------------------------------------------
 # Elastic IPs
 # -----------------------------------------------------------------------------
@@ -27,12 +21,6 @@ output "devnet_tee_instance_id" {
 output "prod_tee_eip" {
   description = "Production TEE Elastic IP"
   value       = aws_eip.prod_tee.public_ip
-  sensitive   = true
-}
-
-output "devnet_tee_eip" {
-  description = "Devnet TEE Elastic IP"
-  value       = aws_eip.devnet_tee.public_ip
   sensitive   = true
 }
 
