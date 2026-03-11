@@ -62,56 +62,56 @@ test.describe("TEE", () => {
     await deployAndAssert(page, "local");
   });
 
-  test("TEE -> remote deploys successfully", async () => {
+  test("TEE -> UEE deploys successfully", async () => {
     const page = sharedPage;
     // Restore TEE mode (previous test left us in local)
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
-    // Switch to remote
-    await page.click("#mode-remote");
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote");
+    // Switch to UEE
+    await page.click("#mode-uee");
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
+    await expect(page.locator("#log")).toContainText("Switched to UEE proving mode");
+    await deployAndAssert(page, "uee");
   });
 });
 
-// ── Remote proving ──
+// ── UEE proving ──
 
-test.describe("remote", () => {
+test.describe("UEE", () => {
   test.beforeEach(() => {
     test.skip(!PROVER_URL, "PROVER_URL env var not set");
   });
 
   test("deploys account", async () => {
     const page = sharedPage;
-    await expect(page.locator("#mode-remote")).toBeEnabled();
-    await page.click("#mode-remote");
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote");
+    await expect(page.locator("#mode-uee")).toBeEnabled();
+    await page.click("#mode-uee");
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
+    await deployAndAssert(page, "uee");
   });
 
   // TODO: re-enable when Aztec nightly WASM perf regression is resolved (token flow takes ~7 min on CI)
   test.skip("runs full token flow", async () => {
     const page = sharedPage;
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await runTokenFlowAndAssert(page, "remote");
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
+    await runTokenFlowAndAssert(page, "uee");
   });
 
-  test("remote -> local deploys successfully", async () => {
+  test("UEE -> local deploys successfully", async () => {
     const page = sharedPage;
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     await expect(page.locator("#log")).toContainText("Switched to local proving mode");
     await deployAndAssert(page, "local");
   });
 
-  test("remote -> TEE deploys successfully", async () => {
+  test("UEE -> TEE deploys successfully", async () => {
     test.skip(!TEE_URL, "TEE_URL env var not set");
     const page = sharedPage;
-    // Restore remote mode (previous test left us in local)
-    await page.click("#mode-remote");
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
+    // Restore UEE mode (previous test left us in local)
+    await page.click("#mode-uee");
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
     // Switch to TEE
     await page.click("#mode-tee");
     await expect(page.locator("#mode-tee")).toHaveClass(/mode-active/);
@@ -137,19 +137,19 @@ test.describe("local", () => {
     await runTokenFlowAndAssert(page, "local");
   });
 
-  test("local -> remote deploys successfully", async () => {
+  test("local -> UEE deploys successfully", async () => {
     const page = sharedPage;
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-    await page.click("#mode-remote");
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await expect(page.locator("#log")).toContainText("Switched to remote proving mode");
-    await deployAndAssert(page, "remote");
+    await page.click("#mode-uee");
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
+    await expect(page.locator("#log")).toContainText("Switched to UEE proving mode");
+    await deployAndAssert(page, "uee");
   });
 
   test("local -> TEE deploys successfully", async () => {
     test.skip(!TEE_URL, "TEE_URL env var not set");
     const page = sharedPage;
-    // Restore local mode (previous test left us in remote)
+    // Restore local mode (previous test left us in UEE)
     await page.click("#mode-local");
     await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
     // Switch to TEE

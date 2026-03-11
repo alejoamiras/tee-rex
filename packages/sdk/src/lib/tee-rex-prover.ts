@@ -13,11 +13,11 @@ import { type AttestationVerifyOptions, verifyNitroAttestation } from "./attesta
 import { encrypt } from "./encrypt.js";
 import { logger } from "./logger.js";
 
-/** Whether proofs are generated locally (WASM), on a remote tee-rex server, or via a local native accelerator. */
+/** Whether proofs are generated locally (WASM), on a UEE (Untrusted Execution Environment) server, or via a local native accelerator. */
 export type ProvingMode = ValueOf<typeof ProvingMode>;
 export const ProvingMode = {
   local: "local",
-  remote: "remote",
+  uee: "uee",
   accelerated: "accelerated",
 } as const;
 
@@ -67,17 +67,17 @@ export interface AcceleratorStatus {
 }
 
 /**
- * Aztec private kernel prover that can generate proofs locally (WASM), on a remote
- * tee-rex server (Nitro Enclave), or via a local native accelerator.
+ * Aztec private kernel prover that can generate proofs locally (WASM), on a UEE
+ * (Untrusted Execution Environment) server, or via a local native accelerator.
  *
- * In remote mode, witness data is encrypted with the server's attested public
+ * In UEE mode, witness data is encrypted with the server's attested public
  * key (curve25519 + AES-256-GCM) before being sent over the network.
  *
  * In accelerated mode, proving is routed to a native `bb` binary running on the
  * user's machine via `http://127.0.0.1:59833`. Falls back to WASM if unavailable.
  */
 export class TeeRexProver extends BBLazyPrivateKernelProver {
-  #provingMode: ProvingMode = ProvingMode.remote;
+  #provingMode: ProvingMode = ProvingMode.uee;
   #attestationConfig: TeeRexAttestationConfig = {};
   #onPhase: ((phase: ProverPhase) => void) | null = null;
   #acceleratorPort: number;
@@ -94,12 +94,12 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#acceleratorHost = DEFAULT_ACCELERATOR_HOST;
   }
 
-  /** Switch between local WASM, remote TEE, or accelerated (native) proving. */
+  /** Switch between local WASM, UEE (server), or accelerated (native) proving. */
   setProvingMode(mode: ProvingMode) {
     this.#provingMode = mode;
   }
 
-  /** Update the tee-rex server URL used for remote proving. */
+  /** Update the tee-rex server URL used for UEE/TEE proving. */
   setApiUrl(url: string) {
     this.apiUrl = url;
   }
@@ -198,9 +198,9 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         this.#onPhase?.("receive");
         return result;
       }
-      case "remote": {
-        logger.info("Using remote prover");
-        return this.#remoteCreateChonkProof(executionSteps);
+      case "uee": {
+        logger.info("Using UEE prover");
+        return this.#ueeCreateChonkProof(executionSteps);
       }
       case "accelerated": {
         logger.info("Using accelerated prover");
@@ -212,7 +212,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     }
   }
 
-  async #remoteCreateChonkProof(
+  async #ueeCreateChonkProof(
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
     logger.info("Creating chonk proof", { apiUrl: this.apiUrl });

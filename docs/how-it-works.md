@@ -6,7 +6,7 @@ Aztec is a privacy-preserving L2 on Ethereum. When you make a transaction, your 
 
 This proof generation is **expensive**. It involves running a circuit prover (Barretenberg) over your transaction's witness data, which can take significant time and CPU. On mobile or low-power devices, this is a bottleneck.
 
-The naive solution is to send your transaction data to a remote prover. But that **breaks privacy** — the prover sees your witnesses, bytecode, and other sensitive details.
+The naive solution is to send your transaction data to an external prover. But that **breaks privacy** — the prover sees your witnesses, bytecode, and other sensitive details.
 
 ## The Solution: Prove Inside a TEE
 
@@ -139,8 +139,8 @@ import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 const prover = new TeeRexProver("https://tee-rex.example.com", wasmSimulator);
 
-// Switch between local (WASM) and remote (TEE) proving
-prover.setProvingMode("remote");
+// Switch between local (WASM) and UEE (TEE) proving
+prover.setProvingMode("uee");
 
 // Optionally require attestation verification with PCR pinning
 prover.setAttestationConfig({
@@ -158,7 +158,7 @@ const proof = await prover.createChonkProof(executionSteps);
 
 Three modes:
 - **`"local"`** — proves using WASM Barretenberg locally (default, always works)
-- **`"remote"`** — encrypts and delegates to the TEE server
+- **`"uee"`** — encrypts and delegates to the TEE server
 - **`"accelerated"`** — routes to the native TeeRex Accelerator on localhost (runs `bb` binary natively, bypassing WASM throttling). Auto-falls back to `"local"` if the accelerator is unavailable or has a version mismatch.
 
 ## The Docker Image: Multi-Stage Build

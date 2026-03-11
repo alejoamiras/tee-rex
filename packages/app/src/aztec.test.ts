@@ -141,8 +141,8 @@ describe("setUiMode", () => {
       setApiUrl: mockSetApiUrl,
       setAttestationConfig: mockSetAttestationConfig,
     } as any;
-    state.provingMode = "remote";
-    state.uiMode = "remote";
+    state.provingMode = "uee";
+    state.uiMode = "uee";
     state.teeServerUrl = "/tee";
   });
 
@@ -162,21 +162,21 @@ describe("setUiMode", () => {
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
   });
 
-  test("remote mode sets correct state and prover config", () => {
-    setUiMode("remote");
-    expect(state.uiMode).toBe("remote");
-    expect(state.provingMode).toBe("remote");
-    expect(mockSetProvingMode).toHaveBeenCalledWith("remote");
+  test("uee mode sets correct state and prover config", () => {
+    setUiMode("uee");
+    expect(state.uiMode).toBe("uee");
+    expect(state.provingMode).toBe("uee");
+    expect(mockSetProvingMode).toHaveBeenCalledWith("uee");
     expect(mockSetApiUrl).toHaveBeenCalledWith("/prover");
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
   });
 
-  test("tee mode sets remote proving with custom URL and attestation", () => {
+  test("tee mode sets uee proving with custom URL and attestation", () => {
     setUiMode("tee", "https://tee.example.com:4000");
     expect(state.uiMode).toBe("tee");
-    expect(state.provingMode).toBe("remote");
+    expect(state.provingMode).toBe("uee");
     expect(state.teeServerUrl).toBe("https://tee.example.com:4000");
-    expect(mockSetProvingMode).toHaveBeenCalledWith("remote");
+    expect(mockSetProvingMode).toHaveBeenCalledWith("uee");
     expect(mockSetApiUrl).toHaveBeenCalledWith("https://tee.example.com:4000");
     expect(mockSetAttestationConfig).toHaveBeenCalledWith({ requireAttestation: true });
   });

@@ -95,26 +95,26 @@ describe("TeeRexProver", () => {
 
     expect(prover).toBeDefined();
     prover.setProvingMode(ProvingMode.local);
-    prover.setProvingMode(ProvingMode.remote);
+    prover.setProvingMode(ProvingMode.uee);
     prover.setProvingMode(ProvingMode.accelerated);
   });
 
-  describe("Remote", () => {
+  describe("UEE", () => {
     /** Mock serializePrivateExecutionSteps to avoid WASM panic on fake witness data. */
-    function mockRemoteSerializer() {
+    function mockUeeSerializer() {
       return spyOn(stdlibKernel, "serializePrivateExecutionSteps").mockReturnValue(
         Buffer.from([0xde, 0xad]),
       );
     }
 
     test("uses serializePrivateExecutionSteps for payload serialization", async () => {
-      const serializeSpy = mockRemoteSerializer();
+      const serializeSpy = mockUeeSerializer();
       mockFetch({
         "/attestation": () => Response.json({ mode: "standard", publicKey: "fake-key" }),
       });
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       try {
         await prover.createChonkProof([fakeStep]);
@@ -128,7 +128,7 @@ describe("TeeRexProver", () => {
 
     test("sends x-aztec-version header to /prove", async () => {
       let capturedVersionHeader: string | null = null;
-      const serializeSpy = mockRemoteSerializer();
+      const serializeSpy = mockUeeSerializer();
       const encryptSpy = spyOn(encryptModule, "encrypt").mockResolvedValue(
         new Uint8Array([0x01, 0x02]),
       );
@@ -143,7 +143,7 @@ describe("TeeRexProver", () => {
       });
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       try {
         await prover.createChonkProof([fakeStep]);
@@ -157,11 +157,11 @@ describe("TeeRexProver", () => {
     });
 
     test("calls the API's attestation endpoint", async () => {
-      const serializeSpy = mockRemoteSerializer();
+      const serializeSpy = mockUeeSerializer();
       const { fetchedUrls } = mockFetch();
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       try {
         await prover.createChonkProof([fakeStep]);
@@ -174,13 +174,13 @@ describe("TeeRexProver", () => {
     });
 
     test("requireAttestation rejects standard mode servers", async () => {
-      const serializeSpy = mockRemoteSerializer();
+      const serializeSpy = mockUeeSerializer();
       mockFetch({
         "/attestation": () => Response.json({ mode: "standard", publicKey: "fake-key" }),
       });
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
       prover.setAttestationConfig({ requireAttestation: true });
 
       await expect(prover.createChonkProof([fakeStep])).rejects.toThrow(
@@ -190,7 +190,7 @@ describe("TeeRexProver", () => {
     });
 
     test("nitro mode falls back to server-provided key when node:crypto unavailable", async () => {
-      const serializeSpy = mockRemoteSerializer();
+      const serializeSpy = mockUeeSerializer();
       mockFetch({
         "/attestation": () =>
           Response.json({
@@ -205,7 +205,7 @@ describe("TeeRexProver", () => {
       );
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       try {
         await prover.createChonkProof([fakeStep]);
@@ -219,7 +219,7 @@ describe("TeeRexProver", () => {
     });
 
     test("nitro mode re-throws real verification errors", async () => {
-      const serializeSpy = mockRemoteSerializer();
+      const serializeSpy = mockUeeSerializer();
       mockFetch({
         "/attestation": () =>
           Response.json({
@@ -234,7 +234,7 @@ describe("TeeRexProver", () => {
       );
 
       const prover = new TeeRexProver(API_URL, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       await expect(prover.createChonkProof([fakeStep])).rejects.toThrow("PCR0 mismatch");
 
@@ -459,7 +459,7 @@ describe("TeeRexProver", () => {
       serializeSpy.mockRestore();
     });
 
-    test("does not call remote TEE API or attestation endpoints", async () => {
+    test("does not call UEE/TEE API or attestation endpoints", async () => {
       const { fetchedUrls } = mockFetch({ "/health": healthMultiVersion });
       const serializeSpy = mockSerializer();
 

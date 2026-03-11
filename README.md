@@ -58,10 +58,10 @@ To run your own TEE-Rex server, see the [Server README](packages/server/README.m
 tee-rex/
 ├── packages/
 │   ├── sdk/          → @alejoamiras/tee-rex (npm package)
-│   │                   Drop-in Aztec prover: local (WASM), remote (TEE), or accelerated (native)
+│   │                   Drop-in Aztec prover: local (WASM), UEE (TEE), or accelerated (native)
 │   ├── server/       → Express server (runs in Nitro Enclave or standalone)
 │   │                   Handles /prove, /attestation endpoints
-│   ├── app/          → Vite frontend demo (local/remote/TEE mode toggle)
+│   ├── app/          → Vite frontend demo (local/UEE/TEE mode toggle)
 │   └── accelerator/  → Tauri tray app — native proving on localhost:59833
 │                       Runs bb binary natively, auto-detected by SDK
 ├── infra/            → Deploy scripts, IAM policies, CloudFront config

@@ -58,7 +58,7 @@ export async function initSharedPage(browser: { newPage: () => Promise<Page> }):
 }
 
 /** Deploy a test account and assert all UI state transitions. */
-export async function deployAndAssert(page: Page, mode: "local" | "remote" | "tee"): Promise<void> {
+export async function deployAndAssert(page: Page, mode: "local" | "uee" | "tee"): Promise<void> {
   await page.click("#deploy-btn");
 
   await expect(page.locator("#progress")).not.toHaveClass(/hidden/);
@@ -98,7 +98,7 @@ export async function deployAndAssert(page: Page, mode: "local" | "remote" | "te
 /** Run token flow and assert all UI state transitions. */
 export async function runTokenFlowAndAssert(
   page: Page,
-  mode: "local" | "remote" | "tee",
+  mode: "local" | "uee" | "tee",
 ): Promise<void> {
   await page.click("#token-flow-btn");
 

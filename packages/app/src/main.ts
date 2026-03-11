@@ -78,12 +78,12 @@ if (ENV_NAME) {
 /** Check prover + TEE services — only needed for embedded proving mode. */
 async function checkEmbeddedServices(): Promise<void> {
   if (PROVER_CONFIGURED) {
-    $btn("mode-remote").disabled = false;
+    $btn("mode-uee").disabled = false;
     const teerex = await checkTeeRexServer();
     setStatus("teerex-status", teerex);
     $("teerex-label").textContent = teerex ? "available" : "unavailable";
     if (!teerex) {
-      appendLog("TEE-Rex server not reachable — remote proving unavailable", "warn");
+      appendLog("TEE-Rex server not reachable — UEE proving unavailable", "warn");
     }
   }
 
@@ -129,7 +129,7 @@ function updateModeUI(mode: UiMode): void {
   const buttons: Record<UiMode, HTMLElement> = {
     local: $("mode-local"),
     accelerated: $("mode-accelerated"),
-    remote: $("mode-remote"),
+    uee: $("mode-uee"),
     tee: $("mode-tee"),
   };
 
@@ -145,11 +145,11 @@ $("mode-local").addEventListener("click", () => {
   appendLog("Switched to local proving mode");
 });
 
-$("mode-remote").addEventListener("click", () => {
-  if (deploying || $btn("mode-remote").disabled) return;
-  setUiMode("remote");
-  updateModeUI("remote");
-  appendLog("Switched to remote proving mode");
+$("mode-uee").addEventListener("click", () => {
+  if (deploying || $btn("mode-uee").disabled) return;
+  setUiMode("uee");
+  updateModeUI("uee");
+  appendLog("Switched to UEE proving mode");
 });
 
 $("mode-tee").addEventListener("click", () => {

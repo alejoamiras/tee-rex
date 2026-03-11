@@ -179,7 +179,7 @@ jobs:
           # Get PR number
           PR_NUM=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
 
-          # Add label if specified (e.g. triggers infra.yml for TEE + Remote deploy + e2e)
+          # Add label if specified (e.g. triggers infra.yml for TEE + UEE deploy + e2e)
           if [ -n "${{ inputs.add_label }}" ]; then
             gh pr edit "$PR_NUM" --add-label "${{ inputs.add_label }}" 2>/dev/null || true
           fi

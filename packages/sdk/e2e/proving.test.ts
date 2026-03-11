@@ -3,7 +3,7 @@
  *
  * One shared setup (prover + wallet + Sponsored FPC), then deploys an account
  * in each mode:
- *   - Remote: standard tee-rex server
+ *   - UEE: standard tee-rex server
  *   - Local: WASM fallback
  *   - Accelerated: native accelerator with phase tracking (skipped when ACCELERATOR_URL not set)
  *   - Accelerated (fallback): dead port triggers WASM fallback (always runs)
@@ -38,7 +38,7 @@ describe("TeeRexProver", () => {
   describe("Setup", () => {
     test("should create prover and connect to Aztec node", async () => {
       prover = new TeeRexProver(config.proverUrl, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       node = createAztecNodeClient(config.nodeUrl);
       const nodeInfo = await node.getNodeInfo();
@@ -74,11 +74,11 @@ describe("TeeRexProver", () => {
     });
   });
 
-  describe("Remote", () => {
-    test("should deploy account with remote proving", async () => {
+  describe("UEE", () => {
+    test("should deploy account with UEE proving", async () => {
       expect(wallet).toBeDefined();
 
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
       prover.setApiUrl(config.proverUrl);
 
       const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
@@ -194,7 +194,7 @@ describe("TeeRexProver", () => {
       expect(wallet).toBeDefined();
 
       prover.setApiUrl(config.teeUrl);
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       const deployed = await deploySchnorrAccount(wallet, feePaymentMethod);
       expect(deployed).toBeDefined();

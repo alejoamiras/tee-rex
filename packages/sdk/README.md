@@ -85,7 +85,7 @@ const store = await createStore(`wallet-${rollupAddress}`, {
 const walletDB = WalletDB.init(store);
 const wallet = new EmbeddedWallet(pxe, node, walletDB);
 
-// 4. Use the wallet — proving happens remotely in the TEE
+// 4. Use the wallet — proving happens in the TEE
 const account = await wallet.createSchnorrAccount(secret, salt, signingKey);
 ```
 
@@ -94,8 +94,8 @@ const account = await wallet.createSchnorrAccount(secret, salt, signingKey);
 ```ts
 import { ProvingMode } from "@alejoamiras/tee-rex";
 
-// delegate proving to a remote TEE (default)
-prover.setProvingMode(ProvingMode.remote);
+// delegate proving to a UEE server (default)
+prover.setProvingMode(ProvingMode.uee);
 
 // use local native accelerator (auto-falls back to WASM if not running)
 prover.setProvingMode(ProvingMode.accelerated);
@@ -139,7 +139,7 @@ prover.setAttestationConfig({
 
 ### `TeeRexProver`
 
-Aztec private kernel prover that can generate proofs locally (WASM), on a remote
+Aztec private kernel prover that can generate proofs locally (WASM), on a UEE
 tee-rex server (Nitro Enclave), or via a local native accelerator.
 
 ```ts
@@ -155,7 +155,7 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 
 - **`apiUrl`** — TEE-Rex server endpoint (e.g. `https://nextnet.tee-rex.dev/prover`)
 - **`...args`** — forwarded to `BBLazyPrivateKernelProver` (typically a `CircuitSimulator` instance)
-- **`setProvingMode(mode)`** — switch between `"remote"` (TEE), `"local"` (WASM), or `"accelerated"` (native) proving
+- **`setProvingMode(mode)`** — switch between `"uee"` (TEE), `"local"` (WASM), or `"accelerated"` (native) proving
 - **`setApiUrl(url)`** — update the tee-rex server URL at runtime
 - **`setAttestationConfig(config)`** — configure attestation verification (PCR checks, freshness, require TEE)
 - **`setAcceleratorConfig(config)`** — configure the local accelerator connection (port, host)
@@ -164,8 +164,8 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 ### `ProvingMode`
 
 ```ts
-const ProvingMode = { local: "local", remote: "remote", accelerated: "accelerated" } as const;
-type ProvingMode = "local" | "remote" | "accelerated";
+const ProvingMode = { local: "local", uee: "uee", accelerated: "accelerated" } as const;
+type ProvingMode = "local" | "uee" | "accelerated";
 ```
 
 ### `TeeRexAttestationConfig`
@@ -223,7 +223,7 @@ const AttestationErrorCode = {
 
 `TeeRexProver` extends Aztec's `BBLazyPrivateKernelProver` and overrides `createChonkProof` — the single method responsible for generating the cryptographic proof (ClientIVC). All other operations (witness generation, kernel circuit simulation) run locally in the PXE.
 
-In **remote** mode, `createChonkProof`:
+In **UEE** mode, `createChonkProof`:
 
 1. Fetches the server's attestation document from `/attestation`
 2. Verifies the Nitro attestation (COSE_Sign1 signature, certificate chain, PCRs)
@@ -251,7 +251,7 @@ npm add @alejoamiras/tee-rex@5.0.0-nightly.20260303
 Requirements:
 - Aztec `5.0.0-nightly` or compatible version
 - A running Aztec node for PXE connectivity
-- A TEE-Rex server for remote proving (or use the [hosted servers](#hosted-servers))
+- A TEE-Rex server for UEE proving (or use the [hosted servers](#hosted-servers))
 
 ## Self-Hosting
 

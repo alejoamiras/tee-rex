@@ -1,7 +1,7 @@
 /**
  * Deploy-only smoke tests — runs against nextnet/devnet with real proofs.
  *
- * 3 tests: one deploy per mode (TEE, remote, local). No token flow,
+ * 3 tests: one deploy per mode (TEE, UEE, local). No token flow,
  * no mode switching — just verifies that each proving mode can deploy
  * an account successfully. Used by infra.yml, deploy-prod.yml, and
  * deploy-devnet.yml pipelines.
@@ -42,18 +42,18 @@ test.describe("TEE", () => {
   });
 });
 
-// ── Remote ──
+// ── UEE ──
 
-test.describe("remote", () => {
+test.describe("UEE", () => {
   test.beforeEach(() => {
     test.skip(!PROVER_URL, "PROVER_URL env var not set");
   });
 
   test("deploys account", async () => {
     const page = sharedPage;
-    await page.click("#mode-remote");
-    await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
-    await deployAndAssert(page, "remote");
+    await page.click("#mode-uee");
+    await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
+    await deployAndAssert(page, "uee");
   });
 });
 
