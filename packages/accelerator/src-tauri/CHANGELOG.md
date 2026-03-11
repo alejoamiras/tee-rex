@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0-rc.1](https://github.com/alejoamiras/tee-rex/compare/accelerator-v1.1.0-rc.1...accelerator-v1.2.0-rc.1) (2026-03-11)
+
+
+### Features
+
+* **accelerator:** logging hardening, tray-only UX, crash recovery ([#167](https://github.com/alejoamiras/tee-rex/issues/167)) ([c52e49c](https://github.com/alejoamiras/tee-rex/commit/c52e49cfe9fb284d51d136b936d8320875ce2e53))
+* add runtime diagnostics and proving timing headers ([#178](https://github.com/alejoamiras/tee-rex/issues/178)) ([30c2f9d](https://github.com/alejoamiras/tee-rex/commit/30c2f9d7459f81554b55b0dc66eaf0463b7f1d21))
+
+
+### Bug Fixes
+
+* **sdk:** rewrite exports at publish time, polish docs and logs ([#169](https://github.com/alejoamiras/tee-rex/issues/169)) ([46efaaf](https://github.com/alejoamiras/tee-rex/commit/46efaaf933ce08f1d79536e0b04b4eb2188d9e82))
+
 ## [1.1.0-rc.1](https://github.com/alejoamiras/tee-rex/compare/accelerator-v1.0.0-rc.1...accelerator-v1.1.0-rc.1) (2026-03-07)
 
 
