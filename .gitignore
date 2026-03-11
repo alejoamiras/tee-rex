@@ -24,6 +24,9 @@ cache
 # Benchmark results (keep .gitkeep)
 packages/benchmarks/results/*.json
 
+# Sensitive lessons (local only)
+lessons/sensitive/
+
 # Playwright
 test-results/
 playwright-report/
