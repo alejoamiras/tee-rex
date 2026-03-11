@@ -10,6 +10,22 @@ COPY . .
 RUN ln -sf /app/node_modules /app/packages/sdk/node_modules && \
     ln -sf /app/node_modules /app/packages/server/node_modules
 
+# Pre-cache bb binaries (same as Dockerfile.nitro).
+ARG BB_VERSIONS=""
+ENV BB_VERSIONS_DIR=/bb-versions
+RUN set -e && \
+    mkdir -p /bb-versions && \
+    if [ -n "${BB_VERSIONS}" ]; then \
+      for version in $(echo "${BB_VERSIONS}" | tr ',' ' '); do \
+        echo "Downloading bb v${version}..." && \
+        mkdir -p "/bb-versions/${version}" && \
+        curl -fSL "https://github.com/AztecProtocol/aztec-packages/releases/download/v${version}/barretenberg-amd64-linux.tar.gz" \
+          | tar -xzf - -C "/bb-versions/${version}" --strip-components=0 && \
+        chmod 755 "/bb-versions/${version}/bb" && \
+        echo "Cached bb v${version}" ; \
+      done ; \
+    fi
+
 EXPOSE 80
 ENV PORT=80
 

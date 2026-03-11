@@ -4,7 +4,7 @@
 
 - **Repo**: `alejoamiras/tee-rex` (GitHub)
 - **SDK** (`/packages/sdk`): TypeScript package `@alejoamiras/tee-rex` - Remote proving client for Aztec
-- **Server** (`/packages/server`): Express server that runs the prover in a TEE environment
+- **Server** (`/packages/server`): Express server that runs the prover in a TEE environment. Zero `@aztec/*` runtime dependencies — calls `bb prove` CLI directly. Supports multi-version bb binaries via `BB_VERSIONS_DIR` cache and `x-aztec-version` request header
 - **App** (`/packages/app`): Vite + vanilla TS frontend — local/remote/TEE mode toggle, timing, token flow, external wallet connection via `@aztec/wallet-sdk`
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
 - **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows), sort-package-json (`package.json` key ordering), OpenTofu fmt + validate (`.tf` files)
@@ -12,7 +12,7 @@
 - **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`, `accelerator.yml`; shell & workflow lint: `actionlint.yml`; auto-update: `aztec-nightlies.yml`, `aztec-devnet.yml`; infra: `infra.yml`; deploy: `deploy-prod.yml`, `deploy-devnet.yml`; release: `release-accelerator.yml`, `release-please-accelerator.yml`; reusable: `_build-base.yml`, `_deploy-unified.yml`, `_publish-sdk.yml`, `_aztec-update.yml`, `_e2e-sdk.yml`, `_e2e-app.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("Remote")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Infrastructure** (`/infra/tofu`): OpenTofu (IaC) managing all AWS resources — EC2, EIPs, SG, IAM, ECR, S3, ACM, CloudFront. Single state file for ci/prod/devnet. Remote state in S3. EC2 consolidated: 1 m5.xlarge per env runs both Nitro enclave (port 4000) and prover container (port 80).
+- **Infrastructure** (`/infra/tofu`): OpenTofu (IaC) managing all AWS resources — EC2, EIPs, SG, IAM, ECR, S3, ACM, CloudFront. Single state file for ci/prod. Remote state in S3. Single c7i.12xlarge instance runs both Nitro enclave (port 4000) and prover container (port 80) for all environments. Both CloudFront distributions (nextnet.tee-rex.dev, devnet.tee-rex.dev) route to the same instance; multi-version bb handles version routing via `x-aztec-version` header. CI instance (m5.xlarge, stopped by default) is separate.
 
 **Reference docs** (read on demand, not on every task):
 - **`docs/roadmap.md`** — completed phases, architectural decisions & gotchas, backlog. Read when working on infra, CI, deploy, or referencing past work.

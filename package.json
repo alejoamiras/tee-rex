@@ -10,6 +10,8 @@
     "app": "bun run --cwd packages/app dev",
     "aztec:check": "bun scripts/check-aztec-nightlies.ts",
     "aztec:update": "bun scripts/update-aztec-version.ts",
+    "bb:download": "bun scripts/download-bb.ts",
+    "bb:list": "bun scripts/download-bb.ts --list",
     "build": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -t tee-rex --platform linux/amd64 .",
     "build:base": "docker build -f Dockerfile.base -t tee-rex-base --platform linux/amd64 .",
     "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",

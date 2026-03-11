@@ -11,10 +11,10 @@ on:
       - "**/playwright.config.ts"
   workflow_dispatch:
     inputs:
-      deploy_servers:
-        description: "Deploy TEE + Prover servers"
+      force_server_rebuild:
+        description: "Force server rebuild (even if bb version is cached)"
         type: boolean
-        default: true
+        default: false
       deploy_app:
         description: "Deploy frontend app"
         type: boolean
@@ -33,31 +33,106 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build base image (idempotent — skips if already in ECR) ─────
+  # ── Check if shared server has the required bb version ────────
+  check-server:
+    name: Check Server Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needs_rebuild: ${{ steps.check.outputs.needs_rebuild }}
+      aztec_version: ${{ steps.version.outputs.aztec_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract required Aztec version
+        id: version
+        run: echo "aztec_version=$(jq -r '.dependencies["@aztec/stdlib"]' packages/sdk/package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Force rebuild on manual dispatch
+        if: inputs.force_server_rebuild
+        id: force
+        run: echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install SSM plugin
+        if: "!inputs.force_server_rebuild"
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Configure AWS credentials
+        if: "!inputs.force_server_rebuild"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Check server for required bb version
+        if: "!inputs.force_server_rebuild"
+        id: check
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_TEE_INSTANCE_ID }}
+          AZTEC_VERSION: ${{ steps.version.outputs.aztec_version }}
+        run: |
+          # SSM tunnel to prod instance (prover on port 80)
+          aws ssm start-session \
+            --target "${INSTANCE_ID}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          TUNNEL_PID=$!
+          trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
+
+          # Wait for tunnel
+          for i in $(seq 1 30); do
+            curl -sf --max-time 2 http://localhost:4002/health > /dev/null 2>&1 && break
+            if [ "$i" = "30" ]; then
+              echo "Could not reach server — rebuild required"
+              echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          VERSIONS=$(curl -sf http://localhost:4002/health | jq -r '.available_versions[]' 2>/dev/null || echo "")
+          echo "Server available versions: ${VERSIONS}"
+          echo "Required version: ${AZTEC_VERSION}"
+
+          if echo "$VERSIONS" | grep -qF "${AZTEC_VERSION}"; then
+            echo "Server has required bb version — no rebuild needed"
+            echo "needs_rebuild=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Server missing bb version — rebuild required"
+            echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Build base image (only if server rebuild needed) ──────────
   ensure-base:
     name: Build Base Image
-    if: github.event_name == 'push' || inputs.deploy_servers
+    needs: check-server
+    if: needs.check-server.outputs.needs_rebuild == 'true' || inputs.force_server_rebuild
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
-  # ── Deploy TEE enclave + prover to single devnet instance ───────
-  deploy-server:
-    name: Deploy Server (devnet)
-    needs: ensure-base
-    if: github.event_name == 'push' || inputs.deploy_servers
+  # ── Rebuild server on shared prod instance (only if needed) ───
+  rebuild-server:
+    name: Rebuild Server
+    needs: [check-server, ensure-base]
+    if: needs.check-server.outputs.needs_rebuild == 'true' || inputs.force_server_rebuild
     uses: ./.github/workflows/_deploy-unified.yml
     secrets: inherit
     with:
-      environment: devnet
-      nitro_image_tag: devnet-tee
-      prover_image_tag: devnet-prover
+      environment: prod
+      nitro_image_tag: prod-tee
+      prover_image_tag: prod-prover
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
-  # ── Validate devnet (BLOCKING — must pass before app/SDK) ──────
+  # ── Validate devnet against shared prod instance ──────────────
   validate-devnet:
     name: Validate Devnet
-    needs: deploy-server
-    if: github.event_name == 'push' || inputs.deploy_servers
+    needs: [check-server, rebuild-server]
+    if: |
+      !cancelled()
+      && (needs.rebuild-server.result == 'success' || needs.rebuild-server.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -88,17 +163,17 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Start SSM tunnels to devnet instance
+      - name: Start SSM tunnels to shared instance
         run: |
-          # Both services run on the same instance (TEE on 4000, prover on 80)
+          # Both services run on the shared prod instance (TEE on 4000, prover on 80)
           aws ssm start-session \
-            --target "${{ secrets.DEVNET_TEE_INSTANCE_ID }}" \
+            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
           echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
           aws ssm start-session \
-            --target "${{ secrets.DEVNET_TEE_INSTANCE_ID }}" \
+            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
           echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"

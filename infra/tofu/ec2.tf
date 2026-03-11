@@ -71,33 +71,3 @@ resource "aws_instance" "prod_tee" {
     ignore_changes = [ami, user_data, user_data_base64, root_block_device]
   }
 }
-
-# -----------------------------------------------------------------------------
-# Devnet Instance
-# -----------------------------------------------------------------------------
-
-resource "aws_instance" "devnet_tee" {
-  ami                    = var.instance_amis.devnet_tee
-  instance_type          = "m5.xlarge"
-  key_name               = aws_key_pair.tee_rex.key_name
-  subnet_id              = var.default_subnet_id
-  vpc_security_group_ids = [aws_security_group.tee_rex.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2.name
-
-  enclave_options {
-    enabled = true
-  }
-
-  root_block_device {
-    encrypted = true
-  }
-
-  tags = {
-    Name        = "tee-rex-devnet"
-    Environment = "devnet"
-  }
-
-  lifecycle {
-    ignore_changes = [ami, user_data, user_data_base64, root_block_device]
-  }
-}

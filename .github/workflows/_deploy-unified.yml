@@ -58,6 +58,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve bb versions to bake
+        id: bb-versions
+        run: |
+          PRIMARY="${BASE_TAG#base-}"
+          # Query npm for latest nightly and devnet versions
+          DIST_TAGS=$(npm view @aztec/aztec.js dist-tags --json 2>/dev/null || echo '{}')
+          NIGHTLY=$(echo "$DIST_TAGS" | jq -r '.nightly // empty')
+          DEVNET=$(echo "$DIST_TAGS" | jq -r '.devnet // empty')
+          # Combine unique versions (primary always first)
+          VERSIONS="$PRIMARY"
+          for v in $NIGHTLY $DEVNET; do
+            if [ -n "$v" ] && [ "$v" != "$PRIMARY" ]; then
+              VERSIONS="${VERSIONS},${v}"
+            fi
+          done
+          echo "versions=$VERSIONS" >> "$GITHUB_OUTPUT"
+          echo "BB versions to bake: $VERSIONS"
+        env:
+          BASE_TAG: ${{ inputs.base_tag }}
+
       - name: Build and push nitro image
         uses: docker/build-push-action@v5
         with:
@@ -65,7 +85,9 @@ jobs:
           file: Dockerfile.nitro
           push: true
           tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.nitro_image_tag }}
-          build-args: BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
+          build-args: |
+            BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
+            BB_VERSIONS=${{ steps.bb-versions.outputs.versions }}
           cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-nitro
           cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-nitro,mode=max
 
@@ -93,6 +115,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve bb versions to bake
+        id: bb-versions
+        run: |
+          PRIMARY="${BASE_TAG#base-}"
+          # Query npm for latest nightly and devnet versions
+          DIST_TAGS=$(npm view @aztec/aztec.js dist-tags --json 2>/dev/null || echo '{}')
+          NIGHTLY=$(echo "$DIST_TAGS" | jq -r '.nightly // empty')
+          DEVNET=$(echo "$DIST_TAGS" | jq -r '.devnet // empty')
+          # Combine unique versions (primary always first)
+          VERSIONS="$PRIMARY"
+          for v in $NIGHTLY $DEVNET; do
+            if [ -n "$v" ] && [ "$v" != "$PRIMARY" ]; then
+              VERSIONS="${VERSIONS},${v}"
+            fi
+          done
+          echo "versions=$VERSIONS" >> "$GITHUB_OUTPUT"
+          echo "BB versions to bake: $VERSIONS"
+        env:
+          BASE_TAG: ${{ inputs.base_tag }}
+
       - name: Build and push prover image
         uses: docker/build-push-action@v5
         with:
@@ -100,7 +142,9 @@ jobs:
           file: Dockerfile
           push: true
           tags: ${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.prover_image_tag }}
-          build-args: BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
+          build-args: |
+            BASE_IMAGE=${{ secrets.ECR_REGISTRY }}/tee-rex:${{ inputs.base_tag }}
+            BB_VERSIONS=${{ steps.bb-versions.outputs.versions }}
           cache-from: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover
           cache-to: type=registry,ref=${{ secrets.ECR_REGISTRY }}/tee-rex:cache-prover,mode=max
 
@@ -110,6 +154,9 @@ jobs:
     needs: [build-nitro, build-prover]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    concurrency:
+      group: deploy-instance-${{ inputs.environment }}
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -117,7 +164,7 @@ jobs:
       deployed: ${{ steps.health.outputs.deployed }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_TEE_INSTANCE_ID || inputs.environment == 'devnet' && secrets.DEVNET_TEE_INSTANCE_ID || secrets.TEE_INSTANCE_ID }}
+      INSTANCE_ID: ${{ inputs.environment == 'prod' && secrets.PROD_TEE_INSTANCE_ID || secrets.TEE_INSTANCE_ID }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
     steps:
       - uses: actions/checkout@v4

@@ -393,6 +393,58 @@ All root causes identified and fixed:
 
 ---
 
+## Lesson 18: Sapphire Rapids (c7i) — 1GB hugepages and enclave memory regions
+
+**Context**: Upgrading devnet from m5.4xlarge (16 vCPUs) to c7i.12xlarge (48 vCPUs, Sapphire Rapids) for faster proving.
+
+**Problem**: On Sapphire Rapids (c7i), the nitro-enclaves-allocator uses a MIX of 1GB + 2MB hugepages (m5 only used 2MB). With 88064MB target, the allocator created 73×1GB + 6656×2MB. The enclave failed to start — exact error was never captured (SSM stdout truncated to 30 lines).
+
+**Key facts**:
+- Nitro Enclaves DO support 1GB hugepages (kernel source + AWS docs confirm)
+- `HugePages_Total` in `/proc/meminfo` only counts 2MB pages; `Hugetlb` counts ALL sizes
+- c7i.12xlarge provides ~73-74 contiguous 1GB regions (physical memory layout limit)
+- Nitro CLI version on Amazon Linux 2023: `1.4.4`
+- Kernel: `6.1.159-182.297.amzn2023.x86_64`
+
+**Root cause (uncertain — never saw actual enclave error)**:
+The actual `nitro-cli run-enclave` error was never captured. Possible causes:
+1. 4096 memory region limit per enclave (73 + 6656 = 6729 regions)
+2. OR the kernel merges contiguous 2MB pages (m5 used 27648×2MB and worked fine)
+3. OR something else entirely with the 1GB+2MB mix
+
+**What went wrong with debugging (7 CI round-trips!)**:
+1. Never captured the actual `nitro-cli` error (SSM `tail -30` truncated it)
+2. Assumed the region limit based on web research, but m5 data contradicts it
+3. Should have SSH'd/SSM'd into the instance to test manually after 2 failures
+4. Didn't follow the "stop after 3 failures" rule from CLAUDE.md
+
+**Fix that worked**: Reduce MEMORY_MB to 81920 (80 GiB) and pre-allocate 1GB pages via sysfs before the EIF build:
+```bash
+echo 80 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages  # get 73-74
+# then 2MB pages for remainder: (81920 - 74×1024) / 2 = 3072
+```
+Working allocation: 74×1GB + 3072×2MB = 81920 MB, 3146 regions total.
+
+**Process lesson**: For infra/deploy debugging, test manually via SSM before pushing to CI. Each CI round-trip is 5-10 min. Manual SSM commands give results in seconds.
+
+---
+
+### Lesson 19: Defer hugepage allocation on small instances (2026-03-11)
+
+**Problem**: `nitro-cli build-enclave` failed with E48 LinuxkitExecError on CI instance (m5.xlarge, 16GB). Root cause: m5.xlarge DOES support 1GB hugepages (contrary to assumption), so the deploy script took the 1GB pre-allocation path. Allocating 8×1GB = 8GB of hugepages left only 6.6GB free — insufficient for linuxkit to process the 2.67GB Docker image.
+
+**Key insight**: The original code assumed m5 = "no 1GB hugepage support." But the allocator journal showed `Reserved 8 pages of type: 1048576kB` — m5.xlarge has 1GB hugepage support! The if/else branching on `HUGEPAGE_1G_DIR` existence was wrong for this case.
+
+**Fix**: Check available headroom: if `TOTAL_MEM_MB - MEMORY_MB < 10240MB`, defer ALL hugepage allocation (including 1GB) until after EIF build. This handles:
+- m5.xlarge (16GB, 8GB enclave → 7.4GB remaining < 10GB → defer)
+- c7i.12xlarge (96GB, 80GB enclave → 16GB remaining > 10GB → pre-allocate)
+
+**Verified**: Manual deploy on m5.xlarge succeeds — EIF builds with 14GB free, then deferred 1GB hugepages allocate (7/8 pages + 2MB remainder via allocator), enclave starts healthy.
+
+**Key diagnostic**: `journalctl -u nitro-enclaves-allocator.service` shows exactly what the allocator reserved (page types and counts). `grep Huge /proc/meminfo` shows `Hugetlb` (total hugepage memory across all sizes).
+
+---
+
 ## Infrastructure Reference
 
 - **TEE EC2**: i-0c1978dfd847c8440 (m5.xlarge, eu-west-2)

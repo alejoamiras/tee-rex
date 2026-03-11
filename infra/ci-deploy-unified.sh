@@ -62,26 +62,37 @@ rm -rf /var/lib/docker/*
 systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
 
-# ── 1. Pre-allocate hugepages ─────────────────────────────────────
-# c7i (Sapphire Rapids) has a 4096 memory-region limit for Nitro Enclaves.
-# 80GB of 2MB pages = 40,960 regions — way over the limit. Use 1GB pages
-# when available (73 pages for ~73GB), staying well under 4096 total.
-# On older instances (m5) without 1GB hugepage support, use 2MB pages only.
+# ── 1. Hugepage strategy ──────────────────────────────────────────
+# Hugepages are needed for nitro-cli run-enclave but NOT for build-enclave.
+# On small instances (m5.xlarge, 16GB), allocating full hugepages before
+# the EIF build starves linuxkit of RAM (E48 LinuxkitExecError).
+# On large instances (c7i.12xlarge, 96GB+), pre-allocating 1GB hugepages
+# avoids post-build memory fragmentation that prevents contiguous allocation.
 #
-# Hugepages MUST be allocated BEFORE the EIF build — on large instances,
-# post-build memory fragmentation prevents allocation of 1GB pages entirely.
-echo "=== Pre-allocating hugepages (${MEMORY_MB}MB for ${CPU_COUNT} vCPUs) ==="
-
-# Clean memory before allocation
-sync && echo 3 > /proc/sys/vm/drop_caches
-echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
-sleep 2
-
+# Strategy: if allocating hugepages would leave <10GB for the host,
+# defer allocation until after the EIF build. Otherwise, pre-allocate.
 HUGEPAGE_1G_DIR="/sys/kernel/mm/hugepages/hugepages-1048576kB"
 HUGEPAGE_2M_DIR="/sys/kernel/mm/hugepages/hugepages-2048kB"
+MIN_HOST_MB=10240  # 10GB for host + Docker pull + linuxkit EIF build
+AVAIL_AFTER_HUGEPAGES=$(( TOTAL_MEM_MB - MEMORY_MB ))
+DEFER_HUGEPAGES=false
 
-if [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
-  # 1GB hugepage strategy (c7i/Sapphire Rapids)
+echo "=== Hugepage strategy (${MEMORY_MB}MB enclave, ${TOTAL_MEM_MB}MB total, ${AVAIL_AFTER_HUGEPAGES}MB would remain) ==="
+
+if (( AVAIL_AFTER_HUGEPAGES < MIN_HOST_MB )); then
+  # Small instance — defer hugepage allocation until after EIF build
+  echo "Deferring hugepages (${AVAIL_AFTER_HUGEPAGES}MB < ${MIN_HOST_MB}MB minimum for host)"
+  sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
+  systemctl restart nitro-enclaves-allocator.service || true
+  sleep 2
+  DEFER_HUGEPAGES=true
+elif [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
+  # Large instance with 1GB hugepage support — pre-allocate now
+  echo "Pre-allocating hugepages (${AVAIL_AFTER_HUGEPAGES}MB headroom for host)"
+  sync && echo 3 > /proc/sys/vm/drop_caches
+  echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
+  sleep 2
+
   PAGES_1G=$(( MEMORY_MB / 1024 ))
   REMAINDER_MB=$(( MEMORY_MB - PAGES_1G * 1024 ))
   PAGES_2M=0
@@ -109,20 +120,20 @@ if [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
     exit 1
   fi
 else
-  # 2MB hugepage strategy (m5/older instances)
-  # Disable allocator first so we can build EIF without memory pressure
-  echo "No 1GB hugepage support — using 2MB pages (deferred until after EIF build)"
-  sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
-  systemctl restart nitro-enclaves-allocator.service || true
+  # Large instance without 1GB support — use 2MB pages, pre-allocate
+  echo "No 1GB hugepage support — using 2MB pages (pre-allocating)"
+  sync && echo 3 > /proc/sys/vm/drop_caches
+  echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
   sleep 2
-  DEFER_2M_HUGEPAGES=true
 fi
 
-# Configure allocator for the enclave and restart to reserve CPUs + acknowledge hugepages.
-# Without restart, nitro-cli rejects run-enclave because the CPU pool is stale.
-sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+# Configure allocator for the enclave and restart to reserve CPUs.
+# For deferred path, keep memory_mib at 512 to avoid starving linuxkit.
+if [[ "${DEFER_HUGEPAGES}" != "true" ]]; then
+  sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+fi
 sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
-echo "Restarting allocator with cpu_count=${CPU_COUNT}, memory_mib=${MEMORY_MB}"
+echo "Restarting allocator with cpu_count=${CPU_COUNT}, memory_mib=$(grep memory_mib /etc/nitro_enclaves/allocator.yaml | awk '{print $2}')"
 systemctl restart nitro-enclaves-allocator.service
 sleep 3
 
@@ -162,18 +173,38 @@ echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
 sleep 2
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
-if [[ "${DEFER_2M_HUGEPAGES:-false}" == "true" ]]; then
-  # 2MB hugepage allocation — only for instances without 1GB hugepage support.
-  # Must happen after EIF build + cleanup to avoid memory fragmentation.
-  echo "=== Reserving 2MB hugepages (${MEMORY_MB}MB) ==="
+if [[ "${DEFER_HUGEPAGES}" == "true" ]]; then
+  # Deferred hugepage allocation — small instances where pre-allocation would
+  # starve linuxkit. Now that EIF is built and Docker layers are cleaned,
+  # there's plenty of free memory for hugepage allocation.
+  sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+  echo "=== Allocating deferred hugepages (${MEMORY_MB}MB) ==="
+
+  # Try 1GB pages first if supported, fall back to 2MB
+  if [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
+    PAGES_1G=$(( MEMORY_MB / 1024 ))
+    REMAINDER_MB=$(( MEMORY_MB - PAGES_1G * 1024 ))
+    echo "Attempting ${PAGES_1G} x 1GB pages"
+    echo "${PAGES_1G}" > "${HUGEPAGE_1G_DIR}/nr_hugepages"
+    sleep 2
+    ACTUAL_1G=$(cat "${HUGEPAGE_1G_DIR}/nr_hugepages")
+    echo "1GB hugepages allocated: ${ACTUAL_1G}/${PAGES_1G}"
+
+    if [[ "${REMAINDER_MB}" -gt 0 ]]; then
+      PAGES_2M=$(( REMAINDER_MB / 2 ))
+      echo "${PAGES_2M}" > "${HUGEPAGE_2M_DIR}/nr_hugepages"
+      sleep 1
+    fi
+  fi
+
   ALLOC_OK=false
   for attempt in 1 2; do
     if systemctl restart nitro-enclaves-allocator.service; then
       sleep 3
-      HUGE_TOTAL=$(grep HugePages_Total /proc/meminfo | awk '{print $2}')
-      HUGE_FREE=$(grep HugePages_Free /proc/meminfo | awk '{print $2}')
-      echo "Hugepages: total=${HUGE_TOTAL} free=${HUGE_FREE} (attempt ${attempt})"
-      if [[ "${HUGE_TOTAL}" -gt 0 ]]; then
+      HUGETLB_KB=$(awk '/Hugetlb/ {print $2}' /proc/meminfo)
+      HUGETLB_MB=$(( HUGETLB_KB / 1024 ))
+      echo "Total hugepage memory: ${HUGETLB_MB}MB (attempt ${attempt})"
+      if [[ "${HUGETLB_MB}" -gt 0 ]]; then
         ALLOC_OK=true
         break
       fi
