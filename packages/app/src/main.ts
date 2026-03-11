@@ -121,9 +121,9 @@ async function checkEmbeddedServices(): Promise<void> {
 
 // ── Mode toggle ──
 const INACTIVE_BTN =
-  "mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400";
+  "mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400";
 const ACTIVE_BTN =
-  "mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active";
+  "mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active";
 
 function updateModeUI(mode: UiMode): void {
   const buttons: Record<UiMode, HTMLElement> = {
