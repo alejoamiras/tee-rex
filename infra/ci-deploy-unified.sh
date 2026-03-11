@@ -120,9 +120,13 @@ fi
 
 # Configure allocator for the enclave and restart to reserve CPUs + acknowledge hugepages.
 # Without restart, nitro-cli rejects run-enclave because the CPU pool is stale.
-sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+# For the deferred-2MB path (m5/older), DON'T set memory_mib yet — it would allocate
+# hugepages before the EIF build, starving linuxkit of RAM. Only set cpu_count.
+if [[ "${DEFER_2M_HUGEPAGES:-false}" != "true" ]]; then
+  sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
+fi
 sed -i "s/cpu_count: .*/cpu_count: ${CPU_COUNT}/" /etc/nitro_enclaves/allocator.yaml
-echo "Restarting allocator with cpu_count=${CPU_COUNT}, memory_mib=${MEMORY_MB}"
+echo "Restarting allocator with cpu_count=${CPU_COUNT}, memory_mib=${DEFER_2M_HUGEPAGES:+512 (deferred)}${DEFER_2M_HUGEPAGES:-${MEMORY_MB}}"
 systemctl restart nitro-enclaves-allocator.service
 sleep 3
 
@@ -165,6 +169,8 @@ echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available
 if [[ "${DEFER_2M_HUGEPAGES:-false}" == "true" ]]; then
   # 2MB hugepage allocation — only for instances without 1GB hugepage support.
   # Must happen after EIF build + cleanup to avoid memory fragmentation.
+  # NOW set the full memory_mib (was kept at 512 to avoid starving linuxkit during EIF build).
+  sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
   echo "=== Reserving 2MB hugepages (${MEMORY_MB}MB) ==="
   ALLOC_OK=false
   for attempt in 1 2; do
