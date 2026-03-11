@@ -26,7 +26,7 @@ function createFakeBb(dir: string, marker: Uint8Array): string {
   // It writes the marker bytes to <outputDir>/proof
   writeFileSync(
     bbPath,
-    `#!/bin/sh
+    `#!/bin/bash
 # Fake bb binary — writes marker bytes as proof
 OUTPUT_DIR=""
 while [ $# -gt 0 ]; do
