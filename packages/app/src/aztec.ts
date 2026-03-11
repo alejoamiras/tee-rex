@@ -18,7 +18,7 @@ import type { WalletProvider } from "./wallet-connect";
 
 export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
 
-export type UiMode = "local" | "remote" | "tee" | "accelerated";
+export type UiMode = "local" | "uee" | "tee" | "accelerated";
 
 const AZTEC_NODE_URL = process.env.AZTEC_NODE_URL || "/aztec";
 /** Vite dev server / CloudFront proxy path for the prover (not the actual URL). */
@@ -40,7 +40,7 @@ const BLOCK_HEADER_NOT_FOUND = "Block header not found";
  *  because re-simulating may pick up different contract state. */
 const RETRY_STALE_HEADER = !!process.env.E2E_RETRY_STALE_HEADER;
 
-/** True when the PROVER_URL env var was set at build time — enables remote proving. */
+/** True when the PROVER_URL env var was set at build time — enables UEE proving. */
 export const PROVER_CONFIGURED = !!process.env.PROVER_URL;
 
 /** True when TEE_URL was set at build time — enables auto-configuration. */
@@ -347,16 +347,16 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
       state.prover.setApiUrl(PROVER_PROXY_PATH);
       state.prover.setAttestationConfig({});
       break;
-    case "remote":
-      state.provingMode = "remote";
-      state.prover.setProvingMode("remote");
+    case "uee":
+      state.provingMode = "uee";
+      state.prover.setProvingMode("uee");
       state.prover.setApiUrl(PROVER_PROXY_PATH);
       state.prover.setAttestationConfig({});
       break;
     case "tee":
       if (teeUrl) state.teeServerUrl = teeUrl;
-      state.provingMode = "remote";
-      state.prover.setProvingMode("remote");
+      state.provingMode = "uee";
+      state.prover.setProvingMode("uee");
       state.prover.setApiUrl(state.teeServerUrl);
       state.prover.setAttestationConfig({ requireAttestation: true });
       break;

@@ -11,7 +11,7 @@ export function setupDOM(): void {
     <span id="wallet-dot" class="status-dot status-unknown"></span>
     <span id="wallet-state"></span>
     <button id="mode-local"></button>
-    <button id="mode-remote" disabled></button>
+    <button id="mode-uee" disabled></button>
     <button id="mode-tee" disabled></button>
     <span id="tee-status" class="status-dot status-unknown"></span>
     <span id="tee-attestation-label"></span>
@@ -29,10 +29,10 @@ export function setupDOM(): void {
     <div id="time-local"></div>
     <div id="tag-local"></div>
     <div id="steps-local" class="hidden"></div>
-    <div id="result-remote"></div>
-    <div id="time-remote"></div>
-    <div id="tag-remote"></div>
-    <div id="steps-remote" class="hidden"></div>
+    <div id="result-uee"></div>
+    <div id="time-uee"></div>
+    <div id="tag-uee"></div>
+    <div id="steps-uee" class="hidden"></div>
     <div id="result-tee"></div>
     <div id="time-tee"></div>
     <div id="tag-tee"></div>

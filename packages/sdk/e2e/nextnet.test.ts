@@ -44,7 +44,7 @@ describe.skipIf(isLocalNetwork)("Nextnet Connectivity", () => {
     });
   });
 
-  test.skipIf(!process.env.PROVER_URL)("should reach remote prover", async () => {
+  test.skipIf(!process.env.PROVER_URL)("should reach UEE prover", async () => {
     const res = await fetch(`${config.proverUrl}/encryption-public-key`, {
       signal: AbortSignal.timeout(10000),
     });
@@ -52,6 +52,6 @@ describe.skipIf(isLocalNetwork)("Nextnet Connectivity", () => {
 
     const data = await res.json();
     expect(data.publicKey).toBeDefined();
-    logger.info("Remote prover reachable", { url: config.proverUrl });
+    logger.info("UEE prover reachable", { url: config.proverUrl });
   });
 });

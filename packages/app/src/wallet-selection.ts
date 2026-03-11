@@ -191,7 +191,7 @@ function wireEmojiConfirm(): void {
           metadata: {
             name: "TEE-Rex",
             version: "1.0.0",
-            description: "Compare local, remote & TEE zero-knowledge proving",
+            description: "Compare local, UEE & TEE zero-knowledge proving",
             url: window.location.origin,
           },
           capabilities: [

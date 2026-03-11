@@ -141,7 +141,7 @@ export function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
 /**
  * Display a result in the appropriate column.
  * @param prefix - Element ID prefix: "" for embedded (uses `time-local` etc.), "ext-" for external (uses `ext-time-wallet` etc.)
- * @param mode - The mode suffix for element IDs (e.g., "local", "remote", "tee", "wallet")
+ * @param mode - The mode suffix for element IDs (e.g., "local", "uee", "tee", "wallet")
  */
 export function showResult(
   prefix: string,

@@ -48,7 +48,7 @@ describe("PhaseQueue", () => {
 });
 
 describe("getFrameFn", () => {
-  const allModes: UiMode[] = ["local", "remote", "tee", "accelerated"];
+  const allModes: UiMode[] = ["local", "uee", "tee", "accelerated"];
   const allPhases: AnimationPhase[] = [
     "detect",
     "fallback",
@@ -83,7 +83,7 @@ describe("getFrameFn", () => {
       ["tee", "encrypt"],
       ["tee", "proving"],
       ["tee", "receive"],
-      ["remote", "proving"],
+      ["uee", "proving"],
       ["local", "proving"],
     ];
     for (const [mode, phase] of boxPhases) {
@@ -129,7 +129,7 @@ describe("getFrameFn", () => {
   });
 
   test("proving alignment across all stages and modes", () => {
-    const modes: UiMode[] = ["tee", "remote", "local"];
+    const modes: UiMode[] = ["tee", "uee", "local"];
     const ticks = [0, 5, 15, 25, 35, 50];
     for (const mode of modes) {
       const fn = getFrameFn(mode, "proving");
@@ -150,7 +150,7 @@ describe("getFrameFn", () => {
   });
 
   test("app:prove produces identical frames to proving", () => {
-    const modes: UiMode[] = ["tee", "remote", "local"];
+    const modes: UiMode[] = ["tee", "uee", "local"];
     for (const mode of modes) {
       const provingFn = getFrameFn(mode, "proving");
       const appProveFn = getFrameFn(mode, "app:prove");
@@ -198,7 +198,7 @@ describe("AsciiController", () => {
 
   test("stop clears content and timers", async () => {
     const ctrl = new AsciiController(el);
-    ctrl.start("remote");
+    ctrl.start("uee");
     ctrl.pushPhase("proving");
     await new Promise((r) => setTimeout(r, 150));
     ctrl.stop();

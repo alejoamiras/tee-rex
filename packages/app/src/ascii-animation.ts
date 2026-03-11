@@ -134,7 +134,7 @@ function serializeFrames(): FrameFn {
   };
 }
 
-function fetchAttestationFrames(mode: "tee" | "remote"): FrameFn {
+function fetchAttestationFrames(mode: "tee" | "uee"): FrameFn {
   const title = mode === "tee" ? "NITRO ATTESTATION" : "SERVER KEY";
   return (tick) =>
     box([`> fetching key...     ${spin(tick)}`, `  ${progressBar(tick, 22)}`], "single", title);
@@ -178,7 +178,7 @@ function transmitFrames(mode: UiMode): FrameFn {
 
 const MODE_CONFIG: Record<UiMode, { border: Border; title: string; wrap?: Border }> = {
   tee: { border: "double", title: "AWS NITRO ENCLAVE" },
-  remote: { border: "single", title: "REMOTE SERVER" },
+  uee: { border: "single", title: "UEE SERVER" },
   local: { border: "single", title: "wasm prover", wrap: "round" },
   accelerated: { border: "single", title: "NATIVE ACCELERATOR", wrap: "round" },
 };
@@ -301,7 +301,7 @@ export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
     case "serialize":
       return serializeFrames();
     case "fetch-attestation":
-      return fetchAttestationFrames(mode === "tee" ? "tee" : "remote");
+      return fetchAttestationFrames(mode === "tee" ? "tee" : "uee");
     case "encrypt":
       return encryptFrames();
     case "transmit":

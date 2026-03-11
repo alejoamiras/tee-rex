@@ -39,9 +39,9 @@ test("page loads with correct initial state (embedded bypass)", async ({ page })
   const localBtn = page.locator("#mode-local");
   await expect(localBtn).toHaveClass(/mode-active/);
 
-  // Remote button is enabled (PROVER_URL set via playwright.config) but not active
-  const remoteBtn = page.locator("#mode-remote");
-  await expect(remoteBtn).not.toHaveClass(/mode-active/);
+  // UEE button is enabled (PROVER_URL set via playwright.config) but not active
+  const ueeBtn = page.locator("#mode-uee");
+  await expect(ueeBtn).not.toHaveClass(/mode-active/);
 
   // TEE button is disabled (TEE_URL not set)
   const teeBtn = page.locator("#mode-tee");
@@ -56,27 +56,27 @@ test("page loads with correct initial state (embedded bypass)", async ({ page })
   await expect(page.locator("#tee-attestation-label")).toHaveText("not configured");
 });
 
-test("mode buttons toggle active class (local and remote)", async ({ page }) => {
+test("mode buttons toggle active class (local and UEE)", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/?wallet=embedded");
 
-  // Wait for init to settle (remote button gets enabled by checkServices)
+  // Wait for init to settle (UEE button gets enabled by checkServices)
   await expect(page.locator("#log")).toContainText("Checking Aztec node");
 
   // Click Local
   await page.click("#mode-local");
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-  await expect(page.locator("#mode-remote")).not.toHaveClass(/mode-active/);
+  await expect(page.locator("#mode-uee")).not.toHaveClass(/mode-active/);
 
-  // Click Remote (enabled because PROVER_URL is set, even if service is offline)
-  await page.click("#mode-remote");
-  await expect(page.locator("#mode-remote")).toHaveClass(/mode-active/);
+  // Click UEE (enabled because PROVER_URL is set, even if service is offline)
+  await page.click("#mode-uee");
+  await expect(page.locator("#mode-uee")).toHaveClass(/mode-active/);
   await expect(page.locator("#mode-local")).not.toHaveClass(/mode-active/);
 
   // Click Local again
   await page.click("#mode-local");
   await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-  await expect(page.locator("#mode-remote")).not.toHaveClass(/mode-active/);
+  await expect(page.locator("#mode-uee")).not.toHaveClass(/mode-active/);
 });
 
 test("TEE button is disabled when TEE_URL is not configured", async ({ page }) => {
@@ -126,9 +126,9 @@ test("service dots show online and teerex label shows available when services re
   await expect(page.locator("#aztec-status")).toHaveClass(/status-online/);
   await expect(page.locator("#teerex-status")).toHaveClass(/status-online/);
 
-  // TEE-Rex label shows "available" and remote button is enabled
+  // TEE-Rex label shows "available" and UEE button is enabled
   await expect(page.locator("#teerex-label")).toHaveText("available");
-  await expect(page.locator("#mode-remote")).toBeEnabled();
+  await expect(page.locator("#mode-uee")).toBeEnabled();
 });
 
 test("service dots show offline and teerex label shows unavailable when services fail", async ({

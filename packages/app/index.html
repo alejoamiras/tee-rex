@@ -40,7 +40,7 @@
             <a id="env-switch" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors" href="#"></a>
           </div>
           <p class="mt-1.5 text-xs tracking-wide text-gray-500 uppercase">
-            Compare local, remote, TEE &amp; accelerated zero-knowledge proving
+            Compare local, UEE, TEE &amp; accelerated zero-knowledge proving
           </p>
         </div>
       </header>
@@ -58,7 +58,7 @@
             class="wallet-choice-card w-full text-left px-4 py-3 border border-gray-800 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <div class="text-xs font-medium text-gray-300">Continue without external wallet</div>
-            <div class="text-[10px] text-gray-600 mt-0.5">Uses a built-in browser wallet — compare local, remote &amp; TEE proving</div>
+            <div class="text-[10px] text-gray-600 mt-0.5">Uses a built-in browser wallet — compare local, UEE &amp; TEE proving</div>
           </button>
           <button
             id="choose-external-btn"
@@ -108,7 +108,7 @@
             </div>
             <div class="flex items-center gap-3 text-xs">
               <span id="teerex-status" class="status-dot status-unknown"></span>
-              <span class="text-gray-400 w-28">TEE-Rex Server</span>
+              <span class="text-gray-400 w-28">UEE Server</span>
               <span id="teerex-label" class="text-[10px] text-gray-600">not configured</span>
               <span id="teerex-url" class="text-gray-600 ml-auto font-light"></span>
             </div>
@@ -141,36 +141,37 @@
             <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">proving mode</span>
           </div>
           <div id="proving-mode-container" class="p-3">
-            <div id="proving-mode-buttons" class="flex gap-2">
+            <div id="proving-mode-buttons" class="grid grid-cols-4 gap-2">
               <button
                 id="mode-local"
-                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
+                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
               >
-                ▸ Local <span class="normal-case tracking-normal opacity-80">(wasm)</span>
+                <span>▸ Local <span class="normal-case tracking-normal opacity-80">(wasm)</span></span>
+                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">slow · fully private</span>
               </button>
               <button
                 id="mode-accelerated"
                 disabled
-                title="Accelerator not detected"
-                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
               >
-                ▸ Accel <span class="text-gray-600 normal-case tracking-normal">(native)</span>
+                <span>▸ Accel <span class="text-gray-600 normal-case tracking-normal">(native)</span></span>
+                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fastest · fully private</span>
               </button>
               <button
-                id="mode-remote"
+                id="mode-uee"
                 disabled
-                title="Remote proving not configured"
-                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
               >
-                ▸ Remote <span class="text-gray-600 normal-case tracking-normal">(server)</span>
+                <span>▸ UEE <span class="text-gray-600 normal-case tracking-normal">(server)</span></span>
+                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fast · not private</span>
               </button>
               <button
                 id="mode-tee"
                 disabled
-                title="TEE proving not configured"
-                class="mode-btn flex-1 py-2.5 px-4 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
               >
-                ▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span>
+                <span>▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span></span>
+                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fast · private · attested</span>
               </button>
             </div>
           </div>
@@ -220,11 +221,11 @@
               <div id="tag-accelerated" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
               <div id="steps-accelerated" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
             </div>
-            <div id="result-remote" class="border border-gray-800 p-4 text-center transition-colors">
-              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Remote (server)</div>
-              <div id="time-remote" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-              <div id="tag-remote" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-              <div id="steps-remote" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            <div id="result-uee" class="border border-gray-800 p-4 text-center transition-colors">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">UEE (server)</div>
+              <div id="time-uee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+              <div id="tag-uee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+              <div id="steps-uee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
             </div>
             <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
               <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>

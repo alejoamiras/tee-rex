@@ -2,7 +2,7 @@
  * Mode-switching e2e tests
  *
  * Validates that switching between proving modes mid-session works correctly.
- * Deploys accounts with remote, local, accelerated, and TEE proving using the
+ * Deploys accounts with UEE, local, accelerated, and TEE proving using the
  * same TeeRexProver instance.
  *
  * Network-agnostic: always uses Sponsored FPC + from: AztecAddress.ZERO.
@@ -35,12 +35,12 @@ let feePaymentMethod: SponsoredFeePaymentMethod;
 
 describe("Mode Switching", () => {
   describe("Setup", () => {
-    test("should create TeeRexProver starting in remote mode", () => {
+    test("should create TeeRexProver starting in UEE mode", () => {
       prover = new TeeRexProver(config.proverUrl, new WASMSimulator());
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
 
       expect(prover).toBeDefined();
-      logger.info("TeeRexProver created in remote mode");
+      logger.info("TeeRexProver created in UEE mode");
     });
 
     test("should connect to Aztec node", async () => {
@@ -77,10 +77,10 @@ describe("Mode Switching", () => {
     });
   });
 
-  describe("Remote → Local Transition", () => {
-    test("should deploy first account with remote proving", async () => {
+  describe("UEE → Local Transition", () => {
+    test("should deploy first account with UEE proving", async () => {
       expect(wallet).toBeDefined();
-      await deploySchnorrAccount(wallet, feePaymentMethod, "remote mode");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "UEE mode");
     }, 600000);
 
     test("should switch to local mode and deploy second account", async () => {
@@ -94,7 +94,7 @@ describe("Mode Switching", () => {
   });
 
   describe.skipIf(!process.env.ACCELERATOR_URL)("Accelerated Mode Transitions", () => {
-    test("should switch from remote to accelerated and deploy", async () => {
+    test("should switch from UEE to accelerated and deploy", async () => {
       expect(wallet).toBeDefined();
 
       prover.setProvingMode(ProvingMode.accelerated);
@@ -125,7 +125,7 @@ describe("Mode Switching", () => {
       expect(wallet).toBeDefined();
 
       prover.setApiUrl(config.teeUrl);
-      prover.setProvingMode(ProvingMode.remote);
+      prover.setProvingMode(ProvingMode.uee);
       logger.info("Switched to TEE mode", { teeUrl: config.teeUrl });
 
       await deploySchnorrAccount(wallet, feePaymentMethod, "TEE mode");
@@ -140,14 +140,14 @@ describe("Mode Switching", () => {
       await deploySchnorrAccount(wallet, feePaymentMethod, "local after TEE");
     }, 600000);
 
-    test("should switch from local back to standard remote and deploy", async () => {
+    test("should switch from local back to standard UEE and deploy", async () => {
       expect(wallet).toBeDefined();
 
       prover.setApiUrl(config.proverUrl);
-      prover.setProvingMode(ProvingMode.remote);
-      logger.info("Switched from local back to standard remote", { apiUrl: config.proverUrl });
+      prover.setProvingMode(ProvingMode.uee);
+      logger.info("Switched from local back to standard UEE", { apiUrl: config.proverUrl });
 
-      await deploySchnorrAccount(wallet, feePaymentMethod, "standard remote after TEE");
+      await deploySchnorrAccount(wallet, feePaymentMethod, "standard UEE after TEE");
     }, 600000);
   });
 });
