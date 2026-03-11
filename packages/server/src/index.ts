@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { availableParallelism, cpus } from "node:os";
 import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
 import cors from "cors";
@@ -85,8 +86,16 @@ export function createApp(deps: AppDependencies): express.Express {
       }
       let decryptedData: Uint8Array;
       try {
+        const decryptStart = performance.now();
         const encryptedData = Base64.toBytes(body.data.data);
         decryptedData = await deps.encryption.decrypt({ data: encryptedData });
+        const decryptMs = Math.round(performance.now() - decryptStart);
+        res.setHeader("x-decrypt-duration-ms", decryptMs);
+        logger.info("Payload decrypted", {
+          requestId: req.id,
+          decryptMs,
+          bytes: decryptedData.byteLength,
+        });
       } catch (err) {
         logger.warn("Failed to decrypt prove payload", {
           requestId: req.id,
@@ -96,8 +105,11 @@ export function createApp(deps: AppDependencies): express.Express {
         return;
       }
 
+      const proveStart = performance.now();
       const proof = await deps.prover.createChonkProof(decryptedData, aztecVersion);
-      logger.info("Prove request completed", { requestId: req.id, aztecVersion });
+      const proveDurationMs = Math.round(performance.now() - proveStart);
+      logger.info("Prove request completed", { requestId: req.id, aztecVersion, proveDurationMs });
+      res.setHeader("x-prove-duration-ms", proveDurationMs);
       res.json({
         proof: Base64.fromBytes(proof), // proof will be publicly posted on chain, so no need to encrypt
       });
@@ -110,6 +122,14 @@ export function createApp(deps: AppDependencies): express.Express {
     res.json({
       status: "ok",
       available_versions: listCachedVersions(),
+      runtime: {
+        hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",
+        available_parallelism: availableParallelism(),
+        cpu_count: cpus().length,
+        tee_mode: process.env.TEE_MODE ?? "unset",
+        node_env: process.env.NODE_ENV ?? "unset",
+        crs_path: process.env.CRS_PATH ?? "unset",
+      },
     });
   });
 

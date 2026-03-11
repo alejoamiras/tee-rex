@@ -349,4 +349,60 @@ describe("GET /health", () => {
       close();
     }
   });
+
+  test("returns runtime diagnostics", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/health`);
+      const body = (await res.json()) as {
+        runtime: {
+          hardware_concurrency: string;
+          available_parallelism: number;
+          cpu_count: number;
+          tee_mode: string;
+          crs_path: string;
+        };
+      };
+      expect(body.runtime).toBeDefined();
+      expect(typeof body.runtime.available_parallelism).toBe("number");
+      expect(body.runtime.available_parallelism).toBeGreaterThan(0);
+      expect(typeof body.runtime.cpu_count).toBe("number");
+      expect(body.runtime.cpu_count).toBeGreaterThan(0);
+      expect(typeof body.runtime.tee_mode).toBe("string");
+    } finally {
+      close();
+    }
+  });
+});
+
+describe("POST /prove — timing headers", () => {
+  test("returns x-prove-duration-ms and x-decrypt-duration-ms headers", async () => {
+    const { app, encryption } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const publicKey = await encryption.getEncryptionPublicKey();
+      const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
+      const encrypted = await encryptForKey(fakeMsgpack, publicKey);
+      const encryptedBase64 = Base64.fromBytes(encrypted);
+
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: encryptedBase64 }),
+      });
+
+      expect(res.status).toBe(200);
+      const proveDuration = res.headers.get("x-prove-duration-ms");
+      const decryptDuration = res.headers.get("x-decrypt-duration-ms");
+      expect(proveDuration).toBeDefined();
+      expect(decryptDuration).toBeDefined();
+      expect(Number(proveDuration)).toBeGreaterThanOrEqual(0);
+      expect(Number(decryptDuration)).toBeGreaterThanOrEqual(0);
+    } finally {
+      close();
+    }
+  });
 });
