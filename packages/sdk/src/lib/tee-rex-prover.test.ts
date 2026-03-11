@@ -4,6 +4,7 @@ import { WASMSimulator } from "@aztec/simulator/client";
 import * as stdlibKernel from "@aztec/stdlib/kernel";
 import sdkPkg from "../../package.json" with { type: "json" };
 import * as attestationModule from "./attestation.js";
+import * as encryptModule from "./encrypt.js";
 import {
   type AcceleratorStatus,
   type ProverPhase,
@@ -123,6 +124,36 @@ describe("TeeRexProver", () => {
 
       expect(serializeSpy).toHaveBeenCalledWith([fakeStep]);
       serializeSpy.mockRestore();
+    });
+
+    test("sends x-aztec-version header to /prove", async () => {
+      let capturedVersionHeader: string | null = null;
+      const serializeSpy = mockRemoteSerializer();
+      const encryptSpy = spyOn(encryptModule, "encrypt").mockResolvedValue(
+        new Uint8Array([0x01, 0x02]),
+      );
+      mockFetch({
+        "/attestation": () => Response.json({ mode: "standard", publicKey: "fake-key" }),
+        "/prove": async (_url, request) => {
+          if (typeof request !== "string") {
+            capturedVersionHeader = (request as Request).headers.get("x-aztec-version");
+          }
+          return new Response("not found", { status: 404 });
+        },
+      });
+
+      const prover = new TeeRexProver(API_URL, new WASMSimulator());
+      prover.setProvingMode(ProvingMode.remote);
+
+      try {
+        await prover.createChonkProof([fakeStep]);
+      } catch {
+        // Expected — ky retries and then fails
+      }
+
+      expect(capturedVersionHeader).toBe(SDK_AZTEC_VERSION);
+      serializeSpy.mockRestore();
+      encryptSpy.mockRestore();
     });
 
     test("calls the API's attestation endpoint", async () => {

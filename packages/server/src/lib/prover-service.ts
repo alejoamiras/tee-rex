@@ -1,40 +1,34 @@
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
+import { join } from "node:path";
 import { getLogger } from "@logtape/logtape";
+import { findBb, listCachedVersions } from "./bb-versions.js";
 
 const logger = getLogger(["tee-rex", "server", "prover"]);
 
-/**
- * Resolve the native Barretenberg binary path from the installed @aztec/bb.js package.
- * Throws if the binary can't be found (msgpack proving requires the native binary).
- */
-export function resolveBbPath(): string {
-  const bbProverEntry = Bun.resolveSync("@aztec/bb-prover", ".");
-  const bbJsEntry = Bun.resolveSync("@aztec/bb.js", bbProverEntry);
-  const bbJsRoot = join(dirname(bbJsEntry), "..", "..");
-  const arch = process.arch === "arm64" ? "arm64" : "amd64";
-  const os = process.platform === "darwin" ? "macos" : "linux";
-  const bbPath = join(bbJsRoot, "build", `${arch}-${os}`, "bb");
-  if (!existsSync(bbPath)) {
-    throw new Error(`Native bb binary not found at ${bbPath}`);
-  }
-  logger.info("Resolved native Barretenberg", { bbPath });
-  return bbPath;
-}
-
 export class ProverService {
-  #bbPath: string;
+  #defaultBbPath: string;
 
   constructor() {
-    this.#bbPath = resolveBbPath();
+    // Resolve the default bb path eagerly at startup (fails fast if bb is missing)
+    this.#defaultBbPath = findBb();
+    logger.info("ProverService initialized", {
+      defaultBb: this.#defaultBbPath,
+      cachedVersions: listCachedVersions(),
+    });
   }
 
-  /** Create a chonk proof from msgpack-serialized execution steps (from `serializePrivateExecutionSteps`). */
-  async createChonkProof(data: Uint8Array): Promise<ChonkProofWithPublicInputs> {
-    logger.info("Creating chonk proof", { bytes: data.byteLength });
+  /**
+   * Create a chonk proof from msgpack-serialized execution steps.
+   * When `version` is specified, uses the cached bb binary for that version.
+   */
+  async createChonkProof(data: Uint8Array, version?: string): Promise<Buffer> {
+    const bbPath = version ? findBb(version) : this.#defaultBbPath;
+    logger.info("Creating chonk proof", {
+      bytes: data.byteLength,
+      version: version ?? "default",
+      bbPath,
+    });
     const start = performance.now();
 
     const tmpDir = await mkdtemp(join(tmpdir(), "tee-rex-prove-"));
@@ -45,20 +39,8 @@ export class ProverService {
       await Bun.write(inputPath, data);
 
       const proc = Bun.spawn(
-        [
-          this.#bbPath,
-          "prove",
-          "--scheme",
-          "chonk",
-          "--ivc_inputs_path",
-          inputPath,
-          "-o",
-          outputDir,
-        ],
-        {
-          stdout: "pipe",
-          stderr: "pipe",
-        },
+        [bbPath, "prove", "--scheme", "chonk", "--ivc_inputs_path", inputPath, "-o", outputDir],
+        { stdout: "pipe", stderr: "pipe" },
       );
       const exitCode = await proc.exited;
       if (exitCode !== 0) {
@@ -69,16 +51,15 @@ export class ProverService {
       const rawProof = new Uint8Array(await Bun.file(join(outputDir, "proof")).arrayBuffer());
 
       // Prepend 4-byte field count header (big-endian u32) — same format as
-      // ChonkProofWithPublicInputs.toBuffer() and the accelerator.
+      // ChonkProofWithPublicInputs.fromBuffer() expects and the accelerator produces.
       const numFields = rawProof.length / 32;
       const header = Buffer.alloc(4);
       header.writeUInt32BE(numFields);
       const proofWithHeader = Buffer.concat([header, rawProof]);
 
-      const result = ChonkProofWithPublicInputs.fromBuffer(proofWithHeader);
       const durationMs = Math.round(performance.now() - start);
-      logger.info("Chonk proof created", { durationMs });
-      return result;
+      logger.info("Chonk proof created", { durationMs, version: version ?? "default" });
+      return proofWithHeader;
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
     }

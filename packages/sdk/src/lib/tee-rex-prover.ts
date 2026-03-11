@@ -230,11 +230,13 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     );
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
+    const aztecVersion = this.#getAztecVersion();
     const response = await ky
       .post(joinURL(this.apiUrl, "prove"), {
         json: { data: encryptedData },
         timeout: ms("5 min"),
         retry: 2,
+        headers: aztecVersion ? { "x-aztec-version": aztecVersion } : {},
       })
       .json();
     this.#onPhase?.("receive");

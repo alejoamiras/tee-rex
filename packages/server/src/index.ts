@@ -12,6 +12,7 @@ import {
   createAttestationService,
   type TeeMode,
 } from "./lib/attestation-service.js";
+import { listCachedVersions } from "./lib/bb-versions.js";
 import { EncryptionService } from "./lib/encryption-service.js";
 import { setupLogging } from "./lib/logging.js";
 import { ProverService } from "./lib/prover-service.js";
@@ -72,7 +73,8 @@ export function createApp(deps: AppDependencies): express.Express {
   app.post("/prove", proveLimiter, async (req, res, next) => {
     try {
       req.socket.setTimeout(ms("5 min"));
-      logger.info("Prove request received", { requestId: req.id });
+      const aztecVersion = req.headers["x-aztec-version"] as string | undefined;
+      logger.info("Prove request received", { requestId: req.id, aztecVersion });
 
       const body = z.object({ data: z.string().min(1) }).safeParse(req.body);
       if (!body.success) {
@@ -94,14 +96,21 @@ export function createApp(deps: AppDependencies): express.Express {
         return;
       }
 
-      const proof = await deps.prover.createChonkProof(decryptedData);
-      logger.info("Prove request completed", { requestId: req.id });
+      const proof = await deps.prover.createChonkProof(decryptedData, aztecVersion);
+      logger.info("Prove request completed", { requestId: req.id, aztecVersion });
       res.json({
-        proof: Base64.fromBytes(proof.toBuffer()), // proof will be publicly posted on chain, so no need to encrypt
+        proof: Base64.fromBytes(proof), // proof will be publicly posted on chain, so no need to encrypt
       });
     } catch (err) {
       next(err);
     }
+  });
+
+  app.get("/health", (_req, res) => {
+    res.json({
+      status: "ok",
+      available_versions: listCachedVersions(),
+    });
   });
 
   app.get("/attestation", async (_req, res, next) => {

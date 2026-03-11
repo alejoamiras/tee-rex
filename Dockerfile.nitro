@@ -57,6 +57,30 @@ RUN mkdir -p /crs && \
     curl -fSL https://crs.aztec-cdn.foundation/grumpkin_g1.dat -o /crs/grumpkin_g1.flat.dat && \
     echo "CRS cached: $(du -sh /crs)"
 
+# Pre-cache Barretenberg (bb) binaries for each supported Aztec version.
+# Nitro Enclaves have NO internet at runtime — binaries must be baked in.
+# BB_VERSIONS: comma-separated list of Aztec versions (e.g., "5.0.0-nightly.20260309").
+# Each version's bb binary is downloaded from Aztec GitHub releases and cached
+# at /bb-versions/{version}/bb — matching the accelerator's cache layout.
+ARG BB_VERSIONS=""
+ENV BB_VERSIONS_DIR=/bb-versions
+RUN set -e && \
+    mkdir -p /bb-versions && \
+    if [ -n "${BB_VERSIONS}" ]; then \
+      for version in $(echo "${BB_VERSIONS}" | tr ',' ' '); do \
+        echo "Downloading bb v${version}..." && \
+        mkdir -p "/bb-versions/${version}" && \
+        curl -fSL "https://github.com/AztecProtocol/aztec-packages/releases/download/v${version}/barretenberg-amd64-linux.tar.gz" \
+          | tar -xzf - -C "/bb-versions/${version}" --strip-components=0 && \
+        if [ ! -f "/bb-versions/${version}/bb" ]; then \
+          echo "ERROR: bb binary not found after extraction for v${version}" && exit 1; \
+        fi && \
+        chmod 755 "/bb-versions/${version}/bb" && \
+        echo "Cached bb v${version}: $(/bb-versions/${version}/bb --version 2>&1 || echo 'version check skipped')" ; \
+      done ; \
+    fi && \
+    echo "BB versions cached: $(ls /bb-versions/ 2>/dev/null || echo 'none')"
+
 # Copy the built application from the builder stage
 COPY --from=builder /app /app
 RUN chown -R appuser:appuser /app

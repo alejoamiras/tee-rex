@@ -20,9 +20,7 @@ async function encryptForKey(data: Uint8Array, publicKeyArmored: string): Promis
 function createTestApp() {
   const encryption = new EncryptionService();
   const attestation = new StandardAttestationService();
-  const fakeProof = {
-    toBuffer: () => Buffer.from("fake-proof-data"),
-  };
+  const fakeProof = Buffer.from("fake-proof-data");
   const prover = {
     createChonkProof: mock(() => Promise.resolve(fakeProof)),
   };
@@ -302,6 +300,51 @@ describe("POST /prove", () => {
       // Verify the prover received the raw msgpack bytes, not parsed JSON
       const calledWith = (prover.createChonkProof as any).mock.calls[0][0] as Uint8Array;
       expect(new Uint8Array(calledWith)).toEqual(fakeMsgpack);
+    } finally {
+      close();
+    }
+  });
+
+  test("passes x-aztec-version header to prover", async () => {
+    const { app, prover, encryption } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const publicKey = await encryption.getEncryptionPublicKey();
+      const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
+      const encrypted = await encryptForKey(fakeMsgpack, publicKey);
+      const encryptedBase64 = Base64.fromBytes(encrypted);
+
+      await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-aztec-version": "5.0.0-nightly.20260309",
+        },
+        body: JSON.stringify({ data: encryptedBase64 }),
+      });
+
+      expect(prover.createChonkProof).toHaveBeenCalledTimes(1);
+      const calledVersion = (prover.createChonkProof as any).mock.calls[0][1] as string;
+      expect(calledVersion).toBe("5.0.0-nightly.20260309");
+    } finally {
+      close();
+    }
+  });
+});
+
+describe("GET /health", () => {
+  test("returns status and available versions", async () => {
+    const { app } = createTestApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/health`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as { status: string; available_versions: string[] };
+      expect(body.status).toBe("ok");
+      expect(Array.isArray(body.available_versions)).toBe(true);
     } finally {
       close();
     }
