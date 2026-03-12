@@ -6,6 +6,7 @@
     "url": "https://github.com/alejoamiras/tee-rex",
     "directory": "packages/sdk"
   },
+  "license": "AGPL-3.0-only",
   "type": "module",
   "exports": "./src/index.ts",
   "files": [

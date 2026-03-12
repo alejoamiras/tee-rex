@@ -15,7 +15,11 @@
   [![Deploy Production](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-prod.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-prod.yml)
 
   **[nextnet.tee-rex.dev](https://nextnet.tee-rex.dev)** · **[devnet.tee-rex.dev](https://devnet.tee-rex.dev)**
+
+  [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 </div>
+
+> **Research project** -- TEE-Rex is a reference implementation for TEE-based proving on Aztec. It is designed to be high-quality, well-documented, and forkable so that other teams can study the approach and take it into production. This repository is not production infrastructure. The hosted servers may be online or offline at any time. If you'd like to test a PoC, feel free to reach out via [Signal](https://signal.me/#eu/alejoamiras.01).
 
 Prove [Aztec](https://aztec.network) transactions inside an AWS Nitro Enclave. The SDK encrypts proving inputs so that only the enclave can read them, generates the proof inside the TEE, and returns it to the client.
 
@@ -100,6 +104,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 | [Accelerator README](packages/accelerator/README.md) | Native proving accelerator — installation, configuration, troubleshooting |
 | [Architecture](docs/architecture.md) | System diagrams, proving flow, Docker strategy |
 | [CI Pipeline](docs/ci-pipeline.md) | Workflow reference, change detection, deploy logic |
+
+## Disclaimer
+
+This software is provided for **research and educational purposes only**. It is not audited, not production-hardened, and comes with absolutely no warranties or guarantees of any kind. The authors are not responsible for any loss of funds, data, privacy, or any other damages resulting from the use of this software. Use at your own risk.
+
+The hosted servers (`nextnet.tee-rex.dev`, `devnet.tee-rex.dev`) are best-effort research infrastructure with no uptime guarantees. They may be taken offline, reconfigured, or decommissioned without notice.
+
+If you intend to use TEE-based proving in production, you should fork this repository, conduct your own security audit, and operate your own infrastructure.
+
+## License
+
+[AGPL-3.0](LICENSE)
 
 ## Contributors
 
