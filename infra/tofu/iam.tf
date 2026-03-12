@@ -31,9 +31,11 @@ resource "aws_iam_role" "ci" {
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
               "repo:alejoamiras/tee-rex:ref:refs/heads/main",
+              "repo:alejoamiras/tee-rex:ref:refs/heads/nightlies",
               "repo:alejoamiras/tee-rex:ref:refs/heads/devnet",
               "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-nightlies-*",
               "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-devnet-*",
+              "repo:alejoamiras/tee-rex:ref:refs/heads/chore/aztec-stable-*",
               "repo:alejoamiras/tee-rex:pull_request",
             ]
           }
@@ -260,6 +262,12 @@ resource "aws_iam_role_policy" "ci_inline" {
         Resource = [
           aws_s3_bucket.prod.arn,
           "${aws_s3_bucket.prod.arn}/*",
+          aws_s3_bucket.mainnet.arn,
+          "${aws_s3_bucket.mainnet.arn}/*",
+          aws_s3_bucket.testnet.arn,
+          "${aws_s3_bucket.testnet.arn}/*",
+          aws_s3_bucket.nightlies.arn,
+          "${aws_s3_bucket.nightlies.arn}/*",
           aws_s3_bucket.devnet.arn,
           "${aws_s3_bucket.devnet.arn}/*",
         ]
@@ -270,6 +278,9 @@ resource "aws_iam_role_policy" "ci_inline" {
         Action = "s3:DeleteObject"
         Resource = [
           "${aws_s3_bucket.prod.arn}/*",
+          "${aws_s3_bucket.mainnet.arn}/*",
+          "${aws_s3_bucket.testnet.arn}/*",
+          "${aws_s3_bucket.nightlies.arn}/*",
           "${aws_s3_bucket.devnet.arn}/*",
         ]
       },
@@ -279,6 +290,9 @@ resource "aws_iam_role_policy" "ci_inline" {
         Action = "cloudfront:CreateInvalidation"
         Resource = [
           aws_cloudfront_distribution.prod.arn,
+          aws_cloudfront_distribution.mainnet.arn,
+          aws_cloudfront_distribution.testnet.arn,
+          aws_cloudfront_distribution.nightlies.arn,
           aws_cloudfront_distribution.devnet.arn,
         ]
       },

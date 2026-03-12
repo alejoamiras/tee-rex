@@ -72,9 +72,27 @@ variable "ecr_repository_name" {
 # -----------------------------------------------------------------------------
 
 variable "prod_s3_bucket" {
-  description = "S3 bucket name for production app"
+  description = "S3 bucket name for production app (legacy, being replaced by mainnet)"
   type        = string
   default     = "tee-rex-app-prod"
+}
+
+variable "mainnet_s3_bucket" {
+  description = "S3 bucket name for mainnet app"
+  type        = string
+  default     = "tee-rex-app-mainnet"
+}
+
+variable "testnet_s3_bucket" {
+  description = "S3 bucket name for testnet app"
+  type        = string
+  default     = "tee-rex-app-testnet"
+}
+
+variable "nightlies_s3_bucket" {
+  description = "S3 bucket name for nightlies app"
+  type        = string
+  default     = "tee-rex-app-nightlies"
 }
 
 variable "devnet_s3_bucket" {
@@ -98,9 +116,27 @@ variable "acm_certificate_arn" {
 # -----------------------------------------------------------------------------
 
 variable "prod_cloudfront_aliases" {
-  description = "Alternate domain names for prod CloudFront distribution"
+  description = "Alternate domain names for prod CloudFront distribution (legacy)"
   type        = list(string)
   default     = ["nextnet.tee-rex.dev"]
+}
+
+variable "mainnet_cloudfront_aliases" {
+  description = "Alternate domain names for mainnet CloudFront distribution"
+  type        = list(string)
+  default     = ["mainnet.tee-rex.dev"]
+}
+
+variable "testnet_cloudfront_aliases" {
+  description = "Alternate domain names for testnet CloudFront distribution"
+  type        = list(string)
+  default     = ["testnet.tee-rex.dev"]
+}
+
+variable "nightlies_cloudfront_aliases" {
+  description = "Alternate domain names for nightlies CloudFront distribution"
+  type        = list(string)
+  default     = ["nightlies.tee-rex.dev"]
 }
 
 variable "devnet_cloudfront_aliases" {
