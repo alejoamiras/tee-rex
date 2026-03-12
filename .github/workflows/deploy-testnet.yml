@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      needs_rebuild: ${{ steps.check.outputs.needs_rebuild }}
+      needs_rebuild: ${{ steps.force.outputs.needs_rebuild || steps.check.outputs.needs_rebuild }}
       aztec_version: ${{ steps.version.outputs.aztec_version }}
     steps:
       - uses: actions/checkout@v4
@@ -126,10 +126,56 @@ jobs:
       prover_image_tag: prod-prover
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
-  # ── Validate testnet against shared prod instance ──────────────
+  # ── Build & deploy app to S3 + invalidate CloudFront ────────────
+  deploy-app:
+    name: Deploy App (testnet)
+    if: github.event_name == 'push' || inputs.deploy_app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build app
+        run: bun run --cwd packages/app build
+        env:
+          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
+          PROVER_URL: ${{ secrets.TESTNET_CLOUDFRONT_URL }}/prover
+          TEE_URL: ${{ secrets.TESTNET_CLOUDFRONT_URL }}/tee
+          VITE_ENV_NAME: testnet
+          OTHER_ENV_URL: https://mainnet.tee-rex.dev
+          OTHER_ENV_NAME: mainnet
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync packages/app/dist/ s3://${{ secrets.TESTNET_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "max-age=31536000,immutable" \
+            --exclude "index.html"
+
+          aws s3 cp packages/app/dist/index.html s3://${{ secrets.TESTNET_S3_BUCKET }}/index.html \
+            --cache-control "max-age=60"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.TESTNET_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/index.html"
+
+  # ── Post-deploy validation against shared prod instance ──────────
   validate-testnet:
     name: Validate Testnet
-    needs: [check-server, rebuild-server]
+    needs: [check-server, rebuild-server, deploy-app]
     if: |
       !cancelled()
       && (needs.rebuild-server.result == 'success' || needs.rebuild-server.result == 'skipped')
@@ -216,56 +262,6 @@ jobs:
         run: |
           kill "$PROVER_TUNNEL_PID" 2>/dev/null || true
           kill "$TEE_TUNNEL_PID" 2>/dev/null || true
-
-  # ── Build & deploy app to S3 + invalidate CloudFront ────────────
-  deploy-app:
-    name: Deploy App (testnet)
-    needs: validate-testnet
-    if: |
-      !cancelled()
-      && (github.event_name == 'push' || inputs.deploy_app)
-      && (needs.validate-testnet.result == 'success' || needs.validate-testnet.result == 'skipped')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build app
-        run: bun run --cwd packages/app build
-        env:
-          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
-          PROVER_URL: ${{ secrets.TESTNET_CLOUDFRONT_URL }}/prover
-          TEE_URL: ${{ secrets.TESTNET_CLOUDFRONT_URL }}/tee
-          VITE_ENV_NAME: testnet
-          OTHER_ENV_URL: https://mainnet.tee-rex.dev
-          OTHER_ENV_NAME: mainnet
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy to S3
-        run: |
-          aws s3 sync packages/app/dist/ s3://${{ secrets.TESTNET_S3_BUCKET }}/ \
-            --delete \
-            --cache-control "max-age=31536000,immutable" \
-            --exclude "index.html"
-
-          aws s3 cp packages/app/dist/index.html s3://${{ secrets.TESTNET_S3_BUCKET }}/index.html \
-            --cache-control "max-age=60"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.TESTNET_CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/index.html"
 
   # ── Publish SDK to npm (testnet dist-tag) ────────────────────────
   publish-sdk:
