@@ -1,0 +1,346 @@
+name: Deploy Mainnet
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "lessons/**"
+      - "**/e2e/**"
+      - "**/*.test.ts"
+      - "**/playwright.config.ts"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-mainnet
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  # ── Detect which components changed ─────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      servers: ${{ steps.override.outputs.servers || steps.filter.outputs.servers }}
+      server_code: ${{ steps.override.outputs.server_code || steps.filter.outputs.server_code }}
+      app: ${{ steps.override.outputs.app || steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            servers:
+              - 'packages/server/**'
+              - 'Dockerfile'
+              - 'Dockerfile.base'
+              - 'Dockerfile.nitro'
+              - 'infra/**'
+              - '.github/workflows/_deploy-*.yml'
+              - '.github/workflows/_build-*.yml'
+              - '.github/workflows/deploy-mainnet.yml'
+              - '.github/actions/**'
+              - 'package.json'
+              - 'bun.lock'
+            server_code:
+              - 'packages/server/**'
+              - 'Dockerfile'
+              - 'Dockerfile.base'
+              - 'Dockerfile.nitro'
+              - 'package.json'
+              - 'bun.lock'
+            app:
+              - 'packages/app/**'
+              - 'packages/sdk/**'
+              - '.github/workflows/deploy-mainnet.yml'
+              - 'package.json'
+              - 'bun.lock'
+      - name: Override for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        id: override
+        run: |
+          {
+            echo "servers=true"
+            echo "server_code=true"
+            echo "app=true"
+          } >> "$GITHUB_OUTPUT"
+
+  # ── Check if shared server already has the required bb version ───
+  check-server:
+    name: Check Server Version
+    needs: changes
+    if: needs.changes.outputs.servers == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needs_rebuild: ${{ steps.force.outputs.needs_rebuild || steps.check.outputs.needs_rebuild }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract required Aztec version
+        id: version
+        run: echo "aztec_version=$(jq -r '.dependencies["@aztec/stdlib"]' packages/sdk/package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Force rebuild for code changes or manual dispatch
+        if: needs.changes.outputs.server_code == 'true' || github.event_name == 'workflow_dispatch'
+        id: force
+        run: echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install SSM plugin
+        if: "!steps.force.outputs.needs_rebuild"
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Configure AWS credentials
+        if: "!steps.force.outputs.needs_rebuild"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Check server for required bb version
+        if: "!steps.force.outputs.needs_rebuild"
+        id: check
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_TEE_INSTANCE_ID }}
+          AZTEC_VERSION: ${{ steps.version.outputs.aztec_version }}
+        run: |
+          # SSM tunnel to prod instance (prover on port 80)
+          aws ssm start-session \
+            --target "${INSTANCE_ID}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          TUNNEL_PID=$!
+          trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
+
+          # Wait for tunnel
+          for i in $(seq 1 30); do
+            curl -sf --max-time 2 http://localhost:4002/health > /dev/null 2>&1 && break
+            if [ "$i" = "30" ]; then
+              echo "Could not reach server — rebuild required"
+              echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          VERSIONS=$(curl -sf http://localhost:4002/health | jq -r '.available_versions[]' 2>/dev/null || echo "")
+          echo "Server available versions: ${VERSIONS}"
+          echo "Required version: ${AZTEC_VERSION}"
+
+          if echo "$VERSIONS" | grep -qF "${AZTEC_VERSION}"; then
+            echo "Server has required bb version — no rebuild needed"
+            echo "needs_rebuild=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Server missing bb version — rebuild required"
+            echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Build base image (idempotent — skips if already in ECR) ─────
+  ensure-base:
+    name: Build Base Image
+    needs: [changes, check-server]
+    if: needs.check-server.outputs.needs_rebuild == 'true'
+    uses: ./.github/workflows/_build-base.yml
+    secrets: inherit
+
+  # ── Deploy TEE enclave + prover to single production instance ────
+  deploy-server:
+    name: Deploy Server (mainnet)
+    needs: [changes, check-server, ensure-base]
+    if: needs.check-server.outputs.needs_rebuild == 'true'
+    uses: ./.github/workflows/_deploy-unified.yml
+    secrets: inherit
+    with:
+      environment: prod
+      nitro_image_tag: prod-tee
+      prover_image_tag: prod-prover
+      base_tag: ${{ needs.ensure-base.outputs.base_tag }}
+
+  # ── Build & deploy app to S3 + invalidate CloudFront ────────────
+  deploy-app:
+    name: Deploy App (mainnet)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build app
+        run: bun run --cwd packages/app build
+        env:
+          AZTEC_NODE_URL: ${{ secrets.MAINNET_AZTEC_NODE_URL }}
+          PROVER_URL: ${{ secrets.MAINNET_CLOUDFRONT_URL }}/prover
+          TEE_URL: ${{ secrets.MAINNET_CLOUDFRONT_URL }}/tee
+          VITE_ENV_NAME: mainnet
+          OTHER_ENV_URL: https://testnet.tee-rex.dev
+          OTHER_ENV_NAME: testnet
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync packages/app/dist/ s3://${{ secrets.MAINNET_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "max-age=31536000,immutable" \
+            --exclude "index.html"
+
+          aws s3 cp packages/app/dist/index.html s3://${{ secrets.MAINNET_S3_BUCKET }}/index.html \
+            --cache-control "max-age=60"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.MAINNET_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/index.html"
+
+  # ── Mainnet connectivity check (gates SDK publish) ──────────────
+  connectivity-check:
+    name: Mainnet Connectivity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check mainnet node connectivity
+        env:
+          MAINNET_URL: ${{ secrets.MAINNET_AZTEC_NODE_URL }}
+        run: |
+          if [ -z "${MAINNET_URL}" ] || [ "${MAINNET_URL}" = "TBD" ]; then
+            echo "::warning::MAINNET_AZTEC_NODE_URL not configured yet — mainnet not live. Skipping connectivity check."
+            exit 0
+          fi
+
+          echo "Checking mainnet node at ${MAINNET_URL}..."
+          if curl -sf --max-time 10 "${MAINNET_URL}" > /dev/null 2>&1; then
+            echo "Mainnet node is reachable"
+          else
+            echo "::warning::Mainnet node at ${MAINNET_URL} is not reachable. This is expected if mainnet is not yet live."
+          fi
+
+  # ── Pre-publish accelerator validation ────────────────────────────
+  # Builds the headless accelerator binary and runs SDK e2e with
+  # ACCELERATOR_URL to ensure ProvingMode.accelerated works before publish.
+  validate-accelerator:
+    name: Validate Accelerator
+    if: "github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/')"
+    uses: ./.github/workflows/_e2e-sdk.yml
+    secrets: inherit
+    with:
+      build_accelerator: true
+
+  # ── Publish SDK to npm (mainnet gets 'latest' tag) ─────────────────
+  # Uses NPM_TOKEN (automation token) — OIDC trusted publishing only supports
+  # one workflow file per package, which doesn't work with multiple deploy workflows.
+  # Gated on validate-mainnet + validate-accelerator + connectivity-check.
+  publish-sdk:
+    name: Publish SDK
+    needs: [validate-mainnet, validate-accelerator, connectivity-check]
+    if: |
+      always()
+      && (needs.validate-mainnet.result == 'success' || needs.validate-mainnet.result == 'skipped')
+      && (needs.validate-accelerator.result == 'success' || needs.validate-accelerator.result == 'skipped')
+      && needs.connectivity-check.result == 'success'
+      && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/'))
+    uses: ./.github/workflows/_publish-sdk.yml
+    secrets: inherit
+    with:
+      dist_tag: latest
+      latest: true
+
+  # ── Post-deploy validation against mainnet ───────────────────────
+  validate-mainnet:
+    name: Validate Mainnet
+    needs: [changes, deploy-server, deploy-app]
+    if: "!cancelled() && (needs.changes.outputs.servers == 'true' || needs.changes.outputs.app == 'true')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install SSM plugin
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Start SSM tunnels to prod instance
+        run: |
+          # Both services run on the same instance (TEE on 4000, prover on 80)
+          aws ssm start-session \
+            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
+
+          aws ssm start-session \
+            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
+          echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"
+
+          echo "Waiting for SSM tunnels..."
+          for i in $(seq 1 30); do
+            PROVER_OK=false
+            TEE_OK=false
+            curl -sf --max-time 5 http://localhost:4002/attestation > /dev/null 2>&1 && PROVER_OK=true
+            curl -sf --max-time 5 http://localhost:4001/attestation > /dev/null 2>&1 && TEE_OK=true
+            if [ "$PROVER_OK" = "true" ] && [ "$TEE_OK" = "true" ]; then
+              echo "Both SSM tunnels ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SSM tunnels failed to connect after 60s"
+          exit 1
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run app smoke E2E against mainnet
+        env:
+          AZTEC_NODE_URL: ${{ secrets.MAINNET_AZTEC_NODE_URL }}
+          PROVER_URL: http://localhost:4002
+          TEE_URL: http://localhost:4001
+        run: bunx playwright test --project=smoke --workers=1
+        working-directory: packages/app
+
+      - name: Cleanup SSM tunnels
+        if: always()
+        run: |
+          kill "$PROVER_TUNNEL_PID" 2>/dev/null || true
+          kill "$TEE_TUNNEL_PID" 2>/dev/null || true
