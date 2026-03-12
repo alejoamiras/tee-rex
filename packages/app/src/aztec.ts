@@ -49,17 +49,12 @@ export const TEE_CONFIGURED = !!process.env.TEE_URL;
 /** Display-friendly TEE URL for the services panel. */
 export const TEE_DISPLAY_URL = process.env.TEE_URL || "";
 
-/** Environment name: "nextnet", "devnet", or undefined (local dev) */
+/** Environment name: "mainnet", "testnet", "nightlies", "devnet", or undefined (local dev) */
 export const ENV_NAME = process.env.VITE_ENV_NAME || undefined;
 
-const ENV_URLS: Record<string, { other: string; otherName: string }> = {
-  nextnet: { other: "https://devnet.tee-rex.dev", otherName: "devnet" },
-  devnet: { other: "https://nextnet.tee-rex.dev", otherName: "nextnet" },
-};
-
-/** URL to the other environment (for switcher link), or undefined */
-export const OTHER_ENV_URL = ENV_NAME ? ENV_URLS[ENV_NAME]?.other : undefined;
-export const OTHER_ENV_NAME = ENV_NAME ? ENV_URLS[ENV_NAME]?.otherName : undefined;
+/** URL and name of the other environment (for switcher link), set at build time */
+export const OTHER_ENV_URL = process.env.VITE_OTHER_ENV_URL || undefined;
+export const OTHER_ENV_NAME = process.env.VITE_OTHER_ENV_NAME || undefined;
 
 export type WalletType = "embedded" | "external";
 
