@@ -17,6 +17,9 @@ bun run dev      # starts with --watch for development
 | `PORT` | `4000` | Server listening port |
 | `TEE_MODE` | `standard` | `"standard"` (dev) or `"nitro"` (Nitro Enclave) |
 | `CRS_PATH` | — | Path to Barretenberg CRS files (Nitro only, pre-cached in the enclave image) |
+| `HARDWARE_CONCURRENCY` | — | Controls Barretenberg thread count (set automatically via `$(nproc)` in Docker) |
+| `BB_VERSIONS_DIR` | `~/.tee-rex/versions` | Directory for multi-version bb binary cache |
+| `BB_BINARY_PATH` | — | Override path to the `bb` binary (bypasses version cache and node_modules) |
 
 ## API
 
@@ -50,8 +53,29 @@ Accepts an encrypted proving request and returns the generated proof.
 - **Rate limit:** 10 requests per hour per IP (localhost exempt)
 - **Payload limit:** 50 MB
 - **Request:** `{ "data": "<base64-encrypted-payload>" }`
+- **Request headers:** `X-Request-Id` (optional, generated if missing; echoed in response), `X-Aztec-Version` (routes to correct bb binary version)
 - **Response:** `{ "proof": "<base64-proof>" }`
-- **Headers:** `X-Request-Id` (optional, generated if missing; echoed in response)
+- **Response headers:** `x-prove-duration-ms` (bb proving time), `x-decrypt-duration-ms` (payload decryption time)
+
+### `GET /health`
+
+Returns server status, API version, available bb binary versions, and runtime diagnostics.
+
+```json
+{
+  "status": "ok",
+  "api_version": 1,
+  "available_versions": ["5.0.0-nightly.20260309"],
+  "runtime": {
+    "hardware_concurrency": "46",
+    "available_parallelism": 46,
+    "cpu_count": 46,
+    "tee_mode": "nitro",
+    "node_env": "production",
+    "crs_path": "/crs"
+  }
+}
+```
 
 ### `GET /encryption-public-key`
 

@@ -101,7 +101,7 @@ tee-rex/
 │   ├── sdk/          → @alejoamiras/tee-rex (npm package)
 │   │                   Drop-in Aztec prover: local (WASM), UEE (TEE), or accelerated (native)
 │   ├── server/       → Express server (runs in Nitro Enclave or standalone)
-│   │                   Handles /prove, /attestation, /encryption-public-key
+│   │                   Handles /prove, /attestation, /health, /encryption-public-key
 │   ├── app/          → Vite frontend demo (local/UEE/TEE mode toggle)
 │   └── accelerator/  → Tauri tray app — native proving on localhost:59833
 │                       Runs bb binary natively, auto-detected by SDK
