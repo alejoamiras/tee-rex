@@ -62,13 +62,14 @@ jobs:
         id: bb-versions
         run: |
           PRIMARY="${BASE_TAG#base-}"
-          # Query npm for latest nightly and devnet versions
+          # Query npm for latest nightly, devnet, and rc versions
           DIST_TAGS=$(npm view @aztec/aztec.js dist-tags --json 2>/dev/null || echo '{}')
           NIGHTLY=$(echo "$DIST_TAGS" | jq -r '.nightly // empty')
           DEVNET=$(echo "$DIST_TAGS" | jq -r '.devnet // empty')
+          RC=$(echo "$DIST_TAGS" | jq -r '.rc // empty')
           # Combine unique versions (primary always first)
           VERSIONS="$PRIMARY"
-          for v in $NIGHTLY $DEVNET; do
+          for v in $NIGHTLY $DEVNET $RC; do
             if [ -n "$v" ] && [ "$v" != "$PRIMARY" ]; then
               VERSIONS="${VERSIONS},${v}"
             fi
@@ -119,13 +120,14 @@ jobs:
         id: bb-versions
         run: |
           PRIMARY="${BASE_TAG#base-}"
-          # Query npm for latest nightly and devnet versions
+          # Query npm for latest nightly, devnet, and rc versions
           DIST_TAGS=$(npm view @aztec/aztec.js dist-tags --json 2>/dev/null || echo '{}')
           NIGHTLY=$(echo "$DIST_TAGS" | jq -r '.nightly // empty')
           DEVNET=$(echo "$DIST_TAGS" | jq -r '.devnet // empty')
+          RC=$(echo "$DIST_TAGS" | jq -r '.rc // empty')
           # Combine unique versions (primary always first)
           VERSIONS="$PRIMARY"
-          for v in $NIGHTLY $DEVNET; do
+          for v in $NIGHTLY $DEVNET $RC; do
             if [ -n "$v" ] && [ "$v" != "$PRIMARY" ]; then
               VERSIONS="${VERSIONS},${v}"
             fi

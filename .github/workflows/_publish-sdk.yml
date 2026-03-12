@@ -97,12 +97,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag ${{ inputs.dist_tag }} --workspaces=false
 
-      - name: Update npm latest dist-tag
-        if: inputs.dist_tag == 'nightlies'
+      - name: Add mainnet dist-tag alias
+        if: inputs.dist_tag == 'latest'
         working-directory: packages/sdk
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm dist-tag add "@alejoamiras/tee-rex@${{ steps.sdk-version.outputs.version }}" latest
+        run: npm dist-tag add "@alejoamiras/tee-rex@${{ steps.sdk-version.outputs.version }}" mainnet
 
       - name: Create git tag and GitHub release
         env:
