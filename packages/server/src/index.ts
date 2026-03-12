@@ -28,6 +28,9 @@ declare global {
 
 const logger = getLogger(["tee-rex", "server"]);
 
+/** Bumped when the server API changes in a way that clients should detect. */
+const API_VERSION = 1;
+
 export interface AppDependencies {
   prover: ProverService;
   encryption: EncryptionService;
@@ -121,6 +124,7 @@ export function createApp(deps: AppDependencies): express.Express {
   app.get("/health", (_req, res) => {
     res.json({
       status: "ok",
+      api_version: API_VERSION,
       available_versions: listCachedVersions(),
       runtime: {
         hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",

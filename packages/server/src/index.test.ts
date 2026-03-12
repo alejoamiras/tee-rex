@@ -334,7 +334,7 @@ describe("POST /prove", () => {
 });
 
 describe("GET /health", () => {
-  test("returns status and available versions", async () => {
+  test("returns status, api_version, and available versions", async () => {
     const { app } = createTestApp();
     const { url, close } = await startTestServer(app);
 
@@ -342,8 +342,13 @@ describe("GET /health", () => {
       const res = await fetch(`${url}/health`);
       expect(res.status).toBe(200);
 
-      const body = (await res.json()) as { status: string; available_versions: string[] };
+      const body = (await res.json()) as {
+        status: string;
+        api_version: number;
+        available_versions: string[];
+      };
       expect(body.status).toBe("ok");
+      expect(body.api_version).toBe(1);
       expect(Array.isArray(body.available_versions)).toBe(true);
     } finally {
       close();
