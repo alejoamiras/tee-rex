@@ -293,3 +293,357 @@ resource "aws_cloudfront_distribution" "devnet" {
     prevent_destroy = true
   }
 }
+
+# -----------------------------------------------------------------------------
+# Mainnet Distribution
+# -----------------------------------------------------------------------------
+
+resource "aws_cloudfront_distribution" "mainnet" {
+  comment             = "tee-rex mainnet — app (S3) + prover/TEE (EC2)"
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+  http_version        = "http2"
+  price_class         = "PriceClass_100"
+  aliases             = var.mainnet_cloudfront_aliases
+
+  origin {
+    domain_name              = aws_s3_bucket.mainnet.bucket_regional_domain_name
+    origin_id                = "s3-app"
+    origin_access_control_id = aws_cloudfront_origin_access_control.app.id
+  }
+
+  origin {
+    domain_name = aws_eip.prod_tee.public_dns
+    origin_id   = "prover-ec2"
+
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  origin {
+    domain_name = aws_eip.prod_tee.public_dns
+    origin_id   = "tee-ec2"
+
+    custom_origin_config {
+      http_port                = 4000
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id           = "s3-app"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/prover/*"
+    target_origin_id           = "prover-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/tee/*"
+    target_origin_id           = "tee-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Testnet Distribution
+# -----------------------------------------------------------------------------
+
+resource "aws_cloudfront_distribution" "testnet" {
+  comment             = "tee-rex testnet — app (S3) + prover/TEE (EC2)"
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+  http_version        = "http2"
+  price_class         = "PriceClass_100"
+  aliases             = var.testnet_cloudfront_aliases
+
+  origin {
+    domain_name              = aws_s3_bucket.testnet.bucket_regional_domain_name
+    origin_id                = "s3-app"
+    origin_access_control_id = aws_cloudfront_origin_access_control.app.id
+  }
+
+  origin {
+    domain_name = aws_eip.prod_tee.public_dns
+    origin_id   = "prover-ec2"
+
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  origin {
+    domain_name = aws_eip.prod_tee.public_dns
+    origin_id   = "tee-ec2"
+
+    custom_origin_config {
+      http_port                = 4000
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id           = "s3-app"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/prover/*"
+    target_origin_id           = "prover-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/tee/*"
+    target_origin_id           = "tee-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Nightlies Distribution
+# -----------------------------------------------------------------------------
+
+resource "aws_cloudfront_distribution" "nightlies" {
+  comment             = "tee-rex nightlies — app (S3) + prover/TEE (EC2)"
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+  http_version        = "http2"
+  price_class         = "PriceClass_100"
+  aliases             = var.nightlies_cloudfront_aliases
+
+  origin {
+    domain_name              = aws_s3_bucket.nightlies.bucket_regional_domain_name
+    origin_id                = "s3-app"
+    origin_access_control_id = aws_cloudfront_origin_access_control.app.id
+  }
+
+  origin {
+    domain_name = aws_eip.prod_tee.public_dns
+    origin_id   = "prover-ec2"
+
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  origin {
+    domain_name = aws_eip.prod_tee.public_dns
+    origin_id   = "tee-ec2"
+
+    custom_origin_config {
+      http_port                = 4000
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout      = 120
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id           = "s3-app"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/prover/*"
+    target_origin_id           = "prover-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/tee/*"
+    target_origin_id           = "tee-ec2"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.coop_coep.id
+    compress                   = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_prefix.arn
+    }
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+}
