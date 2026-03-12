@@ -39,6 +39,39 @@ output "prod_cloudfront_domain" {
   value       = aws_cloudfront_distribution.prod.domain_name
 }
 
+output "mainnet_cloudfront_distribution_id" {
+  description = "Mainnet CloudFront distribution ID"
+  value       = aws_cloudfront_distribution.mainnet.id
+  sensitive   = true
+}
+
+output "mainnet_cloudfront_domain" {
+  description = "Mainnet CloudFront domain name"
+  value       = aws_cloudfront_distribution.mainnet.domain_name
+}
+
+output "testnet_cloudfront_distribution_id" {
+  description = "Testnet CloudFront distribution ID"
+  value       = aws_cloudfront_distribution.testnet.id
+  sensitive   = true
+}
+
+output "testnet_cloudfront_domain" {
+  description = "Testnet CloudFront domain name"
+  value       = aws_cloudfront_distribution.testnet.domain_name
+}
+
+output "nightlies_cloudfront_distribution_id" {
+  description = "Nightlies CloudFront distribution ID"
+  value       = aws_cloudfront_distribution.nightlies.id
+  sensitive   = true
+}
+
+output "nightlies_cloudfront_domain" {
+  description = "Nightlies CloudFront domain name"
+  value       = aws_cloudfront_distribution.nightlies.domain_name
+}
+
 output "devnet_cloudfront_distribution_id" {
   description = "Devnet CloudFront distribution ID"
   value       = aws_cloudfront_distribution.devnet.id
