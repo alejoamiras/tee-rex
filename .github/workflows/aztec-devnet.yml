@@ -26,5 +26,5 @@ jobs:
       dist_tag: devnet
       target_branch: devnet
       branch_prefix: chore/aztec-devnet
-      auto_merge: false
+      auto_merge: true
       version: ${{ inputs.version || '' }}

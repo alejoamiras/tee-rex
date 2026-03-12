@@ -27,6 +27,7 @@ jobs:
     timeout-minutes: 2
     outputs:
       servers: ${{ steps.override.outputs.servers || steps.filter.outputs.servers }}
+      server_code: ${{ steps.override.outputs.server_code || steps.filter.outputs.server_code }}
       app: ${{ steps.override.outputs.app || steps.filter.outputs.app }}
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +37,6 @@ jobs:
           filters: |
             servers:
               - 'packages/server/**'
-              - 'packages/sdk/**'
               - 'Dockerfile'
               - 'Dockerfile.base'
               - 'Dockerfile.nitro'
@@ -45,6 +45,13 @@ jobs:
               - '.github/workflows/_build-*.yml'
               - '.github/workflows/deploy-prod.yml'
               - '.github/actions/**'
+              - 'package.json'
+              - 'bun.lock'
+            server_code:
+              - 'packages/server/**'
+              - 'Dockerfile'
+              - 'Dockerfile.base'
+              - 'Dockerfile.nitro'
               - 'package.json'
               - 'bun.lock'
             app:
@@ -57,22 +64,98 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         id: override
         run: |
-          echo "servers=true" >> "$GITHUB_OUTPUT"
-          echo "app=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "servers=true"
+            echo "server_code=true"
+            echo "app=true"
+          } >> "$GITHUB_OUTPUT"
+
+  # ── Check if shared server already has the required bb version ───
+  check-server:
+    name: Check Server Version
+    needs: changes
+    if: needs.changes.outputs.servers == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needs_rebuild: ${{ steps.force.outputs.needs_rebuild || steps.check.outputs.needs_rebuild }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract required Aztec version
+        id: version
+        run: echo "aztec_version=$(jq -r '.dependencies["@aztec/stdlib"]' packages/sdk/package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Force rebuild for code changes or manual dispatch
+        if: needs.changes.outputs.server_code == 'true' || github.event_name == 'workflow_dispatch'
+        id: force
+        run: echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install SSM plugin
+        if: "!steps.force.outputs.needs_rebuild"
+        run: |
+          curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Configure AWS credentials
+        if: "!steps.force.outputs.needs_rebuild"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Check server for required bb version
+        if: "!steps.force.outputs.needs_rebuild"
+        id: check
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_TEE_INSTANCE_ID }}
+          AZTEC_VERSION: ${{ steps.version.outputs.aztec_version }}
+        run: |
+          # SSM tunnel to prod instance (prover on port 80)
+          aws ssm start-session \
+            --target "${INSTANCE_ID}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
+          TUNNEL_PID=$!
+          trap 'kill $TUNNEL_PID 2>/dev/null' EXIT
+
+          # Wait for tunnel
+          for i in $(seq 1 30); do
+            curl -sf --max-time 2 http://localhost:4002/health > /dev/null 2>&1 && break
+            if [ "$i" = "30" ]; then
+              echo "Could not reach server — rebuild required"
+              echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          VERSIONS=$(curl -sf http://localhost:4002/health | jq -r '.available_versions[]' 2>/dev/null || echo "")
+          echo "Server available versions: ${VERSIONS}"
+          echo "Required version: ${AZTEC_VERSION}"
+
+          if echo "$VERSIONS" | grep -qF "${AZTEC_VERSION}"; then
+            echo "Server has required bb version — no rebuild needed"
+            echo "needs_rebuild=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Server missing bb version — rebuild required"
+            echo "needs_rebuild=true" >> "$GITHUB_OUTPUT"
+          fi
 
   # ── Build base image (idempotent — skips if already in ECR) ─────
   ensure-base:
     name: Build Base Image
-    needs: changes
-    if: needs.changes.outputs.servers == 'true'
+    needs: [changes, check-server]
+    if: needs.check-server.outputs.needs_rebuild == 'true'
     uses: ./.github/workflows/_build-base.yml
     secrets: inherit
 
   # ── Deploy TEE enclave + prover to single production instance ────
   deploy-server:
     name: Deploy Server (prod)
-    needs: [changes, ensure-base]
-    if: needs.changes.outputs.servers == 'true'
+    needs: [changes, check-server, ensure-base]
+    if: needs.check-server.outputs.needs_rebuild == 'true'
     uses: ./.github/workflows/_deploy-unified.yml
     secrets: inherit
     with:

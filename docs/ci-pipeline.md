@@ -1,6 +1,6 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-03-07.
+How the tee-rex CI/CD system works. Last updated: 2026-03-12.
 
 ---
 
@@ -109,46 +109,56 @@ Triggers on push to `main` (excluding docs, lessons, tests, and Playwright confi
 graph TD
     push["Push to main"] --> changes["Detect changes\n(dorny/paths-filter)"]
 
-    changes -->|servers changed| base["ensure-base\n(Build Base Image)"]
+    changes -->|servers changed| check["check-server\n(SSM → /health\nversion check)"]
     changes -->|app changed| app["deploy-app\n(S3 + CloudFront)"]
     push --> nextnet["nextnet-check\n(SDK smoke test)"]
+
+    check -->|needs rebuild| base["ensure-base\n(Build Base Image)"]
+    check -->|version cached| skip_server["Skip server deploy"]
 
     base --> server["deploy-server\n(_deploy-unified.yml)\n(enclave + prover on 1 EC2)"]
 
     server & app --> validate["validate-prod\n(smoke Playwright:\n3 deploys vs nextnet)"]
+    skip_server --> validate
 
     validate & nextnet -->|aztec auto-update only| publish["publish-sdk\n(npm + git tag + release)"]
 
     style validate fill:#afa,stroke:#333
     style nextnet fill:#ffa,stroke:#333
+    style check fill:#ffc,stroke:#333
 ```
 
 ### Change detection outputs
 
 | Output | Triggers on | Gates |
 |--------|------------|-------|
-| `servers` | `packages/server/**`, `packages/sdk/**`, `Dockerfile*`, `infra/**`, `package.json`, `bun.lock` | `ensure-base`, `deploy-server` |
-| `app` | `packages/app/**`, `packages/sdk/**`, `package.json`, `bun.lock` | `deploy-app` |
+| `servers` | `packages/server/**`, `Dockerfile*`, `infra/**`, `.github/workflows/_deploy-*/_build-*/deploy-prod.yml`, `.github/actions/**`, `package.json`, `bun.lock` | `check-server` |
+| `server_code` | `packages/server/**`, `Dockerfile*`, `package.json`, `bun.lock` | Forces rebuild in `check-server` (skips version check) |
+| `app` | `packages/app/**`, `packages/sdk/**`, `.github/workflows/deploy-prod.yml`, `package.json`, `bun.lock` | `deploy-app` |
 
-`workflow_dispatch` overrides both to `true` (deploys everything). `validate-prod` runs when either output is `true`.
+`workflow_dispatch` overrides all three to `true` (deploys everything). `validate-prod` runs when either `servers` or `app` is `true`.
+
+Note: `packages/sdk/**` was removed from the `servers` filter — the server has zero `@aztec/*` runtime dependencies, so SDK-only changes don't require a server rebuild.
 
 ### Job details
 
 | Job | What it does | Duration |
 |-----|-------------|----------|
-| `changes` | `dorny/paths-filter` to detect server vs app changes | ~5s |
-| `ensure-base` | Checks ECR for base image, builds + pushes only if missing | ~1-5 min |
-| `deploy-server` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM (`_deploy-unified.yml`) | ~25 min |
+| `changes` | `dorny/paths-filter` to detect server vs app changes, plus `server_code` subset | ~5s |
+| `check-server` | SSM tunnel to prod instance, query `/health` for `available_versions`. Outputs `needs_rebuild=true` when: server code changed, `workflow_dispatch`, server unreachable, or bb version not cached. Skips SSM when force-rebuild is needed. | ~30s–2 min |
+| `ensure-base` | Checks ECR for base image, builds + pushes only if missing. Only runs when `needs_rebuild=true`. | ~1-5 min |
+| `deploy-server` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM (`_deploy-unified.yml`). Only runs when `needs_rebuild=true`. | ~25 min |
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
 | `publish-sdk` | Resolve version (query npm for existing revisions, append `.N` suffix if needed), set SDK version, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
-| `validate-prod` | SSM tunnels to prod server (both ports on same instance), smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet | ~7 min |
+| `validate-prod` | SSM tunnels to prod server (both ports on same instance), smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet. Runs even when server deploy is skipped (validates existing deployment). | ~7 min |
 
 ### Conditional behavior
 
-- **Workflow-only changes**: All deploy jobs skip, only `nextnet-check` runs
-- **App-only changes**: Only `deploy-app` runs, server deploys skip
-- **Server/SDK changes**: Only server deploys run (app also deploys if SDK changed, since it's in both filters)
+- **Workflow/infra-only changes** (no server code): `check-server` queries `/health` — if bb version is already cached, skips rebuild entirely (~10 min saved)
+- **Server code changes**: `check-server` detects `server_code=true` and forces rebuild (no version check)
+- **App-only changes**: Only `deploy-app` runs, server jobs skip entirely
+- **SDK-only changes**: Only `deploy-app` runs (SDK is in app filter but not server filter)
 - **`publish-sdk`**: Only runs when commit message starts with `chore: update @aztec/` (auto-update merges) or on manual dispatch. Gated by `validate-prod` (must pass or be skipped) AND `nextnet-check` (must pass). Can also be triggered standalone via `workflow_dispatch` on `_publish-sdk.yml` for manual retries.
 - **`validate-prod`**: Hard gate (no `continue-on-error`). Runs smoke tests (`--project=smoke`, 3 deploys) for faster, more reliable validation. App uses `sendWithRetry` (via `E2E_RETRY_STALE_HEADER`) to handle stale block headers during proving.
 
@@ -176,14 +186,15 @@ The `test-infra` label triggers `infra.yml` which does a full TEE + prover deplo
 
 ### Devnet → devnet (`aztec-devnet.yml`)
 
-Weekly cron (Monday 09:00 UTC) checks for new devnet versions, creates a PR targeting the `devnet` branch, and merges immediately (no auto-merge wait). Pushing to `devnet` triggers `deploy-devnet.yml`.
+Weekly cron (Monday 09:00 UTC) checks for new devnet versions, creates a PR targeting the `devnet` branch, and auto-merges when CI passes. Pushing to `devnet` triggers `deploy-devnet.yml`.
 
 ```mermaid
 graph LR
     cron["Weekly Monday 09:00 UTC\n(aztec-devnet.yml)"] --> check["Check npm for\nnew devnet version"]
     check -->|new version| update["Update @aztec/*\nin all package.json"]
     update --> pr["Create PR\ntarget: devnet"]
-    pr --> merge["Immediate merge\nto devnet"]
+    pr --> ci["CI checks run"]
+    ci -->|all green| merge["Auto-merge\nto devnet"]
     merge --> deploy["deploy-devnet.yml\ntriggers (push)"]
 ```
 
@@ -197,7 +208,7 @@ Both wrappers call `_aztec-update.yml` with these inputs:
 | `target_branch` | `main` | `devnet` |
 | `branch_prefix` | `chore/aztec-nightlies` | `chore/aztec-devnet` |
 | `add_label` | `test-infra` | *(none)* |
-| `auto_merge` | `true` (waits for CI) | `false` (immediate) |
+| `auto_merge` | `true` (waits for CI) | `true` (waits for CI) |
 
 ---
 
@@ -295,8 +306,10 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
 | `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows both `deploy-prod.yml` and `deploy-devnet.yml` to publish. AWS still uses OIDC (no stored keys). |
-| Consolidated EC2 (1 per env) | Single m5.xlarge runs both Nitro enclave (port 4000) and prover container (port 80). Saves ~$2,900/yr. Prover instances stopped (not terminated) for rollback. |
+| Consolidated EC2 (1 per env) | Single c7i.12xlarge runs both Nitro enclave (port 4000) and prover container (port 80). Prover instances stopped (not terminated) for rollback. |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
 | Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |
 | `deploy-devnet.yml` push trigger | Pushes to `devnet` branch (from auto-update merges) automatically trigger deployment. Dual-trigger conditions: `github.event_name == 'push' \|\| inputs.<flag>`. |
+| Smart `/health` version check | Both `deploy-prod.yml` and `deploy-devnet.yml` SSM tunnel to the running server and check `/health` `available_versions` before rebuilding. Saves ~10 min on deploys where the required bb version is already cached (common after nightly auto-updates). `deploy-prod.yml` distinguishes `server_code` changes (always rebuild) from infra-only changes (check first). |
+| `api_version` in `/health` | Server returns `api_version: 1` in `/health` response. Enables SDK↔server compatibility checks and fail-fast detection of breaking API changes. |

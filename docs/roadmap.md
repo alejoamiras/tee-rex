@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32)
 
 | Phase | Summary |
 |---|---|
@@ -31,6 +31,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 | **30** | **Wallet SDK integration** — `@aztec/wallet-sdk` for external wallet (browser extension) support. Dual-path: embedded wallet auto-inits as before + "Connect External" button triggers SDK discovery → emoji verification → capability request. External wallet replaces embedded for all operations; proving mode grayed out ("handled by wallet"); deploy disabled (wallet provides accounts). `?wallet=embedded` URL param bypasses external UI for e2e tests. New files: `wallet-connect.ts` (pure logic), UI section in `index.html`, wiring in `main.ts`. `AztecState` extended with `walletType`, `embeddedWallet`, `externalProvider`. |
 | **31** *(in progress)* | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics. See Phase 31 section for details. |
+| **32** | **CI/CD improvements** — narrow server change detection, smart `/health` version check in deploy-prod, devnet auto-merge fix, `api_version` in `/health`. See Phase 32 section. |
 
 ---
 
@@ -451,6 +452,26 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 | **Step 9** | CI e2e integration — headless binary (`src/bin/accelerator-server.rs`) via lib+bins pattern (no Tauri/GUI deps at runtime). `BB_BINARY_PATH` env var for bb resolution in CI. `accelerator.yml` e2e job: prebuild bb sidecar → build headless binary → start Aztec local network + tee-rex server + accelerator → SDK e2e with `ACCELERATOR_URL`. Gate job updated. |
 
 | **Step 7B** | Multi-version bb support + semver + auto-release. `versions.rs`: NetworkTier enum (Nightly/Devnet/Testnet/Mainnet), retention policy (2/3/5/all), download-on-demand from GitHub Releases, tar.gz extraction, atomic caching to `~/.tee-rex-accelerator/versions/{version}/bb`, cleanup on prove. `bb.rs`: version-aware `find_bb(version)` adds cache lookup before sidecar chain. `server.rs`: reads `X-Aztec-Version` header, downloads bb on demand, `/health` returns `available_versions` array, CORS allows version header. Tray: "Versions" submenu showing bundled + cached versions, rebuilt after download/cleanup. SDK: `#checkAcceleratorHealth` returns `{ available, needsDownload }` from `available_versions`, emits `"downloading"` phase, sends `x-aztec-version` header on `/prove`, legacy exact-match preserved for old accelerators. Version bump `0.0.0` → `1.0.0-rc.1`. release-please automation: manifest + config + workflow, `PAT_TOKEN` for tag-triggered releases. |
+
+---
+
+## Phase 32: CI/CD Improvements — DONE (PR #182)
+
+**Goal**: Optimize deploy pipeline and fix devnet auto-merge. Reduce unnecessary server rebuilds and add API versioning.
+
+**Changes:**
+
+| Item | Summary |
+|------|---------|
+| **Narrow server change detection** | Removed `packages/sdk/**` from `servers` path filter in `deploy-prod.yml`. Server has zero `@aztec/*` runtime deps — SDK changes don't require a server rebuild. |
+| **Smart `/health` version check** | Added `check-server` job to `deploy-prod.yml` (same pattern as `deploy-devnet.yml`). SSM tunnels to running server, checks `available_versions` in `/health`. Skips rebuild if bb version already cached. Distinguishes `server_code` changes (always rebuild) from infra-only changes (check first). Saves ~10 min on deploys where the version is already deployed. |
+| **Devnet auto-merge fix** | Changed `auto_merge: false` → `true` in `aztec-devnet.yml`. Was merging immediately without waiting for CI checks — now waits for all checks to pass before merging, matching the nightlies behavior. |
+| **`api_version` in `/health`** | Added `api_version: 1` to server `/health` response. Enables SDK↔server compatibility checks and fail-fast detection of breaking API changes. |
+
+**Key decisions:**
+- `server_code` path filter subset (Dockerfile*, packages/server/**, package.json, bun.lock) forces rebuild even when version check would skip it — prevents deploying stale server code
+- `workflow_dispatch` always forces rebuild (both `server_code` and `servers` override to true)
+- `api_version` is a simple integer, not semver — bumped on breaking API changes only
 
 ---
 
