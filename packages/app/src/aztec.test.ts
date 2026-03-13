@@ -34,19 +34,37 @@ afterEach(() => {
 
 // ── checkAztecNode ──
 describe("checkAztecNode", () => {
-  test("returns true when status responds 200", async () => {
-    globalThis.fetch = mock(() => Promise.resolve(new Response("OK", { status: 200 })));
-    expect(await checkAztecNode()).toBe(true);
+  test("returns reachable when status responds 200", async () => {
+    let callCount = 0;
+    globalThis.fetch = mock(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(new Response("OK", { status: 200 }));
+      // RPC call for node version
+      return Promise.resolve(
+        new Response(JSON.stringify({ result: { nodeVersion: "4.1.0-rc.2" } }), { status: 200 }),
+      );
+    });
+    expect(await checkAztecNode()).toEqual({ reachable: true, nodeVersion: "4.1.0-rc.2" });
   });
 
-  test("returns false when status responds 500", async () => {
+  test("returns reachable without version when RPC fails", async () => {
+    let callCount = 0;
+    globalThis.fetch = mock(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(new Response("OK", { status: 200 }));
+      return Promise.reject(new Error("rpc failed"));
+    });
+    expect(await checkAztecNode()).toEqual({ reachable: true });
+  });
+
+  test("returns not reachable when status responds 500", async () => {
     globalThis.fetch = mock(() => Promise.resolve(new Response("", { status: 500 })));
-    expect(await checkAztecNode()).toBe(false);
+    expect(await checkAztecNode()).toEqual({ reachable: false });
   });
 
-  test("returns false when fetch throws", async () => {
+  test("returns not reachable when fetch throws", async () => {
     globalThis.fetch = mock(() => Promise.reject(new Error("network error")));
-    expect(await checkAztecNode()).toBe(false);
+    expect(await checkAztecNode()).toEqual({ reachable: false });
   });
 });
 
