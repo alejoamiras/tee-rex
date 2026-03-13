@@ -61,10 +61,15 @@ if (ENV_NAME) {
 
   const badge = $("env-badge");
   badge.textContent = ENV_NAME;
-  badge.className =
-    ENV_NAME === "devnet"
-      ? "text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 border rounded border-amber-700/50 text-amber-500 bg-amber-900/20"
-      : "text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 border rounded border-emerald-700/50 text-emerald-500 bg-emerald-900/20";
+  const badgeBase =
+    "text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 border rounded";
+  const badgeColors: Record<string, string> = {
+    mainnet: "border-emerald-700/50 text-emerald-500 bg-emerald-900/20",
+    testnet: "border-yellow-700/50 text-yellow-500 bg-yellow-900/20",
+    nightlies: "border-blue-700/50 text-blue-500 bg-blue-900/20",
+    devnet: "border-amber-700/50 text-amber-500 bg-amber-900/20",
+  };
+  badge.className = `${badgeBase} ${badgeColors[ENV_NAME] ?? badgeColors.mainnet}`;
 
   if (OTHER_ENV_URL && OTHER_ENV_NAME) {
     const link = $("env-switch") as HTMLAnchorElement;
