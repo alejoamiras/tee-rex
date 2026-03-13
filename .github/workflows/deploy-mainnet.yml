@@ -186,8 +186,8 @@ jobs:
           PROVER_URL: ${{ secrets.MAINNET_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.MAINNET_CLOUDFRONT_URL }}/tee
           VITE_ENV_NAME: mainnet
-          OTHER_ENV_URL: https://testnet.tee-rex.dev
-          OTHER_ENV_NAME: testnet
+          VITE_OTHER_ENV_URL: https://testnet.tee-rex.dev
+          VITE_OTHER_ENV_NAME: testnet
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
