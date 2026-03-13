@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
@@ -85,6 +86,10 @@ export default defineConfig(({ mode, command }) => {
     VITE_OTHER_ENV_URL: allEnv.VITE_OTHER_ENV_URL,
     VITE_OTHER_ENV_NAME: allEnv.VITE_OTHER_ENV_NAME,
   };
+
+  // Read @aztec/stdlib version from SDK package.json at build time
+  const sdkPkg = JSON.parse(readFileSync(resolve(__dirname, "../sdk/package.json"), "utf8"));
+  const aztecSdkVersion: string = sdkPkg.dependencies["@aztec/stdlib"] ?? "unknown";
   return {
     plugins: [
       nodePolyfills({
@@ -158,6 +163,7 @@ export default defineConfig(({ mode, command }) => {
         VITE_ENV_NAME: env.VITE_ENV_NAME,
         VITE_OTHER_ENV_URL: env.VITE_OTHER_ENV_URL,
         VITE_OTHER_ENV_NAME: env.VITE_OTHER_ENV_NAME,
+        VITE_AZTEC_SDK_VERSION: aztecSdkVersion,
       }),
     },
   };
