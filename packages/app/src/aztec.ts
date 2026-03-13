@@ -56,6 +56,9 @@ export const ENV_NAME = process.env.VITE_ENV_NAME || undefined;
 export const OTHER_ENV_URL = process.env.VITE_OTHER_ENV_URL || undefined;
 export const OTHER_ENV_NAME = process.env.VITE_OTHER_ENV_NAME || undefined;
 
+/** @aztec/stdlib version from SDK package.json, embedded at build time */
+export const AZTEC_SDK_VERSION = process.env.VITE_AZTEC_SDK_VERSION || "unknown";
+
 export type WalletType = "embedded" | "external";
 
 export interface AztecState {
@@ -108,14 +111,32 @@ export async function checkAccelerator(): Promise<boolean> {
   }
 }
 
-export async function checkAztecNode(): Promise<boolean> {
+export async function checkAztecNode(): Promise<{ reachable: boolean; nodeVersion?: string }> {
   try {
     const res = await fetch(`${AZTEC_NODE_URL}/status`, {
       signal: AbortSignal.timeout(5000),
     });
-    return res.ok;
+    if (!res.ok) return { reachable: false };
+
+    // Try to get the node version via JSON-RPC
+    try {
+      const rpc = await fetch(AZTEC_NODE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", method: "node_getNodeInfo", params: [], id: 1 }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (rpc.ok) {
+        const data = await rpc.json();
+        return { reachable: true, nodeVersion: data.result?.nodeVersion };
+      }
+    } catch {
+      // RPC failed but /status was ok — node is reachable but version unknown
+    }
+
+    return { reachable: true };
   } catch {
-    return false;
+    return { reachable: false };
   }
 }
 

@@ -2,6 +2,7 @@ import "./style.css";
 import { AsciiController } from "./ascii-animation";
 import {
   AZTEC_DISPLAY_URL,
+  AZTEC_SDK_VERSION,
   checkAccelerator,
   checkAztecNode,
   checkTeeAttestation,
@@ -444,9 +445,20 @@ async function init(): Promise<void> {
     onSwitchWallet: handleDisconnect,
   });
 
+  // Show SDK version immediately (build-time constant)
+  $("aztec-version").textContent = `sdk ${AZTEC_SDK_VERSION}`;
+
   appendLog("Checking Aztec node...");
-  const aztec = await checkAztecNode();
+  const { reachable: aztec, nodeVersion } = await checkAztecNode();
   setStatus("aztec-status", aztec);
+
+  if (nodeVersion) {
+    $("aztec-version").textContent = `sdk ${AZTEC_SDK_VERSION} · node ${nodeVersion}`;
+    appendLog(`Aztec node version: ${nodeVersion}`);
+    if (nodeVersion !== AZTEC_SDK_VERSION) {
+      appendLog(`Version mismatch: SDK ${AZTEC_SDK_VERSION} ≠ node ${nodeVersion}`, "warn");
+    }
+  }
 
   nodeReady = aztec;
 
@@ -467,7 +479,7 @@ async function init(): Promise<void> {
   }
 
   // Cache chain info for wallet discovery
-  if (aztec && state.node === null) {
+  if (nodeReady && state.node === null) {
     // Node is available but not yet connected — we'll get chain info via a lightweight check
     try {
       const node = (await import("@aztec/aztec.js/node")).createAztecNodeClient(
