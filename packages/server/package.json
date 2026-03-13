@@ -21,8 +21,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@aztec/bb-prover": "5.0.0-nightly.20260309",
-    "@aztec/simulator": "5.0.0-nightly.20260309",
+    "@aztec/bb-prover": "4.1.0-nightly.20260313",
+    "@aztec/simulator": "4.1.0-nightly.20260313",
     "@logtape/pretty": "^2.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
