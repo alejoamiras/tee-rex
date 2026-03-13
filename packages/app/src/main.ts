@@ -445,19 +445,23 @@ async function init(): Promise<void> {
     onSwitchWallet: handleDisconnect,
   });
 
-  // Show SDK version immediately (build-time constant)
-  $("aztec-version").textContent = `sdk ${AZTEC_SDK_VERSION}`;
-
   appendLog("Checking Aztec node...");
   const { reachable: aztec, nodeVersion } = await checkAztecNode();
   setStatus("aztec-status", aztec);
 
+  // Show versions row once we have data
+  const versionParts: string[] = [];
+  if (AZTEC_SDK_VERSION !== "unknown") versionParts.push(`sdk ${AZTEC_SDK_VERSION}`);
   if (nodeVersion) {
-    $("aztec-version").textContent = `sdk ${AZTEC_SDK_VERSION} · node ${nodeVersion}`;
+    versionParts.push(`node ${nodeVersion}`);
     appendLog(`Aztec node version: ${nodeVersion}`);
     if (nodeVersion !== AZTEC_SDK_VERSION) {
       appendLog(`Version mismatch: SDK ${AZTEC_SDK_VERSION} ≠ node ${nodeVersion}`, "warn");
     }
+  }
+  if (versionParts.length > 0) {
+    $("versions-row").classList.remove("hidden");
+    $("versions-info").textContent = versionParts.join(" · ");
   }
 
   nodeReady = aztec;
