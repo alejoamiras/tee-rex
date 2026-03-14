@@ -297,11 +297,12 @@ if [[ -n "${BB_VERSIONS}" ]]; then
 
     # Upload to enclave
     echo "Uploading bb v${version} to enclave..."
-    UPLOAD_RESPONSE=$(curl -sf -X POST http://localhost:4000/upload-bb \
+    UPLOAD_RESPONSE=$(curl -sf --max-time 300 -X POST http://localhost:4000/upload-bb \
       -H "x-bb-version: ${version}" \
       --data-binary "@${BB_PATH}" 2>&1) || {
       echo "ERROR: Failed to upload bb v${version} to enclave"
-      echo "${UPLOAD_RESPONSE}"
+      echo "Response: ${UPLOAD_RESPONSE}"
+      echo "Enclave health: $(curl -sf --max-time 5 http://localhost:4000/health 2>&1 || echo 'unreachable')"
       exit 1
     }
     echo "Uploaded: ${UPLOAD_RESPONSE}"

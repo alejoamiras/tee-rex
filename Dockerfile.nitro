@@ -60,7 +60,7 @@ RUN mkdir -p /crs && \
 # bb versions directory — host uploads bb binaries at runtime via POST /upload-bb.
 # No bb binaries are baked into the EIF; the host manages downloads.
 ENV BB_VERSIONS_DIR=/bb-versions
-RUN mkdir -p /bb-versions
+RUN mkdir -p /bb-versions && chown appuser:appuser /bb-versions
 
 # Copy the built application from the builder stage
 COPY --from=builder /app /app

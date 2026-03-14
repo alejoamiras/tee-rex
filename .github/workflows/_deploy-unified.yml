@@ -165,7 +165,7 @@ jobs:
             PRIMARY="${BASE_TAG#base-}"
             echo "versions=$PRIMARY" >> "$GITHUB_OUTPUT"
           fi
-          echo "BB versions: $(cat "$GITHUB_OUTPUT" | grep versions | cut -d= -f2)"
+          echo "BB versions: $(grep versions "$GITHUB_OUTPUT" | cut -d= -f2)"
         env:
           BASE_TAG: ${{ inputs.base_tag }}
 

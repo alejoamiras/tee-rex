@@ -123,7 +123,7 @@ jobs:
     with:
       environment: prod
       nitro_image_tag: prod-tee
-      prover_image_tag: prod-prover
+      host_image_tag: prod-host
       base_tag: ${{ needs.ensure-base.outputs.base_tag }}
 
   # ── Validate nightlies against shared prod instance ──────────
