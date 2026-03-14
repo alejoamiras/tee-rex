@@ -318,6 +318,10 @@ echo "=== Deploying host container ==="
 echo "Pulling host image: ${HOST_IMAGE_URI}"
 docker pull "${HOST_IMAGE_URI}"
 
+# Bun's node:http compat silently fails to bind privileged ports as non-root.
+# Allow non-root processes to bind port 80 without running the container as root.
+sysctl -w net.ipv4.ip_unprivileged_port_start=80
+
 echo "=== Starting host container ==="
 docker run -d \
   --name "${HOST_CONTAINER_NAME}" \

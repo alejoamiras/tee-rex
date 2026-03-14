@@ -32,6 +32,10 @@ Split monolithic server into host Express + thin enclave Bun.serve. Host manages
 
 6. **Bun event loop + Express**: Bun's `node:http` compatibility layer does NOT ref the HTTP server handle. Express's `server.listen()` won't keep Bun's event loop alive — the process exits with code 0 immediately after startup. Fix: `setInterval(() => {}, 1 << 30)` as a keep-alive, cleared on SIGTERM for clean shutdown. Affects both standard and proxy modes. Bun.serve (used in enclave) doesn't have this issue.
 
+7. **Bun + privileged ports**: Bun's `node:http` silently fails to bind privileged ports (< 1024) as non-root — fires the listen callback without actually creating a socket. `ss -tlnp` shows nothing on port 80 despite "Server started" log. Works fine on non-privileged ports (8080). Fix: `sysctl -w net.ipv4.ip_unprivileged_port_start=80` in deploy script before starting the container. Avoids running as root while keeping port 80 for CloudFront compatibility.
+
+8. **Proxy /health resilience**: Host `/health` must not fail when enclave is unreachable — deploy script checks host health independently (step 11). Catch enclave fetch errors in the health handler and return `{ status: "ok", enclave: "unreachable" }` with empty versions. Add AbortSignal.timeout(5s) to enclave health fetch to prevent hanging.
+
 ## Test Coverage
 
 - `bb-hash.test.ts`: 3 tests (hash computation, cache operations)
