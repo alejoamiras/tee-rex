@@ -500,7 +500,31 @@ describe("Proxy mode", () => {
       expect(body.api_version).toBe(1);
       expect(body.available_versions).toEqual(["1.0.0"]);
       expect(body.bb_hashes).toEqual([{ version: "1.0.0", sha256: "abc123" }]);
+      expect((body as Record<string, unknown>).enclave).toBe("ok");
       expect(body.runtime).toBeDefined();
+    } finally {
+      close();
+    }
+  });
+
+  test("GET /health returns ok with empty versions when enclave is unreachable", async () => {
+    // Point to a port with nothing listening
+    const app = createApp({
+      type: "proxy",
+      enclaveClient: new EnclaveClient("http://localhost:1"),
+    });
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/health`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.status).toBe("ok");
+      expect(body.api_version).toBe(1);
+      expect(body.available_versions).toEqual([]);
+      expect(body.bb_hashes).toEqual([]);
+      expect(body.enclave).toBe("unreachable");
     } finally {
       close();
     }

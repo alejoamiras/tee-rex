@@ -302,26 +302,32 @@ function registerProxyRoutes(
     }
   });
 
-  app.get("/health", async (_req, res, next) => {
+  app.get("/health", async (_req, res) => {
+    // Health must succeed even when the enclave is unreachable so that the
+    // deploy script and Docker HEALTHCHECK can confirm the host is alive.
+    // Enclave health is verified separately (deploy step 8).
+    let enclaveHealth: Awaited<ReturnType<typeof enclaveClient.health>> | null = null;
     try {
-      const enclaveHealth = await enclaveClient.health();
-      res.json({
-        status: "ok",
-        api_version: API_VERSION,
-        available_versions: enclaveHealth.versions.map((v) => v.version),
-        bb_hashes: enclaveHealth.versions,
-        runtime: {
-          hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",
-          available_parallelism: availableParallelism(),
-          cpu_count: cpus().length,
-          tee_mode: process.env.TEE_MODE ?? "unset",
-          node_env: process.env.NODE_ENV ?? "unset",
-          crs_path: process.env.CRS_PATH ?? "unset",
-        },
-      });
-    } catch (err) {
-      next(err);
+      enclaveHealth = await enclaveClient.health();
+    } catch {
+      logger.warn("Enclave unreachable during health check");
     }
+
+    res.json({
+      status: "ok",
+      api_version: API_VERSION,
+      available_versions: enclaveHealth?.versions.map((v) => v.version) ?? [],
+      bb_hashes: enclaveHealth?.versions ?? [],
+      enclave: enclaveHealth ? "ok" : "unreachable",
+      runtime: {
+        hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",
+        available_parallelism: availableParallelism(),
+        cpu_count: cpus().length,
+        tee_mode: process.env.TEE_MODE ?? "unset",
+        node_env: process.env.NODE_ENV ?? "unset",
+        crs_path: process.env.CRS_PATH ?? "unset",
+      },
+    });
   });
 
   app.get("/attestation", async (_req, res, next) => {

@@ -82,7 +82,7 @@ export class EnclaveClient {
   }
 
   async health(): Promise<EnclaveHealthResponse> {
-    const res = await fetch(`${this.#baseUrl}/health`);
+    const res = await fetch(`${this.#baseUrl}/health`, { signal: AbortSignal.timeout(5_000) });
     if (!res.ok) {
       throw new Error(`Enclave health failed (${res.status})`);
     }
