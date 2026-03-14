@@ -21,17 +21,15 @@ graph TB
   subgraph AWS["AWS"]
     S3["S3 Bucket<br/>(Static App)"]
 
-    subgraph ProverEC2["Prover EC2"]
-      ProverServer["TEE-Rex Server<br/>(Express + Barretenberg)"]
-    end
-
-    subgraph TeeEC2["TEE EC2 (Nitro-capable)"]
+    subgraph EC2["EC2 (c7i.12xlarge, Nitro-capable)"]
+      Host["Host Container<br/>(Express, port 80)<br/>TEE_MODE=nitro<br/>bb download + upload"]
       Socat["socat<br/>TCP:4000 ↔ vsock:16:5000"]
       subgraph Enclave["Nitro Enclave"]
-        TeeServer["TEE-Rex Server<br/>(Express + Barretenberg)"]
+        EnclaveServer["Enclave Service<br/>(Bun.serve, port 4000)<br/>decrypt + prove + attest"]
         NSM["NSM Hardware<br/>(/dev/nsm)"]
-        TeeServer --> NSM
+        EnclaveServer --> NSM
       end
+      Host -->|"http://localhost:4000"| Socat
       Socat --> Enclave
     end
   end
@@ -39,8 +37,8 @@ graph TB
   Client -->|"localhost"| Accelerator
   Client -->|"HTTPS"| CF
   CF -->|"/*"| S3
-  CF -->|"/prover/*"| ProverEC2
-  CF -->|"/tee/*"| TeeEC2
+  CF -->|"/prover/*"| EC2
+  CF -->|"/tee/*"| EC2
 ```
 
 ## Proving Flow
@@ -100,8 +98,9 @@ tee-rex/
 ├── packages/
 │   ├── sdk/          → @alejoamiras/tee-rex (npm package)
 │   │                   Drop-in Aztec prover: local (WASM), UEE (TEE), or accelerated (native)
-│   ├── server/       → Express server (runs in Nitro Enclave or standalone)
-│   │                   Handles /prove, /attestation, /health, /encryption-public-key
+│   ├── server/       → Two entry points: host (Express, src/index.ts) + enclave (Bun.serve, src/enclave.ts)
+│   │                   Host: /prove, /attestation, /health, /encryption-public-key (proxies to enclave in nitro mode)
+│   │                   Enclave: /upload-bb, /prove, /attestation, /public-key, /health
 │   ├── app/          → Vite frontend demo (local/UEE/TEE mode toggle)
 │   └── accelerator/  → Tauri tray app — native proving on localhost:59833
 │                       Runs bb binary natively, auto-detected by SDK
@@ -114,10 +113,10 @@ tee-rex/
 ```mermaid
 graph LR
   Base["Dockerfile.base<br/>(Bun + system deps + bun install)<br/>~2.4 GB, tagged per Aztec version"]
-  Prover["Dockerfile<br/>(FROM base, copy source + build)<br/>~50 MB delta"]
-  Nitro["Dockerfile.nitro<br/>(FROM rust: build libnsm.so<br/>FROM base: copy source + build)<br/>Converted to EIF by nitro-cli"]
+  Host["Dockerfile (host)<br/>(FROM base, copy source + build)<br/>TEE_MODE=nitro, proxies to enclave<br/>~50 MB delta"]
+  Nitro["Dockerfile.nitro (enclave)<br/>(FROM rust: build libnsm.so<br/>FROM base: copy source + CRS + build)<br/>Bun.serve on port 4000<br/>No bb baked — uploaded at runtime"]
 
-  Base --> Prover
+  Base --> Host
   Base --> Nitro
 ```
 

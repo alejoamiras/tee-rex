@@ -1,27 +1,32 @@
 #!/usr/bin/env bash
-# ci-deploy-unified.sh — Deploy tee-rex enclave + prover on a single instance.
+# ci-deploy-unified.sh — Deploy tee-rex enclave + host on a single instance.
 # Intended to be executed via AWS SSM on the EC2 instance.
 #
-# Usage: ci-deploy-unified.sh <nitro-image-uri> <prover-image-uri>
+# Usage: ci-deploy-unified.sh <nitro-image-uri> <host-image-uri> [bb-versions]
 # Example: ci-deploy-unified.sh \
 #   <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:prod-tee \
-#   <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:prod-prover
+#   <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com/tee-rex:prod-host \
+#   "5.0.0-nightly.20260313"
 #
-# Runs the enclave on port 4000 (via socat proxy) and the prover Docker
-# container on port 80. Both services survive reboots (systemd + --restart).
+# Architecture:
+#   Enclave (port 4000 via socat): thin service handling crypto + proving
+#   Host container (port 80): Express proxy, bb version management
+#   bb binaries: downloaded by host, uploaded to enclave at runtime
 
 set -euo pipefail
 
-NITRO_IMAGE_URI="${1:?Usage: ci-deploy-unified.sh <nitro-image-uri> <prover-image-uri>}"
-PROVER_IMAGE_URI="${2:?Usage: ci-deploy-unified.sh <nitro-image-uri> <prover-image-uri>}"
+NITRO_IMAGE_URI="${1:?Usage: ci-deploy-unified.sh <nitro-image-uri> <host-image-uri> [bb-versions]}"
+HOST_IMAGE_URI="${2:?Usage: ci-deploy-unified.sh <nitro-image-uri> <host-image-uri> [bb-versions]}"
+BB_VERSIONS="${3:-}"
 REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
 EIF_DIR="/opt/tee-rex"
 EIF_PATH="${EIF_DIR}/tee-rex.eif"
 BUILD_ARTIFACTS="${EIF_DIR}/build-artifacts"
 ENCLAVE_CID=16
-PROVER_CONTAINER_NAME="tee-rex-prover"
+HOST_CONTAINER_NAME="tee-rex-host"
+BB_CACHE_DIR="/opt/tee-rex/bb-versions"
 
-# Auto-detect host resources, reserve minimum for host OS + prover container
+# Auto-detect host resources, reserve minimum for host OS + host container
 TOTAL_VCPUS=$(nproc --all)
 TOTAL_MEM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
 CPU_COUNT=$(( TOTAL_VCPUS - 2 ))           # Reserve 2 vCPUs for host
@@ -33,29 +38,22 @@ if [[ "${MEMORY_MB}" -lt 8192 ]]; then MEMORY_MB=8192; fi
 
 echo "=== TEE-Rex Unified CI Deploy ==="
 echo "Nitro image: ${NITRO_IMAGE_URI}"
-echo "Prover image: ${PROVER_IMAGE_URI}"
+echo "Host image: ${HOST_IMAGE_URI}"
+echo "BB versions: ${BB_VERSIONS:-<none>}"
 echo "Region: ${REGION}"
 echo "Host: ${TOTAL_VCPUS} vCPUs, ${TOTAL_MEM_MB}MB RAM"
 echo "Enclave: ${CPU_COUNT} vCPUs, ${MEMORY_MB}MB RAM"
 
-# ── 0. Tear down existing enclave + proxy + prover + reclaim disk ──
-# Must happen before disk check. nitro-cli build-enclave creates overlay2
-# layers that Docker's metadata doesn't track, so `docker system prune`
-# can't remove them. Wipe all of /var/lib/docker so Docker reinitializes
-# cleanly — partial wipes (overlay2 only) corrupt Docker's internal state.
+# ── 0. Tear down existing enclave + proxy + host container + reclaim disk ──
 echo "=== Tearing down existing services ==="
 systemctl stop tee-rex-proxy 2>/dev/null || true
 systemctl stop tee-rex-enclave 2>/dev/null || true
 nitro-cli terminate-enclave --all 2>/dev/null || true
-# Kill any stale socat processes that might survive service stop
 pkill -f "socat.*TCP-LISTEN:4000" 2>/dev/null || true
-# Stop prover container (if running from previous deploy)
-docker stop "${PROVER_CONTAINER_NAME}" 2>/dev/null || true
-docker rm "${PROVER_CONTAINER_NAME}" 2>/dev/null || true
+docker stop "${HOST_CONTAINER_NAME}" 2>/dev/null || true
+docker rm "${HOST_CONTAINER_NAME}" 2>/dev/null || true
 rm -f "${EIF_PATH}"
 rm -rf "${BUILD_ARTIFACTS}" 2>/dev/null || true
-# Linuxkit leaves large temp files in /tmp (which is tmpfs on Amazon Linux 2023,
-# ~7.7GB backed by RAM). Clean them to prevent "no space left on device" on tmpfs.
 find /tmp -maxdepth 1 -type f -size +10M -delete 2>/dev/null || true
 systemctl stop docker 2>/dev/null || true
 rm -rf /var/lib/docker/*
@@ -63,14 +61,6 @@ systemctl start docker
 journalctl --vacuum-size=50M 2>/dev/null || true
 
 # ── 1. Hugepage strategy ──────────────────────────────────────────
-# Hugepages are needed for nitro-cli run-enclave but NOT for build-enclave.
-# On small instances (m5.xlarge, 16GB), allocating full hugepages before
-# the EIF build starves linuxkit of RAM (E48 LinuxkitExecError).
-# On large instances (c7i.12xlarge, 96GB+), pre-allocating 1GB hugepages
-# avoids post-build memory fragmentation that prevents contiguous allocation.
-#
-# Strategy: if allocating hugepages would leave <10GB for the host,
-# defer allocation until after the EIF build. Otherwise, pre-allocate.
 HUGEPAGE_1G_DIR="/sys/kernel/mm/hugepages/hugepages-1048576kB"
 HUGEPAGE_2M_DIR="/sys/kernel/mm/hugepages/hugepages-2048kB"
 MIN_HOST_MB=10240  # 10GB for host + Docker pull + linuxkit EIF build
@@ -80,14 +70,12 @@ DEFER_HUGEPAGES=false
 echo "=== Hugepage strategy (${MEMORY_MB}MB enclave, ${TOTAL_MEM_MB}MB total, ${AVAIL_AFTER_HUGEPAGES}MB would remain) ==="
 
 if (( AVAIL_AFTER_HUGEPAGES < MIN_HOST_MB )); then
-  # Small instance — defer hugepage allocation until after EIF build
   echo "Deferring hugepages (${AVAIL_AFTER_HUGEPAGES}MB < ${MIN_HOST_MB}MB minimum for host)"
   sed -i "s/memory_mib: .*/memory_mib: 512/" /etc/nitro_enclaves/allocator.yaml
   systemctl restart nitro-enclaves-allocator.service || true
   sleep 2
   DEFER_HUGEPAGES=true
 elif [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
-  # Large instance with 1GB hugepage support — pre-allocate now
   echo "Pre-allocating hugepages (${AVAIL_AFTER_HUGEPAGES}MB headroom for host)"
   sync && echo 3 > /proc/sys/vm/drop_caches
   echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
@@ -120,15 +108,12 @@ elif [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
     exit 1
   fi
 else
-  # Large instance without 1GB support — use 2MB pages, pre-allocate
   echo "No 1GB hugepage support — using 2MB pages (pre-allocating)"
   sync && echo 3 > /proc/sys/vm/drop_caches
   echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true
   sleep 2
 fi
 
-# Configure allocator for the enclave and restart to reserve CPUs.
-# For deferred path, keep memory_mib at 512 to avoid starving linuxkit.
 if [[ "${DEFER_HUGEPAGES}" != "true" ]]; then
   sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
 fi
@@ -142,7 +127,6 @@ AVAIL_MB=$(df -BM / | tail -1 | awk '{print $4}' | tr -d 'M')
 echo "Disk space available: ${AVAIL_MB}MB"
 if [[ "${AVAIL_MB}" -lt 4096 ]]; then
   echo "ERROR: Insufficient disk space (${AVAIL_MB}MB < 4096MB required)"
-  echo "Consider increasing EBS volume size"
   exit 1
 fi
 
@@ -153,11 +137,6 @@ aws ecr get-login-password --region "${REGION}" \
 docker pull "${NITRO_IMAGE_URI}"
 
 # ── 4. Build EIF ─────────────────────────────────────────────────
-# Must happen before prune: nitro-cli reads the Docker image directly,
-# so the image must still be on disk.
-# Store EIF in /opt/tee-rex/ so it survives reboots (unlike /tmp).
-# Use disk-backed artifacts dir — /tmp is tmpfs on Amazon Linux 2023 (~7.7GB RAM).
-# Linuxkit's initrd + Docker temp files can exceed tmpfs capacity.
 echo "=== Building EIF ==="
 mkdir -p "${EIF_DIR}" "${BUILD_ARTIFACTS}"
 NITRO_CLI_ARTIFACTS="${BUILD_ARTIFACTS}" nitro-cli build-enclave \
@@ -174,13 +153,9 @@ sleep 2
 echo "Disk space after cleanup: $(df -h / | tail -1 | awk '{print $4 " available"}')"
 
 if [[ "${DEFER_HUGEPAGES}" == "true" ]]; then
-  # Deferred hugepage allocation — small instances where pre-allocation would
-  # starve linuxkit. Now that EIF is built and Docker layers are cleaned,
-  # there's plenty of free memory for hugepage allocation.
   sed -i "s/memory_mib: .*/memory_mib: ${MEMORY_MB}/" /etc/nitro_enclaves/allocator.yaml
   echo "=== Allocating deferred hugepages (${MEMORY_MB}MB) ==="
 
-  # Try 1GB pages first if supported, fall back to 2MB
   if [[ -d "${HUGEPAGE_1G_DIR}" ]]; then
     PAGES_1G=$(( MEMORY_MB / 1024 ))
     REMAINDER_MB=$(( MEMORY_MB - PAGES_1G * 1024 ))
@@ -226,9 +201,6 @@ if [[ "${DEFER_HUGEPAGES}" == "true" ]]; then
 fi
 
 # ── 6. Install systemd services + config ─────────────────────────
-# Two services make the enclave survive reboots:
-#   tee-rex-enclave — runs the enclave from the persisted EIF
-#   tee-rex-proxy   — socat proxy (TCP:4000 → vsock enclave)
 echo "=== Installing systemd services ==="
 mkdir -p /etc/tee-rex
 cat > /etc/tee-rex/enclave.env <<EOF
@@ -283,67 +255,95 @@ systemctl restart tee-rex-proxy
 # ── 8. Enclave health check ─────────────────────────────────────
 echo "=== Enclave health check ==="
 for i in $(seq 1 120); do
-  if RESPONSE=$(curl -sf http://localhost:4000/attestation 2>/dev/null) && \
-     echo "${RESPONSE}" | jq -e '.mode' > /dev/null 2>&1; then
+  if RESPONSE=$(curl -sf http://localhost:4000/health 2>/dev/null) && \
+     echo "${RESPONSE}" | jq -e '.status' > /dev/null 2>&1; then
     echo "Enclave healthy (attempt ${i})"
-    echo "${RESPONSE}" | jq '{mode, hasDoc: (.attestationDocument != null)}'
+    echo "${RESPONSE}" | jq '{status, versions}'
     break
   fi
   if [[ "${i}" -eq 120 ]]; then
     echo "ERROR: Enclave health check failed after 10 minutes"
     echo "=== Diagnostics ==="
-    echo "--- Enclave status ---"
     nitro-cli describe-enclaves 2>/dev/null || echo "nitro-cli not available"
-    echo "--- Service status ---"
     systemctl status tee-rex-enclave --no-pager -l 2>/dev/null || true
     systemctl status tee-rex-proxy --no-pager -l 2>/dev/null || true
-    echo "--- Hugepages ---"
     grep Huge /proc/meminfo
-    echo "--- Memory ---"
     free -m
-    echo "--- Disk ---"
     df -h /
     exit 1
   fi
   sleep 5
 done
 
-# ── 9. Pull + run prover container ──────────────────────────────
-# Deployed AFTER enclave is healthy — Docker wipe in step 0 would kill
-# a pre-existing prover container, and we need Docker available for pull.
-echo "=== Deploying prover container ==="
-echo "Pulling prover image: ${PROVER_IMAGE_URI}"
-# ECR login already done in step 3 (same registry)
-docker pull "${PROVER_IMAGE_URI}"
+# ── 9. Download bb + upload to enclave ────────────────────────────
+if [[ -n "${BB_VERSIONS}" ]]; then
+  echo "=== Downloading and uploading bb versions ==="
+  mkdir -p "${BB_CACHE_DIR}"
+  for version in $(echo "${BB_VERSIONS}" | tr ',' ' '); do
+    BB_DIR="${BB_CACHE_DIR}/${version}"
+    BB_PATH="${BB_DIR}/bb"
 
-echo "=== Starting prover container ==="
+    # Download if not already cached on host
+    if [[ ! -f "${BB_PATH}" ]]; then
+      echo "Downloading bb v${version}..."
+      mkdir -p "${BB_DIR}"
+      curl -fSL "https://github.com/AztecProtocol/aztec-packages/releases/download/v${version}/barretenberg-amd64-linux.tar.gz" \
+        | tar -xzf - -C "${BB_DIR}" --strip-components=0
+      chmod 755 "${BB_PATH}"
+      echo "Downloaded bb v${version}"
+    else
+      echo "bb v${version} already cached on host"
+    fi
+
+    # Upload to enclave
+    echo "Uploading bb v${version} to enclave..."
+    UPLOAD_RESPONSE=$(curl -sf -X POST http://localhost:4000/upload-bb \
+      -H "x-bb-version: ${version}" \
+      --data-binary "@${BB_PATH}" 2>&1) || {
+      echo "ERROR: Failed to upload bb v${version} to enclave"
+      echo "${UPLOAD_RESPONSE}"
+      exit 1
+    }
+    echo "Uploaded: ${UPLOAD_RESPONSE}"
+  done
+
+  # Verify enclave has the versions
+  echo "=== Verifying enclave bb versions ==="
+  curl -sf http://localhost:4000/health | jq '{status, versions}'
+fi
+
+# ── 10. Pull + run host container ──────────────────────────────────
+echo "=== Deploying host container ==="
+echo "Pulling host image: ${HOST_IMAGE_URI}"
+docker pull "${HOST_IMAGE_URI}"
+
+echo "=== Starting host container ==="
 docker run -d \
-  --name "${PROVER_CONTAINER_NAME}" \
-  -p 80:80 \
+  --name "${HOST_CONTAINER_NAME}" \
+  --network host \
   -e NODE_ENV=production \
+  -e TEE_MODE=nitro \
+  -e ENCLAVE_URL=http://localhost:4000 \
+  -e PORT=80 \
   -e HARDWARE_CONCURRENCY="$(nproc)" \
   --restart unless-stopped \
-  "${PROVER_IMAGE_URI}"
+  "${HOST_IMAGE_URI}"
 
-# Clean up unused images (prover pull may have brought new layers)
 docker image prune -af
 
-# ── 10. Prover health check ─────────────────────────────────────
-echo "=== Prover health check ==="
+# ── 11. Host health check ─────────────────────────────────────────
+echo "=== Host health check ==="
 for i in $(seq 1 120); do
-  if RESPONSE=$(curl -sf http://localhost:80/attestation 2>/dev/null) && \
-     echo "${RESPONSE}" | jq -e '.mode' > /dev/null 2>&1; then
-    echo "Prover healthy (attempt ${i})"
-    echo "${RESPONSE}" | jq '{mode}'
+  if RESPONSE=$(curl -sf http://localhost:80/health 2>/dev/null) && \
+     echo "${RESPONSE}" | jq -e '.status' > /dev/null 2>&1; then
+    echo "Host healthy (attempt ${i})"
+    echo "${RESPONSE}" | jq '{status, api_version, available_versions, bb_hashes}'
     break
   fi
   if [[ "${i}" -eq 120 ]]; then
-    echo "ERROR: Prover health check failed after 10 minutes"
-    echo "--- Container status ---"
-    docker ps -a --filter "name=${PROVER_CONTAINER_NAME}" 2>/dev/null || true
-    echo "--- Container logs ---"
-    docker logs "${PROVER_CONTAINER_NAME}" --tail 30 2>/dev/null || true
-    echo "--- Memory ---"
+    echo "ERROR: Host health check failed after 10 minutes"
+    docker ps -a --filter "name=${HOST_CONTAINER_NAME}" 2>/dev/null || true
+    docker logs "${HOST_CONTAINER_NAME}" --tail 30 2>/dev/null || true
     free -m
     exit 1
   fi
@@ -351,5 +351,5 @@ for i in $(seq 1 120); do
 done
 
 echo "=== Unified deploy complete ==="
-echo "Enclave: port 4000 (nitro)"
-echo "Prover:  port 80   (standard)"
+echo "Enclave: port 4000 (thin enclave service)"
+echo "Host:    port 80   (Express proxy, TEE_MODE=nitro)"

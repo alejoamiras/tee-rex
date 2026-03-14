@@ -68,7 +68,11 @@ export interface AttestationVerifyOptions {
 export async function verifyNitroAttestation(
   attestationDocumentBase64: string,
   options: AttestationVerifyOptions = {},
-): Promise<{ publicKey: string; document: NitroAttestationDocument }> {
+): Promise<{
+  publicKey: string;
+  document: NitroAttestationDocument;
+  bbVersions: BbVersionInfo[] | null;
+}> {
   const { maxAgeMs = 5 * 60 * 1000 } = options;
 
   // 1. Decode the COSE_Sign1 envelope
@@ -183,14 +187,18 @@ export async function verifyNitroAttestation(
 
   const publicKey = new TextDecoder().decode(attestationDoc.publicKey);
 
+  // Parse bb version hashes from user_data (if present)
+  const bbVersions = attestationDoc.userData ? parseEnclaveUserData(attestationDoc.userData) : null;
+
   logger.info("Nitro attestation verified successfully", {
     moduleId: attestationDoc.moduleId,
     pcr0: Buffer.from(attestationDoc.pcrs.get(0) ?? new Uint8Array())
       .toString("hex")
       .slice(0, 16),
+    bbVersions: bbVersions?.length ?? 0,
   });
 
-  return { publicKey, document: attestationDoc };
+  return { publicKey, document: attestationDoc, bbVersions };
 }
 
 function parseAttestationDocument(doc: Record<string, unknown>): NitroAttestationDocument {
@@ -289,6 +297,30 @@ async function verifyCertificateChain(
         AttestationErrorCode.CHAIN_FAILED,
       );
     }
+  }
+}
+
+/** Version info with its binary SHA256 hash, as embedded in attestation user_data. */
+export interface BbVersionInfo {
+  version: string;
+  sha256: string;
+}
+
+/**
+ * Parse bb version hashes from the attestation document's user_data field.
+ * The enclave embeds JSON `{ versions: [{ version, sha256 }] }` in user_data.
+ * Returns the versions array, or null if user_data is missing or unparseable.
+ */
+export function parseEnclaveUserData(userData: Uint8Array): BbVersionInfo[] | null {
+  try {
+    const text = new TextDecoder().decode(userData);
+    const parsed = JSON.parse(text) as { versions?: BbVersionInfo[] };
+    if (Array.isArray(parsed.versions)) {
+      return parsed.versions;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 

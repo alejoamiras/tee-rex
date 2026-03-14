@@ -4,7 +4,7 @@
 
 - **Repo**: `alejoamiras/tee-rex` (GitHub)
 - **SDK** (`/packages/sdk`): TypeScript package `@alejoamiras/tee-rex` - UEE/TEE proving client for Aztec
-- **Server** (`/packages/server`): Express server that runs the prover in a TEE environment. Zero `@aztec/*` runtime dependencies — calls `bb prove` CLI directly. Supports multi-version bb binaries via `BB_VERSIONS_DIR` cache and `x-aztec-version` request header. `/health` returns `api_version`, `available_versions`, and runtime diagnostics. `/prove` returns `x-prove-duration-ms` and `x-decrypt-duration-ms` timing headers.
+- **Server** (`/packages/server`): Two entry points — **host** (`src/index.ts`, Express) and **enclave** (`src/enclave.ts`, Bun.serve). Zero `@aztec/*` runtime dependencies — calls `bb prove` CLI directly. Supports multi-version bb binaries via `BB_VERSIONS_DIR` cache and `x-aztec-version` request header. In `TEE_MODE=nitro`, host proxies to enclave; in `TEE_MODE=standard`, host handles everything (local dev). Enclave manages keys, attestation (with bb SHA256 hashes in `user_data`), decryption, and proving. Host manages bb downloads from GitHub releases and uploads to enclave at runtime. `/health` returns `api_version`, `available_versions`, `bb_hashes`, and runtime diagnostics. `/prove` returns `x-prove-duration-ms` and `x-decrypt-duration-ms` timing headers.
 - **App** (`/packages/app`): Vite + vanilla TS frontend — local/UEE/TEE mode toggle, timing, token flow, external wallet connection via `@aztec/wallet-sdk`
 - **Build system**: Bun workspaces (`packages/sdk`, `packages/server`, `packages/app`)
 - **Linting/Formatting**: Biome (lint + format in one tool), shellcheck (shell scripts), actionlint (GitHub Actions workflows), sort-package-json (`package.json` key ordering), OpenTofu fmt + validate (`.tf` files)
@@ -12,9 +12,9 @@
 - **CI**: GitHub Actions (per-package workflows with gate jobs: `sdk.yml`, `app.yml`, `server.yml`, `accelerator.yml`; shell & workflow lint: `actionlint.yml`; auto-update: `aztec-nightlies.yml`, `aztec-devnet.yml`, `aztec-stable.yml`; infra: `infra.yml`; deploy: `deploy-mainnet.yml`, `deploy-testnet.yml`, `deploy-nightlies.yml`, `deploy-devnet.yml`, `deploy-prod.yml` (legacy); release: `release-accelerator.yml`, `release-please-accelerator.yml`; reusable: `_build-base.yml`, `_deploy-unified.yml`, `_publish-sdk.yml`, `_aztec-update.yml`, `_e2e-sdk.yml`, `_e2e-app.yml`)
 - **Testing**: Each package owns its own unit tests (`src/`) and e2e tests (`e2e/`). E2e tests fail (not skip) when services unavailable.
 - **Test structure convention**: Group tests under the subject being tested, nest by variant — don't create separate files per variant when they share setup. Example: `describe("TeeRexProver")` > `describe("UEE")` / `describe("Local")` / `describe.skipIf(...)("TEE")`. Extract shared logic (e.g., `deploySchnorrAccount()`) into helpers within the file.
-- **Infrastructure** (`/infra/tofu`): OpenTofu (IaC) managing all AWS resources — EC2, EIPs, SG, IAM, ECR, S3, ACM, CloudFront. Single state file for ci/prod. Remote state in S3. Single c7i.12xlarge instance runs both Nitro enclave (port 4000) and prover container (port 80) for all environments. 5 CloudFront distributions (mainnet, testnet, nightlies, devnet, prod/legacy) all route to the same instance; multi-version bb handles version routing via `x-aztec-version` header. CI instance (m5.xlarge, stopped by default) is separate.
+- **Infrastructure** (`/infra/tofu`): OpenTofu (IaC) managing all AWS resources — EC2, EIPs, SG, IAM, ECR, S3, ACM, CloudFront. Single state file for ci/prod. Remote state in S3. Single c7i.12xlarge instance runs Nitro enclave (port 4000) and host container (port 80, `--network host`) for all environments. bb binaries are downloaded by the host at deploy time and uploaded to the enclave via `POST /upload-bb` — not baked into Docker images. 5 CloudFront distributions (mainnet, testnet, nightlies, devnet, prod/legacy) all route to the same instance; multi-version bb handles version routing via `x-aztec-version` header. CI instance (m5.xlarge, stopped by default) is separate.
 - **Multi-environment strategy**: 4 environments served from 3 branches. `main` (v4.1.x stable) deploys to mainnet + testnet. `nightlies` (v5.x nightly) deploys to nightlies. `devnet` (v5.x snapshot) deploys to devnet. All share one EC2 instance.
-- **Smart rebuild**: All deploy workflows check `/health` `available_versions` before rebuilding server. Skips rebuild when bb version already cached (saves ~10 min). Always rebuilds on actual server code changes or `workflow_dispatch`.
+- **Smart rebuild**: All deploy workflows check `/health` `available_versions` before rebuilding server. Skips rebuild when bb version already cached (saves ~10 min). Always rebuilds on actual server code changes or `workflow_dispatch`. bb version changes only require runtime upload (no Docker/EIF rebuild).
 
 **Reference docs** (read on demand, not on every task):
 - **`docs/roadmap.md`** — completed phases, architectural decisions & gotchas, backlog. Read when working on infra, CI, deploy, or referencing past work.
@@ -122,7 +122,8 @@ bun run lint:fix         # Auto-fix lint/format issues
 bun run test:e2e         # E2E tests (requires Aztec local network + server)
 bun run test:e2e:nextnet # Nextnet smoke test (requires internet)
 bun run test:all         # All tests (lint + typecheck + unit + e2e)
-bun run start            # Start server
+bun run start            # Start host server (TEE_MODE=standard or nitro)
+bun run start:enclave    # Start enclave server (Bun.serve, port 4000)
 bun run sdk:build        # Build SDK
 bun run build            # Build Docker image
 

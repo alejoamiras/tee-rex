@@ -5,11 +5,11 @@ const logger = getLogger(["tee-rex", "server", "attestation"]);
 export type TeeMode = "standard" | "nitro";
 
 export type AttestationResponse =
-  | { mode: "standard"; publicKey: string }
+  | { mode: "standard"; publicKey: string; bbVersions?: { version: string; sha256: string }[] }
   | { mode: "nitro"; attestationDocument: string; publicKey: string };
 
 export interface AttestationService {
-  getAttestation(publicKey: string): Promise<AttestationResponse>;
+  getAttestation(publicKey: string, userData?: Uint8Array): Promise<AttestationResponse>;
 }
 
 /**
@@ -17,9 +17,18 @@ export interface AttestationService {
  * Suitable for development and non-TEE deployments.
  */
 export class StandardAttestationService implements AttestationService {
-  async getAttestation(publicKey: string): Promise<AttestationResponse> {
+  async getAttestation(publicKey: string, userData?: Uint8Array): Promise<AttestationResponse> {
     logger.info("Returning standard attestation (no TEE)");
-    return { mode: "standard", publicKey };
+    const response: AttestationResponse = { mode: "standard", publicKey };
+    if (userData) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(userData));
+        response.bbVersions = parsed.versions;
+      } catch {
+        logger.warn("Failed to parse userData as JSON for standard attestation");
+      }
+    }
+    return response;
   }
 }
 
@@ -31,10 +40,13 @@ export class StandardAttestationService implements AttestationService {
  * Uses Bun FFI to call libnsm.so (available inside Nitro Enclaves).
  */
 export class NitroAttestationService implements AttestationService {
-  async getAttestation(publicKey: string): Promise<AttestationResponse> {
-    logger.info("Generating Nitro attestation document");
+  async getAttestation(publicKey: string, userData?: Uint8Array): Promise<AttestationResponse> {
+    logger.info("Generating Nitro attestation document", {
+      hasUserData: !!userData,
+      userDataSize: userData?.byteLength,
+    });
     const publicKeyBytes = new TextEncoder().encode(publicKey);
-    const attestationDocument = await getNitroAttestationDocument(publicKeyBytes);
+    const attestationDocument = await getNitroAttestationDocument(publicKeyBytes, userData);
     const attestationDocumentBase64 = Buffer.from(attestationDocument).toString("base64");
     logger.info("Nitro attestation document generated", {
       size: attestationDocument.byteLength,
@@ -53,7 +65,6 @@ export class NitroAttestationService implements AttestationService {
  * descriptor (the handle is never closed), eventually crashing the
  * enclave process when it hits the FD limit (~8-9 minutes of traffic).
  */
-// biome-ignore lint/suspicious/noExplicitAny: bun:ffi types unavailable via dynamic import
 let nsmLib: any;
 
 async function getNsmLib() {
@@ -94,7 +105,10 @@ async function getNsmLib() {
  * The attestation document is a COSE_Sign1 structure containing PCR values,
  * certificates, and the embedded public key.
  */
-async function getNitroAttestationDocument(publicKey: Uint8Array): Promise<Uint8Array> {
+async function getNitroAttestationDocument(
+  publicKey: Uint8Array,
+  userData?: Uint8Array,
+): Promise<Uint8Array> {
   const { ptr } = await import("bun:ffi");
   const lib = await getNsmLib();
 
@@ -113,8 +127,8 @@ async function getNitroAttestationDocument(publicKey: Uint8Array): Promise<Uint8
 
     const errorCode = lib.symbols.nsm_get_attestation_doc(
       fd,
-      null, // user_data
-      0, // user_data_len
+      userData ? ptr(userData) : null, // user_data
+      userData ? userData.byteLength : 0, // user_data_len
       null, // nonce
       0, // nonce_len
       ptr(publicKey), // pub_key_data

@@ -1,8 +1,11 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import * as openpgp from "openpgp";
 import { Base64 } from "ox";
-import { type AppDependencies, createApp } from "./index.js";
+import { type AppDependencies, type AppMode, createApp } from "./index.js";
 import { StandardAttestationService } from "./lib/attestation-service.js";
+import { EnclaveClient } from "./lib/enclave-client.js";
 import { EncryptionService } from "./lib/encryption-service.js";
 
 /** Encrypt data using a public key (mirrors what the SDK does). */
@@ -408,6 +411,259 @@ describe("POST /prove — timing headers", () => {
       expect(Number(decryptDuration)).toBeGreaterThanOrEqual(0);
     } finally {
       close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Proxy mode tests
+// ---------------------------------------------------------------------------
+
+describe("Proxy mode", () => {
+  let mockEnclave: ReturnType<typeof Bun.serve>;
+  let enclavePort: number;
+
+  beforeAll(() => {
+    mockEnclave = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+
+        if (url.pathname === "/health") {
+          return Response.json({
+            status: "ok",
+            versions: [{ version: "1.0.0", sha256: "abc123" }],
+          });
+        }
+
+        if (url.pathname === "/attestation") {
+          return Response.json({
+            mode: "standard",
+            publicKey: "mock-enclave-public-key",
+            bbVersions: [{ version: "1.0.0", sha256: "abc123" }],
+          });
+        }
+
+        if (url.pathname === "/public-key") {
+          return Response.json({ publicKey: "mock-enclave-public-key" });
+        }
+
+        if (url.pathname === "/prove") {
+          return new Response(JSON.stringify({ proof: "cHJveHktcHJvb2Y=" }), {
+            headers: {
+              "Content-Type": "application/json",
+              "x-prove-duration-ms": "200",
+              "x-decrypt-duration-ms": "10",
+            },
+          });
+        }
+
+        if (url.pathname === "/upload-bb") {
+          const version = req.headers.get("x-bb-version");
+          return Response.json({ version, sha256: "mock-sha256" });
+        }
+
+        return Response.json({ error: "Not found" }, { status: 404 });
+      },
+    });
+    enclavePort = mockEnclave.port!;
+  });
+
+  afterAll(() => {
+    mockEnclave.stop();
+  });
+
+  function createProxyApp() {
+    const mode: AppMode = {
+      type: "proxy",
+      enclaveClient: new EnclaveClient(`http://localhost:${enclavePort}`),
+    };
+    return createApp(mode);
+  }
+
+  test("GET /health proxies to enclave and includes api_version", async () => {
+    const app = createProxyApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/health`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as {
+        status: string;
+        api_version: number;
+        available_versions: string[];
+        bb_hashes: { version: string; sha256: string }[];
+        runtime: Record<string, unknown>;
+      };
+      expect(body.status).toBe("ok");
+      expect(body.api_version).toBe(1);
+      expect(body.available_versions).toEqual(["1.0.0"]);
+      expect(body.bb_hashes).toEqual([{ version: "1.0.0", sha256: "abc123" }]);
+      expect(body.runtime).toBeDefined();
+    } finally {
+      close();
+    }
+  });
+
+  test("GET /attestation proxies to enclave", async () => {
+    const app = createProxyApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/attestation`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as { mode: string; publicKey: string };
+      expect(body.mode).toBe("standard");
+      expect(body.publicKey).toBe("mock-enclave-public-key");
+    } finally {
+      close();
+    }
+  });
+
+  test("GET /encryption-public-key proxies to enclave", async () => {
+    const app = createProxyApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/encryption-public-key`);
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as { publicKey: string };
+      expect(body.publicKey).toBe("mock-enclave-public-key");
+    } finally {
+      close();
+    }
+  });
+
+  test("POST /prove proxies to enclave with timing headers", async () => {
+    const app = createProxyApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: "dGVzdA==" }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { proof: string };
+      expect(body.proof).toBe("cHJveHktcHJvb2Y=");
+      expect(res.headers.get("x-prove-duration-ms")).toBe("200");
+      expect(res.headers.get("x-decrypt-duration-ms")).toBe("10");
+    } finally {
+      close();
+    }
+  });
+
+  test("POST /prove returns 400 for missing body in proxy mode", async () => {
+    const app = createProxyApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Invalid request body");
+    } finally {
+      close();
+    }
+  });
+
+  test("proxy mode preserves X-Request-Id", async () => {
+    const app = createProxyApp();
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/health`, {
+        headers: { "X-Request-Id": "proxy-test-123" },
+      });
+      expect(res.headers.get("x-request-id")).toBe("proxy-test-123");
+    } finally {
+      close();
+    }
+  });
+
+  test("POST /prove downloads and uploads bb when version not in enclave", async () => {
+    // Stateful mock enclave: starts with no versions, accepts upload, then reports version
+    const uploadedVersions = new Set<string>();
+    const statefulEnclave = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+
+        if (url.pathname === "/health") {
+          const versions = [...uploadedVersions].map((v) => ({ version: v, sha256: "mock-sha" }));
+          return Response.json({ status: "ok", versions });
+        }
+
+        if (url.pathname === "/upload-bb") {
+          const version = req.headers.get("x-bb-version");
+          if (version) uploadedVersions.add(version);
+          return Response.json({ version, sha256: "mock-sha" });
+        }
+
+        if (url.pathname === "/prove") {
+          return new Response(JSON.stringify({ proof: "cHJvb2Y=" }), {
+            headers: {
+              "Content-Type": "application/json",
+              "x-prove-duration-ms": "100",
+              "x-decrypt-duration-ms": "5",
+            },
+          });
+        }
+
+        return Response.json({ error: "Not found" }, { status: 404 });
+      },
+    });
+
+    // Pre-seed bb binary in version cache so downloadBb() skips the actual HTTP download
+    const testVersion = "99.0.0-test.proxy-download";
+    const bbDir = join(
+      process.env.BB_VERSIONS_DIR || `${process.env.HOME}/.tee-rex/versions`,
+      testVersion,
+    );
+    mkdirSync(bbDir, { recursive: true });
+    writeFileSync(join(bbDir, "bb"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+    const mode: AppMode = {
+      type: "proxy",
+      enclaveClient: new EnclaveClient(`http://localhost:${statefulEnclave.port}`),
+    };
+    const app = createApp(mode);
+    const { url, close } = await startTestServer(app);
+
+    try {
+      const res = await fetch(`${url}/prove`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-aztec-version": testVersion,
+        },
+        body: JSON.stringify({ data: "dGVzdA==" }),
+      });
+
+      expect(res.status).toBe(200);
+      // Verify download+upload occurred (timing headers set)
+      expect(res.headers.get("x-download-duration-ms")).toBeDefined();
+      expect(res.headers.get("x-upload-duration-ms")).toBeDefined();
+      expect(Number(res.headers.get("x-download-duration-ms"))).toBeGreaterThanOrEqual(0);
+      expect(Number(res.headers.get("x-upload-duration-ms"))).toBeGreaterThanOrEqual(0);
+      // Verify proof returned
+      const body = (await res.json()) as { proof: string };
+      expect(body.proof).toBe("cHJvb2Y=");
+      // Verify bb was uploaded to enclave
+      expect(uploadedVersions.has(testVersion)).toBe(true);
+    } finally {
+      close();
+      statefulEnclave.stop();
+      rmSync(bbDir, { recursive: true, force: true });
     }
   });
 });
