@@ -16,6 +16,7 @@ Split monolithic server into host Express + thin enclave Bun.serve. Host manages
 | 6. Docker + deploy script | Remove bb baking from Dockerfiles, rewrite deploy script | Worked — EIF shrinks significantly |
 | 7. CI/CD workflows | Rename prover→host, pass bb_versions as runtime input | Worked — actionlint clean |
 | 8. SDK attestation | `parseEnclaveUserData()`, extend `verifyNitroAttestation` return type | Worked — backward compatible |
+| 9. Host crash-loop fix | Diagnosed via SSM: host exits code 0 ~1s after starting. Bun's `node:http` compat doesn't ref the server handle → event loop drains. Fix: `setInterval(() => {}, 1 << 30)` + clear on SIGTERM. | Worked — verified on CI instance |
 
 ## Key Learnings
 
@@ -28,6 +29,8 @@ Split monolithic server into host Express + thin enclave Bun.serve. Host manages
 4. **Attestation user_data for binary identity**: Instead of baking bb into the EIF (making PCR0 cover everything), embed bb SHA256 in user_data. NSM hardware-signs it. Clients verify PCR0 (code) + bb_hash (binary). Equivalent security, better auditability.
 
 5. **Atomic file operations**: Upload bb to temp dir, compute hash, rename to final path. Prevents partial uploads from corrupting the cache.
+
+6. **Bun event loop + Express**: Bun's `node:http` compatibility layer does NOT ref the HTTP server handle. Express's `server.listen()` won't keep Bun's event loop alive — the process exits with code 0 immediately after startup. Fix: `setInterval(() => {}, 1 << 30)` as a keep-alive, cleared on SIGTERM for clean shutdown. Affects both standard and proxy modes. Bun.serve (used in enclave) doesn't have this issue.
 
 ## Test Coverage
 

@@ -373,7 +373,17 @@ if (import.meta.main) {
   const app = createApp(mode);
 
   const port = process.env.PORT || 4000;
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     logger.info("Server started", { port, teeMode, mode: mode.type });
+  });
+
+  // Bun's node:http compat layer doesn't ref the server handle, so the event
+  // loop drains and the process exits immediately. This timer keeps it alive.
+  const keepAlive = setInterval(() => {}, 1 << 30);
+
+  process.on("SIGTERM", () => {
+    logger.info("SIGTERM received, shutting down");
+    clearInterval(keepAlive);
+    server.close(() => process.exit(0));
   });
 }
