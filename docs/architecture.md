@@ -22,7 +22,7 @@ graph TB
     S3["S3 Bucket<br/>(Static App)"]
 
     subgraph EC2["EC2 (c7i.12xlarge, Nitro-capable)"]
-      Host["Host Container<br/>(Express, port 80)<br/>TEE_MODE=nitro<br/>bb download + upload"]
+      Host["Host Container<br/>(Bun.serve, port 80)<br/>TEE_MODE=nitro<br/>bb download + upload"]
       Socat["socat<br/>TCP:4000 ↔ vsock:16:5000"]
       subgraph Enclave["Nitro Enclave"]
         EnclaveServer["Enclave Service<br/>(Bun.serve, port 4000)<br/>decrypt + prove + attest"]
@@ -98,7 +98,7 @@ tee-rex/
 ├── packages/
 │   ├── sdk/          → @alejoamiras/tee-rex (npm package)
 │   │                   Drop-in Aztec prover: local (WASM), UEE (TEE), or accelerated (native)
-│   ├── server/       → Two entry points: host (Express, src/index.ts) + enclave (Bun.serve, src/enclave.ts)
+│   ├── server/       → Two entry points: host (Bun.serve, src/index.ts) + enclave (Bun.serve, src/enclave.ts)
 │   │                   Host: /prove, /attestation, /health, /encryption-public-key (proxies to enclave in nitro mode)
 │   │                   Enclave: /upload-bb, /prove, /attestation, /public-key, /health
 │   ├── app/          → Vite frontend demo (local/UEE/TEE mode toggle)

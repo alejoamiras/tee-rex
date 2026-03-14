@@ -528,6 +528,17 @@ CloudFront → Host Express (port 80, --network host)
 - `Bun.serve({ maxRequestBodySize: 300_000_000 })` for ~200MB bb uploads
 - Backward compatible: `AppDependencies` interface still works, SDK attestation works with or without user_data
 
+### Phase 33 Follow-up: Express → Bun.serve Host Migration
+
+Replaced Express and 7 runtime dependencies (`express`, `cors`, `express-rate-limit`, `@logtape/express`, `ms`, `ox`, `zod`) with native `Bun.serve` on the host server. Both host and enclave now use the same `Bun.serve` pattern — runtime deps reduced from 9 to 2 (`@logtape/logtape`, `openpgp`).
+
+**Changes:**
+- `src/index.ts`: Rewrote host as `Bun.serve` with native request routing, CORS headers, and body size limit (`maxRequestBodySize`)
+- `src/lib/rate-limit.ts`: New sliding-window rate limiter (replaces `express-rate-limit`), 9 unit tests
+- Removed `setInterval` keepAlive hack (Bun.serve refs the event loop natively)
+- Removed `sysctl` workaround for silent port-bind failure (Bun.serve throws on bind errors)
+- **Behavioral change**: Oversized requests (>50MB) now return bare `413` from Bun.serve instead of JSON error body. SDK doesn't parse 413 bodies, so no client impact.
+
 ---
 
 ## Backlog

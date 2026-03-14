@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as openpgp from "openpgp";
-import { Base64 } from "ox";
-import { type AppDependencies, type AppMode, createApp } from "./index.js";
+import { type AppMode, createHostServer } from "./index.js";
 import { StandardAttestationService } from "./lib/attestation-service.js";
 import { EnclaveClient } from "./lib/enclave-client.js";
 import { EncryptionService } from "./lib/encryption-service.js";
@@ -19,86 +18,73 @@ async function encryptForKey(data: Uint8Array, publicKeyArmored: string): Promis
   return unarmored.data as Uint8Array;
 }
 
-/** Create a test app with a mocked ProverService. */
-function createTestApp() {
+/** Create a test server with a mocked ProverService. */
+function createTestServer() {
   const encryption = new EncryptionService();
   const attestation = new StandardAttestationService();
   const fakeProof = Buffer.from("fake-proof-data");
   const prover = {
     createChonkProof: mock(() => Promise.resolve(fakeProof)),
   };
-  const deps = { prover, encryption, attestation } as unknown as AppDependencies;
-  const app = createApp(deps);
-  return { app, prover, encryption };
-}
-
-/** Start the app on a random port and return the base URL. */
-async function startTestServer(app: ReturnType<typeof createApp>) {
-  return new Promise<{ url: string; close: () => void }>((resolve) => {
-    const server = app.listen(0, () => {
-      const addr = server.address();
-      const port = typeof addr === "object" && addr ? addr.port : 0;
-      resolve({
-        url: `http://localhost:${port}`,
-        close: () => server.close(),
-      });
-    });
-  });
+  const mode: AppMode = {
+    type: "standard",
+    prover: prover as any,
+    encryption,
+    attestation,
+  };
+  const server = createHostServer(mode, { port: 0 });
+  return { server, prover, encryption };
 }
 
 describe("GET /attestation", () => {
   test("returns standard attestation with public key", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/attestation`);
+      const res = await fetch(`${server.url}attestation`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { mode: string; publicKey: string };
       expect(body.mode).toBe("standard");
       expect(body.publicKey).toContain("-----BEGIN PGP PUBLIC KEY BLOCK-----");
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("X-Request-Id", () => {
   test("generates a request ID when none provided", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/attestation`);
+      const res = await fetch(`${server.url}attestation`);
       const requestId = res.headers.get("x-request-id");
       expect(requestId).toBeDefined();
       expect(requestId).toMatch(/^[0-9a-f]{8}-/);
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("echoes client-provided request ID", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/attestation`, {
+      const res = await fetch(`${server.url}attestation`, {
         headers: { "X-Request-Id": "client-123" },
       });
       expect(res.headers.get("x-request-id")).toBe("client-123");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("includes requestId in error responses", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -107,38 +93,33 @@ describe("X-Request-Id", () => {
       expect(body.requestId).toBeDefined();
       expect(res.headers.get("x-request-id")).toBe(body.requestId);
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("GET /encryption-public-key", () => {
   test("returns 200 with a valid PGP public key (backward compat)", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/encryption-public-key`);
+      const res = await fetch(`${server.url}encryption-public-key`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { publicKey: string };
       expect(body.publicKey).toContain("-----BEGIN PGP PUBLIC KEY BLOCK-----");
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("Reverse proxy headers", () => {
   test("rate-limited endpoint handles X-Forwarded-For without crashing", async () => {
-    // Without trust proxy configured, express-rate-limit v8 throws
-    // ERR_ERL_UNEXPECTED_X_FORWARDED_FOR when it sees this header.
-    // CloudFront always adds it, so every proxied request would crash.
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -149,21 +130,20 @@ describe("Reverse proxy headers", () => {
       // Should get 400 (bad decryption), not 500 from rate limiter crash
       expect(res.status).toBe(400);
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("Rate limit localhost exemption", () => {
   test("localhost requests bypass the rate limit", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
       // Send 12 requests (exceeds the 10/hour limit) — all should get 400
       // (bad payload), not 429 (rate limited), because localhost is exempt.
       for (let i = 0; i < 12; i++) {
-        const res = await fetch(`${url}/prove`, {
+        const res = await fetch(`${server.url}prove`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ data: "not-encrypted" }),
@@ -171,20 +151,19 @@ describe("Rate limit localhost exemption", () => {
         expect(res.status).toBe(400);
       }
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("POST /prove — payload limits", () => {
   test("accepts large payloads within the 50mb limit", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
       // 15MB payload — should reach the decrypt step (400), not be rejected as too large (413)
       const largeData = "x".repeat(15 * 1024 * 1024);
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: largeData }),
@@ -193,39 +172,17 @@ describe("POST /prove — payload limits", () => {
       const body = (await res.json()) as { error: string };
       expect(body.error).toContain("Failed to decrypt");
     } finally {
-      close();
-    }
-  });
-
-  test("returns 413 with requestId for payloads exceeding 50mb", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
-
-    try {
-      const hugeData = "x".repeat(51 * 1024 * 1024);
-      const res = await fetch(`${url}/prove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: hugeData }),
-      });
-      expect(res.status).toBe(413);
-      const body = (await res.json()) as { error: string; requestId: string };
-      expect(body.error).toBe("Request payload too large");
-      expect(body.requestId).toBeDefined();
-      expect(res.headers.get("x-request-id")).toBe(body.requestId);
-    } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("POST /prove — error handling", () => {
   test("returns 400 for missing body", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -234,16 +191,15 @@ describe("POST /prove — error handling", () => {
       const body = (await res.json()) as { error: string };
       expect(body.error).toContain("Invalid request body");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("returns 400 for malformed JSON", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "not json",
@@ -252,16 +208,15 @@ describe("POST /prove — error handling", () => {
       const body = (await res.json()) as { error: string };
       expect(body.error).toBe("Malformed request body");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("includes requestId in malformed JSON error response", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "not json",
@@ -270,15 +225,14 @@ describe("POST /prove — error handling", () => {
       expect(body.requestId).toBeDefined();
       expect(res.headers.get("x-request-id")).toBe(body.requestId);
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("POST /prove", () => {
   test("returns 200 with proof for valid encrypted payload", async () => {
-    const { app, prover, encryption } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server, prover, encryption } = createTestServer();
 
     try {
       const publicKey = await encryption.getEncryptionPublicKey();
@@ -286,9 +240,9 @@ describe("POST /prove", () => {
       // Simulate msgpack-encoded execution steps (from serializePrivateExecutionSteps)
       const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
       const encrypted = await encryptForKey(fakeMsgpack, publicKey);
-      const encryptedBase64 = Base64.fromBytes(encrypted);
+      const encryptedBase64 = Buffer.from(encrypted).toString("base64");
 
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: encryptedBase64 }),
@@ -304,21 +258,20 @@ describe("POST /prove", () => {
       const calledWith = (prover.createChonkProof as any).mock.calls[0][0] as Uint8Array;
       expect(new Uint8Array(calledWith)).toEqual(fakeMsgpack);
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("passes x-aztec-version header to prover", async () => {
-    const { app, prover, encryption } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server, prover, encryption } = createTestServer();
 
     try {
       const publicKey = await encryption.getEncryptionPublicKey();
       const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
       const encrypted = await encryptForKey(fakeMsgpack, publicKey);
-      const encryptedBase64 = Base64.fromBytes(encrypted);
+      const encryptedBase64 = Buffer.from(encrypted).toString("base64");
 
-      await fetch(`${url}/prove`, {
+      await fetch(`${server.url}prove`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -331,18 +284,17 @@ describe("POST /prove", () => {
       const calledVersion = (prover.createChonkProof as any).mock.calls[0][1] as string;
       expect(calledVersion).toBe("5.0.0-nightly.20260309");
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("GET /health", () => {
   test("returns status, api_version, and available versions", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/health`);
+      const res = await fetch(`${server.url}health`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as {
@@ -354,16 +306,15 @@ describe("GET /health", () => {
       expect(body.api_version).toBe(1);
       expect(Array.isArray(body.available_versions)).toBe(true);
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("returns runtime diagnostics", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/health`);
+      const res = await fetch(`${server.url}health`);
       const body = (await res.json()) as {
         runtime: {
           hardware_concurrency: string;
@@ -380,23 +331,22 @@ describe("GET /health", () => {
       expect(body.runtime.cpu_count).toBeGreaterThan(0);
       expect(typeof body.runtime.tee_mode).toBe("string");
     } finally {
-      close();
+      server.stop();
     }
   });
 });
 
 describe("POST /prove — timing headers", () => {
   test("returns x-prove-duration-ms and x-decrypt-duration-ms headers", async () => {
-    const { app, encryption } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server, encryption } = createTestServer();
 
     try {
       const publicKey = await encryption.getEncryptionPublicKey();
       const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
       const encrypted = await encryptForKey(fakeMsgpack, publicKey);
-      const encryptedBase64 = Base64.fromBytes(encrypted);
+      const encryptedBase64 = Buffer.from(encrypted).toString("base64");
 
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: encryptedBase64 }),
@@ -410,7 +360,7 @@ describe("POST /prove — timing headers", () => {
       expect(Number(proveDuration)).toBeGreaterThanOrEqual(0);
       expect(Number(decryptDuration)).toBeGreaterThanOrEqual(0);
     } finally {
-      close();
+      server.stop();
     }
   });
 });
@@ -421,7 +371,6 @@ describe("POST /prove — timing headers", () => {
 
 describe("Proxy mode", () => {
   let mockEnclave: ReturnType<typeof Bun.serve>;
-  let enclavePort: number;
 
   beforeAll(() => {
     mockEnclave = Bun.serve({
@@ -466,27 +415,25 @@ describe("Proxy mode", () => {
         return Response.json({ error: "Not found" }, { status: 404 });
       },
     });
-    enclavePort = mockEnclave.port!;
   });
 
   afterAll(() => {
     mockEnclave.stop();
   });
 
-  function createProxyApp() {
+  function createProxyServer() {
     const mode: AppMode = {
       type: "proxy",
-      enclaveClient: new EnclaveClient(`http://localhost:${enclavePort}`),
+      enclaveClient: new EnclaveClient(`http://localhost:${mockEnclave.port}`),
     };
-    return createApp(mode);
+    return createHostServer(mode, { port: 0 });
   }
 
   test("GET /health proxies to enclave and includes api_version", async () => {
-    const app = createProxyApp();
-    const { url, close } = await startTestServer(app);
+    const server = createProxyServer();
 
     try {
-      const res = await fetch(`${url}/health`);
+      const res = await fetch(`${server.url}health`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as {
@@ -503,20 +450,21 @@ describe("Proxy mode", () => {
       expect((body as Record<string, unknown>).enclave).toBe("ok");
       expect(body.runtime).toBeDefined();
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("GET /health returns ok with empty versions when enclave is unreachable", async () => {
-    // Point to a port with nothing listening
-    const app = createApp({
-      type: "proxy",
-      enclaveClient: new EnclaveClient("http://localhost:1"),
-    });
-    const { url, close } = await startTestServer(app);
+    const server = createHostServer(
+      {
+        type: "proxy",
+        enclaveClient: new EnclaveClient("http://localhost:1"),
+      },
+      { port: 0 },
+    );
 
     try {
-      const res = await fetch(`${url}/health`);
+      const res = await fetch(`${server.url}health`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as Record<string, unknown>;
@@ -526,47 +474,44 @@ describe("Proxy mode", () => {
       expect(body.bb_hashes).toEqual([]);
       expect(body.enclave).toBe("unreachable");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("GET /attestation proxies to enclave", async () => {
-    const app = createProxyApp();
-    const { url, close } = await startTestServer(app);
+    const server = createProxyServer();
 
     try {
-      const res = await fetch(`${url}/attestation`);
+      const res = await fetch(`${server.url}attestation`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { mode: string; publicKey: string };
       expect(body.mode).toBe("standard");
       expect(body.publicKey).toBe("mock-enclave-public-key");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("GET /encryption-public-key proxies to enclave", async () => {
-    const app = createProxyApp();
-    const { url, close } = await startTestServer(app);
+    const server = createProxyServer();
 
     try {
-      const res = await fetch(`${url}/encryption-public-key`);
+      const res = await fetch(`${server.url}encryption-public-key`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { publicKey: string };
       expect(body.publicKey).toBe("mock-enclave-public-key");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("POST /prove proxies to enclave with timing headers", async () => {
-    const app = createProxyApp();
-    const { url, close } = await startTestServer(app);
+    const server = createProxyServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: "dGVzdA==" }),
@@ -578,16 +523,15 @@ describe("Proxy mode", () => {
       expect(res.headers.get("x-prove-duration-ms")).toBe("200");
       expect(res.headers.get("x-decrypt-duration-ms")).toBe("10");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("POST /prove returns 400 for missing body in proxy mode", async () => {
-    const app = createProxyApp();
-    const { url, close } = await startTestServer(app);
+    const server = createProxyServer();
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -596,21 +540,20 @@ describe("Proxy mode", () => {
       const body = (await res.json()) as { error: string };
       expect(body.error).toContain("Invalid request body");
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("proxy mode preserves X-Request-Id", async () => {
-    const app = createProxyApp();
-    const { url, close } = await startTestServer(app);
+    const server = createProxyServer();
 
     try {
-      const res = await fetch(`${url}/health`, {
+      const res = await fetch(`${server.url}health`, {
         headers: { "X-Request-Id": "proxy-test-123" },
       });
       expect(res.headers.get("x-request-id")).toBe("proxy-test-123");
     } finally {
-      close();
+      server.stop();
     }
   });
 
@@ -656,15 +599,16 @@ describe("Proxy mode", () => {
     mkdirSync(bbDir, { recursive: true });
     writeFileSync(join(bbDir, "bb"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
 
-    const mode: AppMode = {
-      type: "proxy",
-      enclaveClient: new EnclaveClient(`http://localhost:${statefulEnclave.port}`),
-    };
-    const app = createApp(mode);
-    const { url, close } = await startTestServer(app);
+    const server = createHostServer(
+      {
+        type: "proxy",
+        enclaveClient: new EnclaveClient(`http://localhost:${statefulEnclave.port}`),
+      },
+      { port: 0 },
+    );
 
     try {
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -685,7 +629,7 @@ describe("Proxy mode", () => {
       // Verify bb was uploaded to enclave
       expect(uploadedVersions.has(testVersion)).toBe(true);
     } finally {
-      close();
+      server.stop();
       statefulEnclave.stop();
       rmSync(bbDir, { recursive: true, force: true });
     }

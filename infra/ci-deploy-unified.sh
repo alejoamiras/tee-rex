@@ -10,7 +10,7 @@
 #
 # Architecture:
 #   Enclave (port 4000 via socat): thin service handling crypto + proving
-#   Host container (port 80): Express proxy, bb version management
+#   Host container (port 80): Bun.serve proxy, bb version management
 #   bb binaries: downloaded by host, uploaded to enclave at runtime
 
 set -euo pipefail
@@ -318,8 +318,8 @@ echo "=== Deploying host container ==="
 echo "Pulling host image: ${HOST_IMAGE_URI}"
 docker pull "${HOST_IMAGE_URI}"
 
-# Bun's node:http compat silently fails to bind privileged ports as non-root.
-# Allow non-root processes to bind port 80 without running the container as root.
+# Bun.serve() binds privileged ports as non-root on Linux when
+# net.ipv4.ip_unprivileged_port_start <= port. Default is 1024, so we lower it.
 sysctl -w net.ipv4.ip_unprivileged_port_start=80
 
 echo "=== Starting host container ==="
@@ -357,4 +357,4 @@ done
 
 echo "=== Unified deploy complete ==="
 echo "Enclave: port 4000 (thin enclave service)"
-echo "Host:    port 80   (Express proxy, TEE_MODE=nitro)"
+echo "Host:    port 80   (Bun.serve proxy, TEE_MODE=nitro)"

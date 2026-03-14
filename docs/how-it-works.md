@@ -38,7 +38,7 @@ TEE-Rex uses **AWS Nitro Enclaves** as the TEE. The idea:
                            │ HTTPS (via CloudFront)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  EC2 Host — Host Container (Express, port 80)               │
+│  EC2 Host — Host Container (Bun.serve, port 80)              │
 │                                                             │
 │  • Proxies /attestation, /prove, /encryption-public-key     │
 │  • Downloads bb from GitHub releases on demand              │

@@ -26,11 +26,6 @@ export async function setupLogging() {
         sinks: ["console"],
         lowestLevel: "info",
       },
-      {
-        category: ["express"],
-        sinks: ["console"],
-        lowestLevel: "info",
-      },
     ],
   });
 }

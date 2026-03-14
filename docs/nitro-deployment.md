@@ -603,7 +603,7 @@ aws ec2 run-instances \
 │  EC2 Host (c7i.12xlarge)            │
 │  Amazon Linux 2023                  │
 │                                     │
-│  Host Container (Express, port 80)  │
+│  Host Container (Bun.serve, port 80)│
 │    TEE_MODE=nitro, --network host   │
 │    Proxies to enclave               │
 │    Downloads + uploads bb on demand │

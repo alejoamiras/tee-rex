@@ -8,7 +8,6 @@ import { chmodSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getLogger } from "@logtape/logtape";
-import { Base64 } from "ox";
 import type { AttestationService, TeeMode } from "./lib/attestation-service.js";
 import { createAttestationService } from "./lib/attestation-service.js";
 import { BbHashCache, computeBbHash } from "./lib/bb-hash.js";
@@ -146,7 +145,7 @@ async function handleProve(
 
   logger.info("Prove completed", { aztecVersion, proveDurationMs, decryptDurationMs });
 
-  return new Response(JSON.stringify({ proof: Base64.fromBytes(proof) }), {
+  return new Response(JSON.stringify({ proof: Buffer.from(proof).toString("base64") }), {
     headers: {
       "Content-Type": "application/json",
       "x-prove-duration-ms": String(proveDurationMs),

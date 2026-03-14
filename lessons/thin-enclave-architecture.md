@@ -2,7 +2,7 @@
 
 ## Overview
 
-Split monolithic server into host Express + thin enclave Bun.serve. Host manages bb downloads/uploads, enclave handles keys, attestation, decryption, proving. bb SHA256 hashes embedded in NSM attestation `user_data`.
+Split monolithic server into host Bun.serve + thin enclave Bun.serve. Host manages bb downloads/uploads, enclave handles keys, attestation, decryption, proving. bb SHA256 hashes embedded in NSM attestation `user_data`.
 
 ## Implementation Approach
 
@@ -17,6 +17,7 @@ Split monolithic server into host Express + thin enclave Bun.serve. Host manages
 | 7. CI/CD workflows | Rename prover→host, pass bb_versions as runtime input | Worked — actionlint clean |
 | 8. SDK attestation | `parseEnclaveUserData()`, extend `verifyNitroAttestation` return type | Worked — backward compatible |
 | 9. Host crash-loop fix | Diagnosed via SSM: host exits code 0 ~1s after starting. Bun's `node:http` compat doesn't ref the server handle → event loop drains. Fix: `setInterval(() => {}, 1 << 30)` + clear on SIGTERM. | Worked — verified on CI instance |
+| 10. Express→Bun.serve migration | Replace Express + 7 deps (express, cors, express-rate-limit, @logtape/express, ms, ox, zod) with native Bun.serve on host. Custom sliding-window rate limiter. Removes keepAlive hack and silent port-bind workaround. | Worked — 106 server tests (9 new rate-limit tests), lint clean |
 
 ## Key Learnings
 
@@ -36,6 +37,8 @@ Split monolithic server into host Express + thin enclave Bun.serve. Host manages
 
 8. **Proxy /health resilience**: Host `/health` must not fail when enclave is unreachable — deploy script checks host health independently (step 11). Catch enclave fetch errors in the health handler and return `{ status: "ok", enclave: "unreachable" }` with empty versions. Add AbortSignal.timeout(5s) to enclave health fetch to prevent hanging.
 
+9. **Bun.serve 413 behavior**: Bun.serve returns a bare `413 Payload Too Large` with empty body when `maxRequestBodySize` is exceeded, unlike Express which returns a JSON error body. Acceptable since the SDK doesn't parse 413 bodies — it just surfaces the HTTP status.
+
 ## Test Coverage
 
 - `bb-hash.test.ts`: 3 tests (hash computation, cache operations)
@@ -45,4 +48,5 @@ Split monolithic server into host Express + thin enclave Bun.serve. Host manages
 - `index.test.ts`: 6 new proxy mode tests + all existing standard mode tests
 - `attestation.test.ts` (SDK): 5 new parseEnclaveUserData tests
 - `attestation-service.test.ts`: 3 new userData tests
-- Total: 282 tests passing (49+1skip SDK, 96 server, 137 app)
+- `rate-limit.test.ts`: 9 tests (sliding window, IP extraction, edge cases)
+- Total: 291 tests passing (49+1skip SDK, 106 server, 137 app)

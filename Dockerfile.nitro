@@ -68,7 +68,7 @@ RUN chown -R appuser:appuser /app
 WORKDIR /app/packages/server
 
 # Nitro Enclaves communicate via vsock, not TCP.
-# socat bridges vsock port 5000 → localhost:4000 (Express server).
+# socat bridges vsock port 5000 → localhost:4000 (Bun.serve enclave).
 ENV PORT=4000
 ENV TEE_MODE=nitro
 
