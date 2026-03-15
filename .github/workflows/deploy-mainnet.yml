@@ -185,6 +185,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.MAINNET_AZTEC_NODE_URL }}
           PROVER_URL: ${{ secrets.MAINNET_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.MAINNET_CLOUDFRONT_URL }}/tee
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
           VITE_ENV_NAME: mainnet
           VITE_OTHER_ENV_URL: https://testnet.tee-rex.dev
           VITE_OTHER_ENV_NAME: testnet
@@ -336,6 +337,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.MAINNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 

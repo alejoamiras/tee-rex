@@ -174,10 +174,11 @@ jobs:
       - name: Build app
         run: bun run --cwd packages/app build
         env:
-          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.PROD_CLOUDFRONT_URL }}/tee
-          VITE_ENV_NAME: nextnet
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
+          VITE_ENV_NAME: testnet
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -201,9 +202,9 @@ jobs:
             --distribution-id ${{ secrets.PROD_CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/index.html"
 
-  # ── Nextnet connectivity check (gates SDK publish) ───────────────
-  nextnet-check:
-    name: Nextnet Smoke
+  # ── Testnet connectivity check (gates SDK publish) ───────────────
+  testnet-check:
+    name: Testnet Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -222,8 +223,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run nextnet smoke tests
-        run: bun run test:e2e:nextnet
+      - name: Run testnet smoke tests
+        run: bun run test:e2e:remote
 
   # ── Pre-publish accelerator validation ────────────────────────────
   # Builds the headless accelerator binary and runs SDK e2e with
@@ -239,15 +240,15 @@ jobs:
   # ── Publish SDK to npm (nightlies auto-update merges only) ─────────
   # Uses NPM_TOKEN (automation token) — OIDC trusted publishing only supports
   # one workflow file per package, which doesn't work with deploy-prod + deploy-devnet.
-  # Gated on validate-prod + validate-accelerator + nextnet-check.
+  # Gated on validate-prod + validate-accelerator + testnet-check.
   publish-sdk:
     name: Publish SDK
-    needs: [validate-prod, validate-accelerator, nextnet-check]
+    needs: [validate-prod, validate-accelerator, testnet-check]
     if: |
       always()
       && (needs.validate-prod.result == 'success' || needs.validate-prod.result == 'skipped')
       && (needs.validate-accelerator.result == 'success' || needs.validate-accelerator.result == 'skipped')
-      && needs.nextnet-check.result == 'success'
+      && needs.testnet-check.result == 'success'
       && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/'))
     uses: ./.github/workflows/_publish-sdk.yml
     secrets: inherit
@@ -255,9 +256,9 @@ jobs:
       dist_tag: nightlies
       latest: true
 
-  # ── Post-deploy validation against nextnet ───────────────────────
+  # ── Post-deploy validation against testnet ───────────────────────
   validate-prod:
-    name: Validate Prod (nextnet)
+    name: Validate Prod (testnet)
     needs: [changes, deploy-server, deploy-app]
     if: "!cancelled() && (needs.changes.outputs.servers == 'true' || needs.changes.outputs.app == 'true')"
     runs-on: ubuntu-latest
@@ -323,11 +324,12 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Run app smoke E2E against nextnet
+      - name: Run app smoke E2E against testnet
         env:
-          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 

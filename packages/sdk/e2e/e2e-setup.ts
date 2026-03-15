@@ -47,8 +47,8 @@ export const isLocalNetwork =
   config.nodeUrl.includes("localhost") || config.nodeUrl.includes("127.0.0.1");
 
 // Assert local services are available — fail fast with a clear message.
-// Only checks when targeting local network. Remote networks (nextnet) are
-// validated by the test files themselves (nextnet.test.ts, etc.).
+// Only checks when targeting local network. Remote networks (testnet) are
+// validated by the test files themselves (remote-network.test.ts, etc.).
 async function assertLocalServicesAvailable(): Promise<void> {
   if (!isLocalNetwork) return;
 

@@ -14,8 +14,8 @@ npm add @alejoamiras/tee-rex
 The SDK version tracks Aztec nightly releases. Use dist-tags to install the right version for your network:
 
 ```sh
-npm add @alejoamiras/tee-rex@nightlies  # latest nightly (nextnet-compatible)
-npm add @alejoamiras/tee-rex@devnet     # devnet-compatible
+npm add @alejoamiras/tee-rex@nightlies  # latest nightly (v4)
+npm add @alejoamiras/tee-rex@rc         # latest release candidate
 ```
 
 ## Hosted Servers
@@ -24,12 +24,13 @@ Public TEE-Rex servers are available for both Aztec networks. No authentication 
 
 | Network | Prover URL | TEE URL |
 |---------|-----------|---------|
-| Nextnet | `https://nextnet.tee-rex.dev/prover` | `https://nextnet.tee-rex.dev/tee` |
-| Devnet  | `https://devnet.tee-rex.dev/prover`  | `https://devnet.tee-rex.dev/tee`  |
+| Mainnet | `https://mainnet.tee-rex.dev/prover` | `https://mainnet.tee-rex.dev/tee` |
+| Testnet | `https://testnet.tee-rex.dev/prover` | `https://testnet.tee-rex.dev/tee` |
+| Nightlies | `https://nightlies.tee-rex.dev/prover` | `https://nightlies.tee-rex.dev/tee` |
 
 - Rate limited to **10 proofs per hour per IP**
 - Security: client encrypts proving inputs with the server's attested public key (curve25519 + AES-256-GCM) — the server never sees plaintext data outside the TEE
-- You need your own Aztec node URL (e.g. `https://v4-devnet-2.aztec-labs.com` for devnet)
+- You need your own Aztec node URL (e.g. `https://rpc.testnet.aztec-labs.com` for testnet)
 
 ## Quick Start
 
@@ -44,7 +45,7 @@ import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 const node = createAztecNodeClient("<your-aztec-node-url>");
 
-const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
+const prover = new TeeRexProver("https://testnet.tee-rex.dev/prover", new WASMSimulator());
 const pxe = await createPXE(node, getPXEConfig(), {
   proverOrOptions: prover,
 });
@@ -65,7 +66,7 @@ import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 // 1. Create prover and connect to an Aztec node
-const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
+const prover = new TeeRexProver("https://testnet.tee-rex.dev/prover", new WASMSimulator());
 const node = createAztecNodeClient("<your-aztec-node-url>");
 
 // 2. Initialize PXE with the TEE-Rex prover
@@ -153,7 +154,7 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 }
 ```
 
-- **`apiUrl`** — TEE-Rex server endpoint (e.g. `https://nextnet.tee-rex.dev/prover`)
+- **`apiUrl`** — TEE-Rex server endpoint (e.g. `https://testnet.tee-rex.dev/prover`)
 - **`...args`** — forwarded to `BBLazyPrivateKernelProver` (typically a `CircuitSimulator` instance)
 - **`setProvingMode(mode)`** — switch between `"uee"` (TEE), `"local"` (WASM), or `"accelerated"` (native) proving
 - **`setApiUrl(url)`** — update the tee-rex server URL at runtime
@@ -239,17 +240,18 @@ The SDK version scheme tracks Aztec releases:
 
 | SDK Version | Aztec Network | Install Command |
 |-------------|---------------|-----------------|
-| `5.x.x-nightly.*` | Nextnet | `npm add @alejoamiras/tee-rex@nightlies` |
-| `4.x.x-devnet.*` | Devnet | `npm add @alejoamiras/tee-rex@devnet` |
+| `4.x.x` (latest) | Mainnet | `npm add @alejoamiras/tee-rex` |
+| `4.x.x-rc.*` | Testnet | `npm add @alejoamiras/tee-rex@rc` |
+| `4.x.x-nightly.*` | Nightlies | `npm add @alejoamiras/tee-rex@nightlies` |
 
 To install a specific version:
 
 ```sh
-npm add @alejoamiras/tee-rex@5.0.0-nightly.20260303
+npm add @alejoamiras/tee-rex@4.1.0
 ```
 
 Requirements:
-- Aztec `5.0.0-nightly` or compatible version
+- Aztec Edition 4 (v4.x) or compatible version
 - A running Aztec node for PXE connectivity
 - A TEE-Rex server for UEE proving (or use the [hosted servers](#hosted-servers))
 

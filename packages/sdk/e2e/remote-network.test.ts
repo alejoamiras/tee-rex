@@ -1,10 +1,10 @@
 /**
- * Nextnet connectivity smoke tests
+ * Remote network connectivity smoke tests
  *
- * Validates that the Aztec nextnet node is reachable and healthy.
- * Auto-skipped when running against local sandbox (default).
+ * Validates that the Aztec node (testnet or other remote network) is
+ * reachable and healthy. Auto-skipped when running against local sandbox.
  *
- * Run with: bun run test:e2e:nextnet
+ * Run with: bun run test:e2e:remote
  */
 
 import { describe, expect, test } from "bun:test";
@@ -12,9 +12,9 @@ import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getLogger } from "@logtape/logtape";
 import { config, isLocalNetwork } from "./e2e-setup.js";
 
-const logger = getLogger(["tee-rex", "sdk", "e2e", "nextnet"]);
+const logger = getLogger(["tee-rex", "sdk", "e2e", "remote-network"]);
 
-describe.skipIf(isLocalNetwork)("Nextnet Connectivity", () => {
+describe.skipIf(isLocalNetwork)("Remote Network Connectivity", () => {
   test("should reach the Aztec node /status endpoint", async () => {
     const res = await fetch(`${config.nodeUrl}/status`, {
       signal: AbortSignal.timeout(10000),

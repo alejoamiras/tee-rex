@@ -12,9 +12,9 @@
   [![App](https://github.com/alejoamiras/tee-rex/actions/workflows/app.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/app.yml)
   [![Server](https://github.com/alejoamiras/tee-rex/actions/workflows/server.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/server.yml)
   [![Accelerator](https://github.com/alejoamiras/tee-rex/actions/workflows/accelerator.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/accelerator.yml)
-  [![Deploy Production](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-prod.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-prod.yml)
+  [![Deploy Mainnet](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-mainnet.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-mainnet.yml)
 
-  **[nextnet.tee-rex.dev](https://nextnet.tee-rex.dev)** · **[devnet.tee-rex.dev](https://devnet.tee-rex.dev)**
+  **[mainnet.tee-rex.dev](https://mainnet.tee-rex.dev)** · **[testnet.tee-rex.dev](https://testnet.tee-rex.dev)** · **[nightlies.tee-rex.dev](https://nightlies.tee-rex.dev)**
 
   [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 </div>
@@ -46,7 +46,7 @@ import { getPXEConfig } from "@aztec/pxe/config";
 import { WASMSimulator } from "@aztec/simulator/client";
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
+const prover = new TeeRexProver("https://testnet.tee-rex.dev/prover", new WASMSimulator());
 const pxe = await createPXE(node, getPXEConfig(), { proverOrOptions: prover });
 
 // use the PXE as usual -- proving is delegated to the TEE
@@ -109,7 +109,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 
 This software is provided for **research and educational purposes only**. It is not audited, not production-hardened, and comes with absolutely no warranties or guarantees of any kind. The authors are not responsible for any loss of funds, data, privacy, or any other damages resulting from the use of this software. Use at your own risk.
 
-The hosted servers (`nextnet.tee-rex.dev`, `devnet.tee-rex.dev`) are best-effort research infrastructure with no uptime guarantees. They may be taken offline, reconfigured, or decommissioned without notice.
+The hosted servers (`mainnet.tee-rex.dev`, `testnet.tee-rex.dev`, `nightlies.tee-rex.dev`) are best-effort research infrastructure with no uptime guarantees. They may be taken offline, reconfigured, or decommissioned without notice.
 
 If you intend to use TEE-based proving in production, you should fork this repository, conduct your own security audit, and operate your own infrastructure.
 

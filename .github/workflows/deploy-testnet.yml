@@ -146,6 +146,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: ${{ secrets.TESTNET_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.TESTNET_CLOUDFRONT_URL }}/tee
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
           VITE_ENV_NAME: testnet
           VITE_OTHER_ENV_URL: https://mainnet.tee-rex.dev
           VITE_OTHER_ENV_NAME: mainnet
@@ -244,6 +245,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bun run --cwd packages/sdk test:e2e
 
       - name: Install Playwright browsers
@@ -254,6 +256,7 @@ jobs:
           AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 

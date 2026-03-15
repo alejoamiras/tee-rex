@@ -120,7 +120,7 @@ bun run lint:actions     # Lint GitHub Actions workflows
 bun run lint:tofu        # Lint OpenTofu files (fmt -check -diff)
 bun run lint:fix         # Auto-fix lint/format issues
 bun run test:e2e         # E2E tests (requires Aztec local network + server)
-bun run test:e2e:nextnet # Nextnet smoke test (requires internet)
+bun run test:e2e:remote  # Remote network smoke test (requires internet)
 bun run test:all         # All tests (lint + typecheck + unit + e2e)
 bun run start            # Start host server (TEE_MODE=standard or nitro)
 bun run start:enclave    # Start enclave server (Bun.serve, port 4000)

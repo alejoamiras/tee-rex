@@ -166,6 +166,7 @@ jobs:
           PROVER_URL: ${{ inputs.prover_url }}
           ACCELERATOR_URL: ${{ inputs.build_accelerator && 'http://127.0.0.1:59833' || '' }}
           ACCELERATOR_DOWNLOAD_TEST: ${{ inputs.build_accelerator && 'true' || '' }}
+          SPONSORED_FPC_SALT: ${{ !contains(inputs.aztec_node_url, 'localhost') && secrets.SPONSORED_FPC_SALT || '' }}
         run: bun run --cwd packages/sdk test:e2e
 
       - name: Upload Aztec logs
