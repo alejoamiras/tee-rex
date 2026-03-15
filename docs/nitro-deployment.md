@@ -588,16 +588,25 @@ aws ec2 run-instances \
 
 ## Architecture Reference
 
+> **Note**: This runbook was written for early Phase 5 development. The production deploy
+> flow is now automated via `ci-deploy-unified.sh` and uses the thin enclave architecture
+> (Phase 33): host Express proxies to Bun.serve enclave, bb uploaded at runtime.
+
 ```
 ┌─────────────────────────────────────┐
-│  Your machine                       │
-│  curl http://<public-ip>:4000/...   │
+│  Your machine / CloudFront          │
+│  curl http://<host>:80/...          │
 └──────────────┬──────────────────────┘
-               │ TCP port 4000
+               │ TCP port 80
                ▼
 ┌─────────────────────────────────────┐
-│  EC2 Host (m5.xlarge)               │
+│  EC2 Host (c7i.12xlarge)            │
 │  Amazon Linux 2023                  │
+│                                     │
+│  Host Container (Bun.serve, port 80)│
+│    TEE_MODE=nitro, --network host   │
+│    Proxies to enclave               │
+│    Downloads + uploads bb on demand │
 │                                     │
 │  socat TCP:4000 ↔ vsock:CID:5000   │
 │  (bridges TCP to enclave vsock)     │
@@ -610,11 +619,12 @@ aws ec2 run-instances \
 │                                     │
 │  entrypoint.sh:                     │
 │    ifconfig lo 127.0.0.1            │
-│    bun run src/index.ts &           │
+│    bun run src/enclave.ts &         │
 │    socat vsock:5000 ↔ tcp:4000      │
 │                                     │
-│  Express server on localhost:4000   │
+│  Bun.serve on localhost:4000        │
 │  TEE_MODE=nitro                     │
 │  libnsm.so → /dev/nsm (hardware)   │
+│  bb uploaded via POST /upload-bb    │
 └─────────────────────────────────────┘
 ```

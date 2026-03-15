@@ -1,204 +1,373 @@
 import { randomUUID } from "node:crypto";
 import { availableParallelism, cpus } from "node:os";
-import { expressLogger } from "@logtape/express";
 import { getLogger } from "@logtape/logtape";
-import cors from "cors";
-import express from "express";
-import rateLimit from "express-rate-limit";
-import ms from "ms";
-import { Base64 } from "ox";
-import { z } from "zod";
 import {
   type AttestationService,
   createAttestationService,
   type TeeMode,
 } from "./lib/attestation-service.js";
+import { downloadBb } from "./lib/bb-download.js";
 import { listCachedVersions } from "./lib/bb-versions.js";
+import { EnclaveClient } from "./lib/enclave-client.js";
 import { EncryptionService } from "./lib/encryption-service.js";
 import { setupLogging } from "./lib/logging.js";
 import { ProverService } from "./lib/prover-service.js";
-
-declare global {
-  namespace Express {
-    interface Request {
-      id: string;
-    }
-  }
-}
+import { getClientIp, isLocalhost, RateLimiter } from "./lib/rate-limit.js";
 
 const logger = getLogger(["tee-rex", "server"]);
 
 /** Bumped when the server API changes in a way that clients should detect. */
 const API_VERSION = 1;
 
-export interface AppDependencies {
-  prover: ProverService;
-  encryption: EncryptionService;
-  attestation: AttestationService;
+// ---------------------------------------------------------------------------
+// CORS helpers
+// ---------------------------------------------------------------------------
+
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Request-Id, X-Aztec-Version",
+  "Access-Control-Expose-Headers":
+    "X-Request-Id, X-Prove-Duration-Ms, X-Decrypt-Duration-Ms, X-Download-Duration-Ms, X-Upload-Duration-Ms",
+};
+
+function withCors(res: Response): Response {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    res.headers.set(key, value);
+  }
+  return res;
 }
 
-export function createApp(deps: AppDependencies): express.Express {
-  const app = express();
+// ---------------------------------------------------------------------------
+// App mode: standard (handles everything) or proxy (forwards to enclave)
+// ---------------------------------------------------------------------------
 
-  // Permissive CORS: in prod the server sits behind CloudFront (same-origin),
-  // and in dev the Vite proxy handles it. This keeps the server itself stateless.
-  app.use(cors());
+export type AppMode =
+  | {
+      type: "standard";
+      prover: ProverService;
+      encryption: EncryptionService;
+      attestation: AttestationService;
+    }
+  | {
+      type: "proxy";
+      enclaveClient: EnclaveClient;
+    };
 
-  // The server always runs behind a reverse proxy (CloudFront + socat).
-  // Without this, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
-  // when it sees the X-Forwarded-For header that CloudFront adds.
-  // Use 1 (not true) to trust only the first proxy hop — `true` is too
-  // permissive and triggers ERR_ERL_PERMISSIVE_TRUST_PROXY.
-  app.set("trust proxy", 1);
+// ---------------------------------------------------------------------------
+// JSON + header helpers
+// ---------------------------------------------------------------------------
 
-  // Assign a unique request ID to each request, returned in X-Request-Id header.
-  // Runs before body parsing so that parsing errors include the request ID.
-  app.use((req, res, next) => {
-    const id = (req.headers["x-request-id"] as string) || randomUUID();
-    req.id = id;
-    res.setHeader("X-Request-Id", id);
-    next();
-  });
+function jsonResponse(
+  data: unknown,
+  init: { status?: number; headers?: Record<string, string> } = {},
+): Response {
+  const res = Response.json(data, { status: init.status ?? 200 });
+  if (init.headers) {
+    for (const [k, v] of Object.entries(init.headers)) {
+      res.headers.set(k, v);
+    }
+  }
+  return res;
+}
 
-  app.use(expressLogger());
-  // Proving payloads are large (encrypted witness + bytecode + VK, base64-encoded).
-  // 50mb accommodates the largest expected proving requests.
-  app.use(express.json({ limit: "50mb" }));
+// ---------------------------------------------------------------------------
+// createHostServer
+// ---------------------------------------------------------------------------
 
-  const proveLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    limit: 10, // 10 requests per hour per IP
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-    message: { error: "Too many prove requests, try again later" },
-    skip: (req) => req.ip === "127.0.0.1" || req.ip === "::1",
-  });
+export function createHostServer(
+  mode: AppMode,
+  options: { port?: number; maxRequestBodySize?: number } = {},
+) {
+  const rateLimiter = new RateLimiter({ windowMs: 60 * 60 * 1000, limit: 10 });
 
-  app.post("/prove", proveLimiter, async (req, res, next) => {
-    try {
-      req.socket.setTimeout(ms("5 min"));
-      const aztecVersion = req.headers["x-aztec-version"] as string | undefined;
-      logger.info("Prove request received", { requestId: req.id, aztecVersion });
-
-      const body = z.object({ data: z.string().min(1) }).safeParse(req.body);
-      if (!body.success) {
-        res
-          .status(400)
-          .json({ error: "Invalid request body: expected { data: string }", requestId: req.id });
-        return;
+  const server = Bun.serve({
+    port: options.port ?? 4000,
+    maxRequestBodySize: options.maxRequestBodySize ?? 50 * 1024 * 1024, // 50MB
+    async fetch(req, server) {
+      // CORS preflight
+      if (req.method === "OPTIONS") {
+        return withCors(new Response(null, { status: 204 }));
       }
-      let decryptedData: Uint8Array;
+
+      const url = new URL(req.url);
+      const requestId = req.headers.get("x-request-id") ?? randomUUID();
+
+      // Request logging
+      logger.info("Request", { method: req.method, path: url.pathname, requestId });
+
       try {
-        const decryptStart = performance.now();
-        const encryptedData = Base64.toBytes(body.data.data);
-        decryptedData = await deps.encryption.decrypt({ data: encryptedData });
-        const decryptMs = Math.round(performance.now() - decryptStart);
-        res.setHeader("x-decrypt-duration-ms", decryptMs);
-        logger.info("Payload decrypted", {
-          requestId: req.id,
-          decryptMs,
-          bytes: decryptedData.byteLength,
-        });
+        let response: Response;
+
+        if (req.method === "POST" && url.pathname === "/prove") {
+          // Rate limiting
+          const clientIp = getClientIp(req, server);
+          if (!isLocalhost(clientIp) && rateLimiter.isLimited(clientIp)) {
+            response = jsonResponse(
+              { error: "Too many prove requests, try again later", requestId },
+              { status: 429 },
+            );
+            response.headers.set("X-Request-Id", requestId);
+            return withCors(response);
+          }
+
+          response =
+            mode.type === "standard"
+              ? await handleStandardProve(req, mode, requestId)
+              : await handleProxyProve(req, mode.enclaveClient, requestId);
+        } else if (req.method === "GET" && url.pathname === "/health") {
+          response =
+            mode.type === "standard"
+              ? handleStandardHealth()
+              : await handleProxyHealth(mode.enclaveClient);
+        } else if (req.method === "GET" && url.pathname === "/attestation") {
+          response =
+            mode.type === "standard"
+              ? await handleStandardAttestation(mode)
+              : await handleProxyAttestation(mode.enclaveClient);
+        } else if (req.method === "GET" && url.pathname === "/encryption-public-key") {
+          response =
+            mode.type === "standard"
+              ? await handleStandardPublicKey(mode)
+              : await handleProxyPublicKey(mode.enclaveClient);
+        } else {
+          response = jsonResponse({ error: "Not found", requestId }, { status: 404 });
+        }
+
+        response.headers.set("X-Request-Id", requestId);
+        return withCors(response);
       } catch (err) {
-        logger.warn("Failed to decrypt prove payload", {
-          requestId: req.id,
-          error: err instanceof Error ? err.message : String(err),
+        logger.error("Unhandled error", {
+          requestId,
+          error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
         });
-        res.status(400).json({ error: "Failed to decrypt request payload", requestId: req.id });
-        return;
+        const response = jsonResponse(
+          { error: "Internal server error", requestId },
+          { status: 500 },
+        );
+        response.headers.set("X-Request-Id", requestId);
+        return withCors(response);
       }
-
-      const proveStart = performance.now();
-      const proof = await deps.prover.createChonkProof(decryptedData, aztecVersion);
-      const proveDurationMs = Math.round(performance.now() - proveStart);
-      logger.info("Prove request completed", { requestId: req.id, aztecVersion, proveDurationMs });
-      res.setHeader("x-prove-duration-ms", proveDurationMs);
-      res.json({
-        proof: Base64.fromBytes(proof), // proof will be publicly posted on chain, so no need to encrypt
-      });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  app.get("/health", (_req, res) => {
-    res.json({
-      status: "ok",
-      api_version: API_VERSION,
-      available_versions: listCachedVersions(),
-      runtime: {
-        hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",
-        available_parallelism: availableParallelism(),
-        cpu_count: cpus().length,
-        tee_mode: process.env.TEE_MODE ?? "unset",
-        node_env: process.env.NODE_ENV ?? "unset",
-        crs_path: process.env.CRS_PATH ?? "unset",
-      },
-    });
-  });
-
-  app.get("/attestation", async (_req, res, next) => {
-    try {
-      const publicKey = await deps.encryption.getEncryptionPublicKey();
-      const attestation = await deps.attestation.getAttestation(publicKey);
-      res.json(attestation);
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // Backward-compatible alias
-  app.get("/encryption-public-key", async (_req, res, next) => {
-    try {
-      const publicKey = await deps.encryption.getEncryptionPublicKey();
-      res.json({ publicKey });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  app.use(
-    (err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-      const requestId = req.id;
-      if (err instanceof z.ZodError) {
-        res.status(400).json({ error: "Validation error", details: err.issues, requestId });
-        return;
-      }
-      if (err instanceof SyntaxError && "body" in err) {
-        res.status(400).json({ error: "Malformed request body", requestId });
-        return;
-      }
-      if (err instanceof Error && "status" in err && (err as any).status === 413) {
-        res.status(413).json({ error: "Request payload too large", requestId });
-        return;
-      }
-      logger.error("Unhandled error", {
-        requestId,
-        error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err),
-      });
-      res.status(500).json({ error: "Internal server error", requestId });
     },
-  );
+  });
 
-  return app;
+  return server;
 }
+
+// ---------------------------------------------------------------------------
+// Standard mode handlers
+// ---------------------------------------------------------------------------
+
+async function handleStandardProve(
+  req: Request,
+  mode: Extract<AppMode, { type: "standard" }>,
+  requestId: string,
+): Promise<Response> {
+  const aztecVersion = req.headers.get("x-aztec-version") ?? undefined;
+  logger.info("Prove request received", { requestId, aztecVersion });
+
+  let body: { data?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: "Malformed request body", requestId }, { status: 400 });
+  }
+
+  if (typeof body?.data !== "string" || body.data.length === 0) {
+    return jsonResponse(
+      { error: "Invalid request body: expected { data: string }", requestId },
+      { status: 400 },
+    );
+  }
+
+  let decryptedData: Uint8Array;
+  const headers: Record<string, string> = {};
+  try {
+    const decryptStart = performance.now();
+    const encryptedData = Buffer.from(body.data, "base64");
+    decryptedData = await mode.encryption.decrypt({ data: encryptedData });
+    const decryptMs = Math.round(performance.now() - decryptStart);
+    headers["x-decrypt-duration-ms"] = String(decryptMs);
+    logger.info("Payload decrypted", { requestId, decryptMs, bytes: decryptedData.byteLength });
+  } catch (err) {
+    logger.warn("Failed to decrypt prove payload", {
+      requestId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return jsonResponse({ error: "Failed to decrypt request payload", requestId }, { status: 400 });
+  }
+
+  const proveStart = performance.now();
+  const proof = await mode.prover.createChonkProof(decryptedData, aztecVersion);
+  const proveDurationMs = Math.round(performance.now() - proveStart);
+  logger.info("Prove request completed", { requestId, aztecVersion, proveDurationMs });
+  headers["x-prove-duration-ms"] = String(proveDurationMs);
+
+  return jsonResponse({ proof: Buffer.from(proof).toString("base64") }, { headers });
+}
+
+function handleStandardHealth(): Response {
+  return Response.json({
+    status: "ok",
+    api_version: API_VERSION,
+    available_versions: listCachedVersions(),
+    runtime: {
+      hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",
+      available_parallelism: availableParallelism(),
+      cpu_count: cpus().length,
+      tee_mode: process.env.TEE_MODE ?? "unset",
+      node_env: process.env.NODE_ENV ?? "unset",
+      crs_path: process.env.CRS_PATH ?? "unset",
+    },
+  });
+}
+
+async function handleStandardAttestation(
+  mode: Extract<AppMode, { type: "standard" }>,
+): Promise<Response> {
+  const publicKey = await mode.encryption.getEncryptionPublicKey();
+  const attestation = await mode.attestation.getAttestation(publicKey);
+  return Response.json(attestation);
+}
+
+async function handleStandardPublicKey(
+  mode: Extract<AppMode, { type: "standard" }>,
+): Promise<Response> {
+  const publicKey = await mode.encryption.getEncryptionPublicKey();
+  return Response.json({ publicKey });
+}
+
+// ---------------------------------------------------------------------------
+// Proxy mode handlers
+// ---------------------------------------------------------------------------
+
+async function handleProxyProve(
+  req: Request,
+  enclaveClient: EnclaveClient,
+  requestId: string,
+): Promise<Response> {
+  const aztecVersion = req.headers.get("x-aztec-version") ?? undefined;
+  logger.info("Prove request received (proxy)", { requestId, aztecVersion });
+
+  let body: { data?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: "Malformed request body", requestId }, { status: 400 });
+  }
+
+  if (typeof body?.data !== "string" || body.data.length === 0) {
+    return jsonResponse(
+      { error: "Invalid request body: expected { data: string }", requestId },
+      { status: 400 },
+    );
+  }
+
+  const headers: Record<string, string> = {};
+
+  // Check if enclave has the requested bb version, download + upload if missing
+  if (aztecVersion) {
+    const health = await enclaveClient.health();
+    const hasVersion = health.versions.some((v) => v.version === aztecVersion);
+    if (!hasVersion) {
+      logger.info("bb version not in enclave, downloading", { requestId, version: aztecVersion });
+      const downloadStart = performance.now();
+      const bbPath = await downloadBb(aztecVersion);
+      const downloadDurationMs = Math.round(performance.now() - downloadStart);
+      headers["x-download-duration-ms"] = String(downloadDurationMs);
+
+      const uploadStart = performance.now();
+      await enclaveClient.uploadBb(aztecVersion, bbPath);
+      const uploadDurationMs = Math.round(performance.now() - uploadStart);
+      headers["x-upload-duration-ms"] = String(uploadDurationMs);
+
+      logger.info("bb uploaded to enclave", {
+        requestId,
+        version: aztecVersion,
+        downloadDurationMs,
+        uploadDurationMs,
+      });
+    }
+  }
+
+  const encryptedData = Buffer.from(body.data, "base64");
+  const result = await enclaveClient.prove(encryptedData.buffer as ArrayBuffer, aztecVersion);
+
+  headers["x-prove-duration-ms"] = String(result.proveDurationMs);
+  headers["x-decrypt-duration-ms"] = String(result.decryptDurationMs);
+  logger.info("Prove request completed (proxy)", {
+    requestId,
+    aztecVersion,
+    proveDurationMs: result.proveDurationMs,
+  });
+
+  return jsonResponse({ proof: result.proof }, { headers });
+}
+
+async function handleProxyHealth(enclaveClient: EnclaveClient): Promise<Response> {
+  let enclaveHealth: Awaited<ReturnType<typeof enclaveClient.health>> | null = null;
+  try {
+    enclaveHealth = await enclaveClient.health();
+  } catch {
+    logger.warn("Enclave unreachable during health check");
+  }
+
+  return Response.json({
+    status: "ok",
+    api_version: API_VERSION,
+    available_versions: enclaveHealth?.versions.map((v) => v.version) ?? [],
+    bb_hashes: enclaveHealth?.versions ?? [],
+    enclave: enclaveHealth ? "ok" : "unreachable",
+    runtime: {
+      hardware_concurrency: process.env.HARDWARE_CONCURRENCY ?? "unset",
+      available_parallelism: availableParallelism(),
+      cpu_count: cpus().length,
+      tee_mode: process.env.TEE_MODE ?? "unset",
+      node_env: process.env.NODE_ENV ?? "unset",
+      crs_path: process.env.CRS_PATH ?? "unset",
+    },
+  });
+}
+
+async function handleProxyAttestation(enclaveClient: EnclaveClient): Promise<Response> {
+  const attestation = await enclaveClient.getAttestation();
+  return Response.json(attestation);
+}
+
+async function handleProxyPublicKey(enclaveClient: EnclaveClient): Promise<Response> {
+  const publicKey = await enclaveClient.getPublicKey();
+  return Response.json({ publicKey });
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
 
 if (import.meta.main) {
   await setupLogging();
 
-  const teeMode = z
-    .enum(["standard", "nitro"])
-    .catch("standard")
-    .parse(process.env.TEE_MODE) as TeeMode;
+  const teeMode: TeeMode = process.env.TEE_MODE === "nitro" ? "nitro" : "standard";
 
-  const app = createApp({
-    prover: new ProverService(),
-    encryption: new EncryptionService(),
-    attestation: createAttestationService(teeMode),
-  });
+  let mode: AppMode;
+  if (teeMode === "nitro") {
+    const enclaveUrl = process.env.ENCLAVE_URL || "http://localhost:4000";
+    logger.info("Starting in proxy mode", { enclaveUrl });
+    mode = { type: "proxy", enclaveClient: new EnclaveClient(enclaveUrl) };
+  } else {
+    mode = {
+      type: "standard",
+      prover: new ProverService(),
+      encryption: new EncryptionService(),
+      attestation: createAttestationService(teeMode),
+    };
+  }
 
-  const port = process.env.PORT || 4000;
-  app.listen(port, () => {
-    logger.info("Server started", { port, teeMode });
+  const port = Number(process.env.PORT) || 4000;
+  const server = createHostServer(mode, { port });
+  logger.info("Server started", { port, teeMode, mode: mode.type, url: server.url.href });
+
+  process.on("SIGTERM", () => {
+    logger.info("SIGTERM received, shutting down");
+    server.stop();
   });
 }

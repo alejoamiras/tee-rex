@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
 import crypto from "node:crypto";
-import { AttestationError, AttestationErrorCode, verifyNitroAttestation } from "./attestation.js";
+import {
+  AttestationError,
+  AttestationErrorCode,
+  parseEnclaveUserData,
+  verifyNitroAttestation,
+} from "./attestation.js";
 
 /**
  * Generate a P-384 EC key pair and self-signed or CA-signed X.509 certificate
@@ -321,5 +326,38 @@ describe.skipIf(!process.env.TEE_URL)("Real Nitro attestation (integration)", ()
     expect(document.digest).toBe("SHA384");
     expect(document.pcrs.get(0)).toBeInstanceOf(Uint8Array);
     expect(document.timestamp).toBeGreaterThan(0);
+  });
+});
+
+describe("parseEnclaveUserData", () => {
+  test("parses valid JSON with versions array", () => {
+    const versions = [
+      { version: "1.0.0", sha256: "abc123" },
+      { version: "2.0.0", sha256: "def456" },
+    ];
+    const userData = new TextEncoder().encode(JSON.stringify({ versions }));
+    const result = parseEnclaveUserData(userData);
+    expect(result).toEqual(versions);
+  });
+
+  test("returns null for invalid JSON", () => {
+    const userData = new TextEncoder().encode("not json");
+    expect(parseEnclaveUserData(userData)).toBeNull();
+  });
+
+  test("returns null for JSON without versions array", () => {
+    const userData = new TextEncoder().encode(JSON.stringify({ other: "data" }));
+    expect(parseEnclaveUserData(userData)).toBeNull();
+  });
+
+  test("returns null for empty userData", () => {
+    const userData = new TextEncoder().encode("");
+    expect(parseEnclaveUserData(userData)).toBeNull();
+  });
+
+  test("returns empty array for empty versions", () => {
+    const userData = new TextEncoder().encode(JSON.stringify({ versions: [] }));
+    const result = parseEnclaveUserData(userData);
+    expect(result).toEqual([]);
   });
 });

@@ -90,7 +90,7 @@ graph TD
     PR["Pull Request"] --> check{"test-infra\nlabel?"}
     check -->|no| gate_pass["Infra Status\n(auto-pass)"]
     check -->|yes| base["Build Base Image\n(_build-base.yml)"]
-    base --> server["Deploy Server\n(_deploy-unified.yml)\n(enclave + prover on 1 EC2)"]
+    base --> server["Deploy Server\n(_deploy-unified.yml)\n(enclave + host on 1 EC2)"]
     server --> sdk_e2e["SDK E2E\n(TEE + Remote modes)"]
     server --> app_e2e["App Smoke E2E\n(3 deploys vs nextnet)"]
     sdk_e2e & app_e2e --> teardown["Teardown\n(stop EC2)"]
@@ -116,7 +116,7 @@ graph TD
     check -->|needs rebuild| base["ensure-base\n(Build Base Image)"]
     check -->|version cached| skip_server["Skip server deploy"]
 
-    base --> server["deploy-server\n(_deploy-unified.yml)\n(enclave + prover on 1 EC2)"]
+    base --> server["deploy-server\n(_deploy-unified.yml)\n(enclave + host on 1 EC2)"]
 
     server & app --> validate["validate-prod\n(smoke Playwright:\n3 deploys vs nextnet)"]
     skip_server --> validate
@@ -147,7 +147,7 @@ Note: `packages/sdk/**` was removed from the `servers` filter — the server has
 | `changes` | `dorny/paths-filter` to detect server vs app changes, plus `server_code` subset | ~5s |
 | `check-server` | SSM tunnel to prod instance, query `/health` for `available_versions`. Outputs `needs_rebuild=true` when: server code changed, `workflow_dispatch`, server unreachable, or bb version not cached. Skips SSM when force-rebuild is needed. | ~30s–2 min |
 | `ensure-base` | Checks ECR for base image, builds + pushes only if missing. Only runs when `needs_rebuild=true`. | ~1-5 min |
-| `deploy-server` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM (`_deploy-unified.yml`). Only runs when `needs_rebuild=true`. | ~25 min |
+| `deploy-server` | Build Nitro + host images in parallel, push to ECR, start single EC2, deploy enclave + host container via SSM (`_deploy-unified.yml`). Host downloads bb from GitHub releases and uploads to enclave at runtime. Only runs when `needs_rebuild=true`. | ~25 min |
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
 | `publish-sdk` | Resolve version (query npm for existing revisions, append `.N` suffix if needed), set SDK version, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
@@ -249,7 +249,7 @@ Automated version bumping and changelog generation via [release-please](https://
 | Workflow | Purpose | Key inputs |
 |----------|---------|-----------|
 | `_build-base.yml` | Idempotent base image build (Bun + system deps + `bun install`). Checks ECR first, builds only if missing. | None. Outputs: `base_tag` |
-| `_deploy-unified.yml` | Build Nitro + prover images in parallel, push to ECR, start single EC2, deploy enclave + prover container via SSM | `environment`, `nitro_image_tag`, `prover_image_tag`, `base_tag` |
+| `_deploy-unified.yml` | Build Nitro + host images in parallel, push to ECR, start single EC2, deploy enclave + host container via SSM. bb binaries downloaded at runtime and uploaded to enclave. | `environment`, `nitro_image_tag`, `host_image_tag`, `base_tag`, `bb_versions` |
 | `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
@@ -279,19 +279,21 @@ Dockerfile.base (shared)          ~2.4 GB, tagged base-{aztec-version}
   ├── System dependencies
   └── bun install (all workspace deps)
 
-Dockerfile (prover)                ~50 MB delta
+Dockerfile (host)                  ~50 MB delta
   └── FROM base → copy source → build
+      (TEE_MODE=nitro, proxies to enclave)
 
-Dockerfile.nitro (TEE)             ~100 MB delta
+Dockerfile.nitro (enclave)         ~100 MB delta
   ├── Stage 1: Build NSM library (Rust)
-  └── Stage 2: FROM base → copy source + NSM lib → build
+  └── Stage 2: FROM base → copy source + NSM lib + CRS → build
+      (Bun.serve on port 4000, no bb baked — uploaded at runtime)
 ```
 
-The base image is built once per Aztec version and cached in ECR. Prover and TEE images extend it with only app-specific code, making rebuilds fast.
+The base image is built once per Aztec version and cached in ECR. Host and enclave images extend it with only app-specific code, making rebuilds fast. bb binaries are not baked into any Docker image — they're downloaded by the host at deploy time and uploaded to the enclave via `POST /upload-bb`.
 
 ### Deploy scripts
 
-- **Unified** (`ci-deploy-unified.sh`): teardown enclave + prover → Docker wipe → pull nitro image → build EIF → hugepages → start enclave → health check → pull prover image → run prover container (port 80) → health check. Both services on same host.
+- **Unified** (`ci-deploy-unified.sh`): teardown enclave + host → Docker wipe → pull nitro image → build EIF → hugepages → start enclave → health check → download bb binaries → upload to enclave → pull host image → run host container (port 80, `--network host`) → health check. Host proxies to enclave; bb binaries uploaded at runtime (not baked into Docker images).
 
 ---
 
@@ -306,7 +308,7 @@ The base image is built once per Aztec version and cached in ECR. Prover and TEE
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
 | `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows both `deploy-prod.yml` and `deploy-devnet.yml` to publish. AWS still uses OIDC (no stored keys). |
-| Consolidated EC2 (1 per env) | Single c7i.12xlarge runs both Nitro enclave (port 4000) and prover container (port 80). Prover instances stopped (not terminated) for rollback. |
+| Consolidated EC2 (1 per env) | Single c7i.12xlarge runs both Nitro enclave (port 4000) and host container (port 80, `--network host`). Host proxies to enclave and manages bb version lifecycle. |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
 | Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |

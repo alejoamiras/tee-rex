@@ -5,18 +5,21 @@
 ```
 Client (SDK)
     │
-    ▼ HTTP
-EC2 Parent Instance
-    │ proxy.sh (socat: TCP :4000 → vsock CID:5000)
-    ▼ vsock
-Nitro Enclave
-    │ entrypoint.sh (socat: vsock :5000 → TCP :4000)
-    ▼ localhost
-Express Server (TEE_MODE=nitro)
-    ├── /attestation  → NSM attestation doc + encryption key
-    ├── /prove        → decrypt → prove → return proof
-    └── /encryption-public-key (backward compat)
+    ▼ HTTPS (via CloudFront)
+EC2 Host — Host Container (Express, port 80, --network host)
+    │ TEE_MODE=nitro — proxies to enclave
+    │ Downloads bb from GitHub releases, uploads to enclave
+    ▼ http://localhost:4000 (via socat: TCP :4000 → vsock CID:5000)
+Nitro Enclave — Enclave Service (Bun.serve, port 4000)
+    ├── POST /upload-bb     → save binary, compute SHA256
+    ├── POST /prove         → decrypt → prove → return proof
+    ├── GET /attestation    → NSM doc + encryption key + bb hashes in user_data
+    ├── GET /public-key     → encryption public key
+    └── GET /health         → loaded versions + hashes
 ```
+
+bb binaries are not baked into Docker images — they're downloaded by the host
+at deploy time and uploaded to the enclave via `POST /upload-bb`.
 
 ## Prerequisites
 
@@ -25,8 +28,10 @@ Express Server (TEE_MODE=nitro)
 - Docker installed on the EC2 instance
 - Enclave allocator configured (`/etc/nitro_enclaves/allocator.yaml`):
   ```yaml
-  memory_mib: 4096
-  cpu_count: 2
+  # Production (c7i.12xlarge): 46 vCPUs, 81920 MB with hugepages
+  # Dev/test: adjust to instance size
+  cpu_count: 46
+  memory_mib: 81920
   ```
 
 ## Deployment

@@ -3,8 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as openpgp from "openpgp";
-import { Base64 } from "ox";
-import { type AppDependencies, createApp } from "../index.js";
+import { type AppMode, createHostServer } from "../index.js";
 import { StandardAttestationService } from "./attestation-service.js";
 import { EncryptionService } from "./encryption-service.js";
 
@@ -59,16 +58,6 @@ async function encryptForKey(data: Uint8Array, publicKeyArmored: string): Promis
   return unarmored.data as Uint8Array;
 }
 
-async function startTestServer(app: ReturnType<typeof createApp>) {
-  return new Promise<{ url: string; close: () => void }>((resolve) => {
-    const server = app.listen(0, () => {
-      const addr = server.address();
-      const port = typeof addr === "object" && addr ? addr.port : 0;
-      resolve({ url: `http://localhost:${port}`, close: () => server.close() });
-    });
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Test setup: fake bb versions + real encryption, fake prover that uses findBb
 // ---------------------------------------------------------------------------
@@ -107,29 +96,33 @@ describe("Multi-version bb routing", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function createTestApp() {
+  function createTestServer() {
     const encryption = new EncryptionService();
     const attestation = new StandardAttestationService();
     // Use the real ProverService which will call findBb with the version
     const { ProverService } = require("./prover-service.js");
     const prover = new ProverService();
-    const deps = { prover, encryption, attestation } as unknown as AppDependencies;
-    const app = createApp(deps);
-    return { app, encryption };
+    const mode: AppMode = {
+      type: "standard",
+      prover,
+      encryption,
+      attestation,
+    };
+    const server = createHostServer(mode, { port: 0 });
+    return { server, encryption };
   }
 
   test("routes to correct bb based on x-aztec-version header", async () => {
-    const { app, encryption } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server, encryption } = createTestServer();
 
     try {
       const publicKey = await encryption.getEncryptionPublicKey();
       const payload = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
       const encrypted = await encryptForKey(payload, publicKey);
-      const encryptedBase64 = Base64.fromBytes(encrypted);
+      const encryptedBase64 = Buffer.from(encrypted).toString("base64");
 
       // Request with v2 version header
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -140,7 +133,7 @@ describe("Multi-version bb routing", () => {
 
       expect(res.status).toBe(200);
       const body = (await res.json()) as { proof: string };
-      const proofBytes = Base64.toBytes(body.proof as `0x${string}`);
+      const proofBytes = Buffer.from(body.proof, "base64");
       // First 4 bytes are the field count header (2 fields = 0x00000002)
       expect(proofBytes[0]).toBe(0);
       expect(proofBytes[1]).toBe(0);
@@ -150,21 +143,20 @@ describe("Multi-version bb routing", () => {
       expect(proofBytes[4]).toBe(0xbb);
       expect(proofBytes[67]).toBe(0xbb);
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("uses default bb when no version header", async () => {
-    const { app, encryption } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server, encryption } = createTestServer();
 
     try {
       const publicKey = await encryption.getEncryptionPublicKey();
       const payload = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
       const encrypted = await encryptForKey(payload, publicKey);
-      const encryptedBase64 = Base64.fromBytes(encrypted);
+      const encryptedBase64 = Buffer.from(encrypted).toString("base64");
 
-      const res = await fetch(`${url}/prove`, {
+      const res = await fetch(`${server.url}prove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: encryptedBase64 }),
@@ -172,20 +164,19 @@ describe("Multi-version bb routing", () => {
 
       expect(res.status).toBe(200);
       const body = (await res.json()) as { proof: string };
-      const proofBytes = Base64.toBytes(body.proof as `0x${string}`);
+      const proofBytes = Buffer.from(body.proof, "base64");
       // Default (BB_BINARY_PATH) points to v1 → 0xAA fill
       expect(proofBytes[4]).toBe(0xaa);
     } finally {
-      close();
+      server.stop();
     }
   });
 
   test("GET /health lists cached versions", async () => {
-    const { app } = createTestApp();
-    const { url, close } = await startTestServer(app);
+    const { server } = createTestServer();
 
     try {
-      const res = await fetch(`${url}/health`);
+      const res = await fetch(`${server.url}health`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { status: string; available_versions: string[] };
@@ -193,7 +184,7 @@ describe("Multi-version bb routing", () => {
       expect(body.available_versions).toContain("1.0.0-nightly.20260301");
       expect(body.available_versions).toContain("2.0.0-nightly.20260302");
     } finally {
-      close();
+      server.stop();
     }
   });
 
@@ -215,32 +206,35 @@ describe("Multi-version bb routing", () => {
           return Promise.resolve(Buffer.from("fake"));
         }),
       };
-      const app = createApp({
-        prover,
-        encryption,
-        attestation,
-      } as unknown as AppDependencies);
-      const { url, close } = await startTestServer(app);
+      const server = createHostServer(
+        {
+          type: "standard",
+          prover,
+          encryption,
+          attestation,
+        } as unknown as AppMode,
+        { port: 0 },
+      );
 
       try {
         const publicKey = await encryption.getEncryptionPublicKey();
         const payload = new Uint8Array([0x93, 0x01]);
         const encrypted = await encryptForKey(payload, publicKey);
 
-        const res = await fetch(`${url}/prove`, {
+        const res = await fetch(`${server.url}prove`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "x-aztec-version": "99.99.99",
           },
-          body: JSON.stringify({ data: Base64.fromBytes(encrypted) }),
+          body: JSON.stringify({ data: Buffer.from(encrypted).toString("base64") }),
         });
 
         expect(res.status).toBe(500);
         const body = (await res.json()) as { error: string };
         expect(body.error).toBe("Internal server error");
       } finally {
-        close();
+        server.stop();
       }
     } finally {
       process.env.BB_BINARY_PATH = origPath;

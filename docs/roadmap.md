@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32, 33)
 
 | Phase | Summary |
 |---|---|
@@ -32,6 +32,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **30** | **Wallet SDK integration** — `@aztec/wallet-sdk` for external wallet (browser extension) support. Dual-path: embedded wallet auto-inits as before + "Connect External" button triggers SDK discovery → emoji verification → capability request. External wallet replaces embedded for all operations; proving mode grayed out ("handled by wallet"); deploy disabled (wallet provides accounts). `?wallet=embedded` URL param bypasses external UI for e2e tests. New files: `wallet-connect.ts` (pure logic), UI section in `index.html`, wiring in `main.ts`. `AztecState` extended with `walletType`, `embeddedWallet`, `externalProvider`. |
 | **31** *(in progress)* | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics. See Phase 31 section for details. |
 | **32** | **CI/CD improvements** — narrow server change detection, smart `/health` version check in deploy-prod, devnet auto-merge fix, `api_version` in `/health`. See Phase 32 section. |
+| **33** | **Thin Enclave Architecture** — split monolithic server into host Express (`src/index.ts`) + thin enclave Bun.serve (`src/enclave.ts`). Host manages bb downloads/uploads, enclave handles keys, attestation, decryption, proving. bb SHA256 hashes embedded in NSM attestation `user_data`. Docker images no longer bake bb binaries. See Phase 33 section. |
 
 ---
 
@@ -472,6 +473,71 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 - `server_code` path filter subset (Dockerfile*, packages/server/**, package.json, bun.lock) forces rebuild even when version check would skip it — prevents deploying stale server code
 - `workflow_dispatch` always forces rebuild (both `server_code` and `servers` override to true)
 - `api_version` is a simple integer, not semver — bumped on breaking API changes only
+
+---
+
+## Phase 33: Thin Enclave Architecture — DONE
+
+**Goal**: Split monolithic server into host (Express) + thin enclave (Bun.serve). Host manages bb version downloads and uploads; enclave handles cryptographic operations. bb binaries no longer baked into Docker/EIF images — uploaded at runtime.
+
+**Architecture:**
+```
+CloudFront → Host Express (port 80, --network host)
+                ├─ GET /health         → aggregates host + enclave health
+                ├─ GET /attestation    → proxies to enclave
+                ├─ POST /prove         → downloads bb if needed, uploads to enclave, proxies
+                └─ GET /encryption-public-key → proxies to enclave
+                ▼ (http://localhost:4000 via socat→vsock)
+           Thin Enclave (Bun.serve, port 4000)
+                ├─ POST /upload-bb     → save binary, compute SHA256
+                ├─ POST /prove         → decrypt + bb prove
+                ├─ GET /attestation    → NSM doc with bb hashes in user_data
+                ├─ GET /public-key     → encryption public key
+                └─ GET /health         → loaded versions + hashes
+```
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `packages/server/src/enclave.ts` | Thin enclave Bun.serve() HTTP server |
+| `packages/server/src/enclave.test.ts` | 12 tests for enclave service |
+| `packages/server/src/lib/enclave-protocol.ts` | Shared host↔enclave types |
+| `packages/server/src/lib/bb-hash.ts` | BB binary SHA256 hashing + cache |
+| `packages/server/src/lib/bb-download.ts` | Download bb from GitHub releases |
+| `packages/server/src/lib/enclave-client.ts` | Typed HTTP client for host→enclave |
+| `scripts/download-and-upload-bb.sh` | Manual bb version management |
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `packages/server/src/index.ts` | `AppMode` discriminated union: `standard` (local dev) vs `proxy` (TEE_MODE=nitro) |
+| `packages/server/src/lib/attestation-service.ts` | `getAttestation(publicKey, userData?)` — optional userData for NSM user_data field |
+| `packages/sdk/src/lib/attestation.ts` | `parseEnclaveUserData()`, `verifyNitroAttestation` returns `bbVersions` |
+| `Dockerfile.nitro` | Removed bb baking, entrypoint → `src/enclave.ts` |
+| `Dockerfile` | Removed bb baking, added `TEE_MODE=nitro`, `ENCLAVE_URL` |
+| `infra/ci-deploy-unified.sh` | New flow: enclave → download bb → upload to enclave → host container |
+| `.github/workflows/_deploy-unified.yml` | Renamed prover→host, bb_versions as runtime input |
+
+**Key decisions:**
+- Express on host (middleware, rate limiting, CORS), Bun.serve in enclave (minimal surface area)
+- `TEE_MODE=standard` preserved for local dev — handles everything in one process
+- bb SHA256 in attestation `user_data` — hardware-signed by NSM, equivalent security to PCR0-covers-everything
+- Atomic bb upload: write to tmp dir, rename. Partial uploads are safe.
+- `Bun.serve({ maxRequestBodySize: 300_000_000 })` for ~200MB bb uploads
+- Backward compatible: `AppDependencies` interface still works, SDK attestation works with or without user_data
+
+### Phase 33 Follow-up: Express → Bun.serve Host Migration
+
+Replaced Express and 7 runtime dependencies (`express`, `cors`, `express-rate-limit`, `@logtape/express`, `ms`, `ox`, `zod`) with native `Bun.serve` on the host server. Both host and enclave now use the same `Bun.serve` pattern — runtime deps reduced from 9 to 2 (`@logtape/logtape`, `openpgp`).
+
+**Changes:**
+- `src/index.ts`: Rewrote host as `Bun.serve` with native request routing, CORS headers, and body size limit (`maxRequestBodySize`)
+- `src/lib/rate-limit.ts`: New sliding-window rate limiter (replaces `express-rate-limit`), 9 unit tests
+- Removed `setInterval` keepAlive hack (Bun.serve refs the event loop natively)
+- Removed `sysctl` workaround for silent port-bind failure (Bun.serve throws on bind errors)
+- **Behavioral change**: Oversized requests (>50MB) now return bare `413` from Bun.serve instead of JSON error body. SDK doesn't parse 413 bodies, so no client impact.
 
 ---
 

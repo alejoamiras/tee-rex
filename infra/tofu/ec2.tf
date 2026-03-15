@@ -48,7 +48,7 @@ resource "aws_instance" "ci_tee" {
 
 resource "aws_instance" "prod_tee" {
   ami                    = var.instance_amis.prod_tee
-  instance_type          = "c7i.12xlarge"
+  instance_type          = var.prod_instance_type
   key_name               = aws_key_pair.tee_rex.key_name
   subnet_id              = var.default_subnet_id
   vpc_security_group_ids = [aws_security_group.tee_rex.id]

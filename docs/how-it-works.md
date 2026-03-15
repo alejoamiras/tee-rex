@@ -31,30 +31,35 @@ TEE-Rex uses **AWS Nitro Enclaves** as the TEE. The idea:
 │                                                             │
 │  1. Build transaction locally (private execution)           │
 │  2. GET /attestation → verify enclave is genuine            │
+│     (attestation includes bb SHA256 hashes in user_data)    │
 │  3. Encrypt proving inputs with enclave's public key        │
 │  4. POST /prove → get back the proof                        │
 └──────────────────────────┬──────────────────────────────────┘
-                           │ HTTPS
+                           │ HTTPS (via CloudFront)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  EC2 Host                                                   │
+│  EC2 Host — Host Container (Bun.serve, port 80)              │
+│                                                             │
+│  • Proxies /attestation, /prove, /encryption-public-key     │
+│  • Downloads bb from GitHub releases on demand              │
+│  • Uploads bb to enclave via POST /upload-bb                │
+│  • Aggregates health from enclave + host runtime            │
+│                                                             │
 │  socat TCP:4000 ←→ vsock:16:5000                            │
 └──────────────────────────┬──────────────────────────────────┘
                            │ vsock (hypervisor-controlled)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  AWS Nitro Enclave                                          │
+│  AWS Nitro Enclave — Enclave Service (Bun.serve, port 4000) │
 │                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  TEE-Rex Server (Express + Barretenberg)            │    │
-│  │                                                     │    │
-│  │  • Decrypt proving inputs (OpenPGP)                 │    │
-│  │  • Run Barretenberg prover (native binary)          │    │
-│  │  • Return proof (not encrypted, proofs are public)  │    │
-│  │  • Generate attestation via NSM hardware (/dev/nsm) │    │
-│  └─────────────────────────────────────────────────────┘    │
+│  • POST /upload-bb  → save binary, compute SHA256           │
+│  • POST /prove      → decrypt (OpenPGP) + bb prove         │
+│  • GET /attestation → NSM doc with bb hashes in user_data   │
+│  • GET /public-key  → encryption public key                 │
+│  • GET /health      → loaded versions + hashes              │
 │                                                             │
 │  No network, no disk, no SSH. Only vsock in/out.            │
+│  bb binaries uploaded at runtime (not baked into EIF).       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -161,17 +166,25 @@ Three modes:
 - **`"uee"`** — encrypts and delegates to the TEE server
 - **`"accelerated"`** — routes to the native TeeRex Accelerator on localhost (runs `bb` binary natively, bypassing WASM throttling). Auto-falls back to `"local"` if the accelerator is unavailable or has a version mismatch.
 
-## The Docker Image: Multi-Stage Build
+## Docker Images
 
-The `Dockerfile.nitro` uses three stages:
+Two Docker images serve different roles:
+
+**`Dockerfile.nitro` (enclave)** — runs inside the Nitro Enclave:
 
 | Stage | Base Image | Purpose |
 |-------|-----------|---------|
 | 1. `nsm` | `rust:1.85-slim` | Compiles `libnsm.so` from AWS's `aws-nitro-enclaves-nsm-api` Rust crate |
 | 2. `builder` | `oven/bun:1.3-debian` | Installs dependencies, copies source code |
-| 3. Runtime | `oven/bun:1.3-debian` | Copies `libnsm.so` + app, runs server with socat vsock bridge |
+| 3. Runtime | `oven/bun:1.3-debian` | Copies `libnsm.so` + CRS + app, runs `src/enclave.ts` with socat vsock bridge |
 
-The `libnsm.so` library is what lets the server talk to the NSM hardware device. It must be compiled from source — there is no pre-built package.
+**`Dockerfile` (host)** — runs on the EC2 host with `--network host`:
+- FROM base → copy source → runs `src/index.ts` with `TEE_MODE=nitro`
+- Proxies requests to enclave, manages bb version lifecycle
+
+The `libnsm.so` library is what lets the enclave talk to the NSM hardware device. It must be compiled from source — there is no pre-built package.
+
+**Important**: bb binaries are not baked into either Docker image. The host downloads them from GitHub releases at deploy time and uploads them to the enclave via `POST /upload-bb`. This means Docker/EIF rebuilds are only needed for code changes, not for bb version updates.
 
 ## Security Properties
 

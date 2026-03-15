@@ -12,6 +12,12 @@ variable "aws_region" {
 # EC2
 # -----------------------------------------------------------------------------
 
+variable "prod_instance_type" {
+  description = "EC2 instance type for prod (c7i.12xlarge for performance, c7i.2xlarge for cost savings)"
+  type        = string
+  default     = "c7i.2xlarge"
+}
+
 variable "ec2_key_name" {
   description = "EC2 key pair name"
   type        = string
