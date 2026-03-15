@@ -57,7 +57,7 @@ docs/        Architecture, CI pipeline reference
 | `bun run test` | Lint + typecheck + all unit tests |
 | `bun run test:unit` | Unit tests only |
 | `bun run test:e2e` | E2E tests (requires local Aztec sandbox + server) |
-| `bun run test:e2e:nextnet` | Nextnet smoke test (requires internet) |
+| `bun run test:e2e:remote` | Remote network smoke test (requires internet) |
 | `bun run test:all` | Everything (unit + e2e) |
 
 Unit tests live alongside source code (`src/*.test.ts`). E2e tests live in each package's `e2e/` directory.

@@ -195,9 +195,10 @@ jobs:
 
       - name: Run SDK E2E tests
         env:
-          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bun run --cwd packages/sdk test:e2e
 
       - name: Install Playwright browsers
@@ -205,9 +206,10 @@ jobs:
 
       - name: Run app smoke E2E
         env:
-          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
           TEE_URL: http://localhost:4001
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 
@@ -238,12 +240,13 @@ jobs:
       - name: Build app
         run: bun run --cwd packages/app build
         env:
-          AZTEC_NODE_URL: https://nextnet.aztec-labs.com
+          AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: ${{ secrets.NIGHTLIES_CLOUDFRONT_URL }}/prover
           TEE_URL: ${{ secrets.NIGHTLIES_CLOUDFRONT_URL }}/tee
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
           VITE_ENV_NAME: nightlies
-          VITE_OTHER_ENV_URL: https://devnet.tee-rex.dev
-          VITE_OTHER_ENV_NAME: devnet
+          VITE_OTHER_ENV_URL: https://testnet.tee-rex.dev
+          VITE_OTHER_ENV_NAME: testnet
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

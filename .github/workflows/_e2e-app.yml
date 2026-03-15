@@ -117,6 +117,7 @@ jobs:
           TEE_URL: ${{ inputs.tee_url }}
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
           PROVER_URL: ${{ inputs.prover_url }}
+          SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bun run --cwd packages/app ${{ inputs.test_script }}
 
       - name: Upload Aztec logs

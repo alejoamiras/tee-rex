@@ -59,10 +59,14 @@ describe("TeeRexProver", () => {
         pxeOptions: { proverOrOptions: prover },
       });
 
-      // Derive canonical Sponsored FPC address and register in PXE
+      // Derive Sponsored FPC address and register in PXE.
+      // Uses SPONSORED_FPC_SALT when set (private FPC on live networks),
+      // defaults to salt=0 (canonical FPC for local sandbox).
+      const saltHex = process.env.SPONSORED_FPC_SALT;
+      const fpcSalt = saltHex ? Fr.fromHexString(saltHex) : new Fr(0);
       const fpcInstance = await getContractInstanceFromInstantiationParams(
         SponsoredFPCContract.artifact,
-        { salt: new Fr(0) },
+        { salt: fpcSalt },
       );
       await wallet.registerContract(fpcInstance, SponsoredFPCContract.artifact);
       feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);

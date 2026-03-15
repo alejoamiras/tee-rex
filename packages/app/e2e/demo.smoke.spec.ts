@@ -1,10 +1,9 @@
 /**
- * Deploy-only smoke tests — runs against nextnet/devnet with real proofs.
+ * Deploy-only smoke tests — runs against testnet with real proofs.
  *
  * 3 tests: one deploy per mode (TEE, UEE, local). No token flow,
  * no mode switching — just verifies that each proving mode can deploy
- * an account successfully. Used by infra.yml, deploy-prod.yml, and
- * deploy-devnet.yml pipelines.
+ * an account successfully. Used by infra.yml and deploy pipelines.
  *
  * Usage: bun run --cwd packages/app test:e2e:smoke
  */

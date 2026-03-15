@@ -31,7 +31,7 @@
     "test": "bun run lint && bun run test:typecheck && bun run test:unit",
     "test:all": "bun run test && bun run test:e2e",
     "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/app test:e2e:all",
-    "test:e2e:nextnet": "bun run --cwd packages/sdk test:e2e:nextnet",
+    "test:e2e:remote": "bun run --cwd packages/sdk test:e2e:remote",
     "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
     "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/app test:unit"
   },

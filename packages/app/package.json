@@ -5,11 +5,10 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "dev:devnet": "AZTEC_NODE_URL=https://v4-devnet-2.aztec-labs.com PROVER_URL=https://devnet.tee-rex.dev/prover TEE_URL=https://devnet.tee-rex.dev/tee VITE_ENV_NAME=devnet vite",
     "dev:local-network:local": "PROVER_URL=http://localhost:4000 vite",
-    "dev:local-network:prod": "PROVER_URL=https://nextnet.tee-rex.dev/prover TEE_URL=https://nextnet.tee-rex.dev/tee vite",
-    "dev:nextnet:local": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=http://localhost:4000 vite",
-    "dev:nextnet:prod": "AZTEC_NODE_URL=https://nextnet.aztec-labs.com PROVER_URL=https://nextnet.tee-rex.dev/prover TEE_URL=https://nextnet.tee-rex.dev/tee vite",
+    "dev:local-network:prod": "PROVER_URL=https://testnet.tee-rex.dev/prover TEE_URL=https://testnet.tee-rex.dev/tee vite",
+    "dev:testnet:local": "AZTEC_NODE_URL=https://rpc.testnet.aztec-labs.com PROVER_URL=http://localhost:4000 vite",
+    "dev:testnet:prod": "AZTEC_NODE_URL=https://rpc.testnet.aztec-labs.com PROVER_URL=https://testnet.tee-rex.dev/prover TEE_URL=https://testnet.tee-rex.dev/tee vite",
     "preview": "vite preview",
     "test": "bun test",
     "test:e2e": "bunx playwright test --project=mocked",
@@ -44,6 +43,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
+    "viem": "npm:@aztec/viem@2.38.2",
     "vite": "^7.3.1",
     "vite-plugin-node-polyfills": "^0.25.0"
   }
