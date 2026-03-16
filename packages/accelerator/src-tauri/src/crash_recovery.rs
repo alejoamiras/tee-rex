@@ -89,7 +89,7 @@ pub fn enable_crash_recovery() {
     let service_path = service_dir.join(format!("{APP_NAME}.service"));
     let service_content = format!(
         "[Unit]\n\
-         Description=TeeRex Accelerator\n\
+         Description=Aztec Accelerator\n\
          After=default.target\n\
          \n\
          [Service]\n\
