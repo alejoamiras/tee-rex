@@ -21,7 +21,7 @@ use tracing_subscriber::EnvFilter;
 
 // Tray icon variants (44x44 RGBA PNGs, macOS template mode)
 static ICON_IDLE: &[u8] = include_bytes!("../icons/tray-idle.png");
-static ICON_PROVING: [&[u8]; 12] = [
+static ICON_PROVING: [&[u8]; 24] = [
     include_bytes!("../icons/tray-proving-1.png"),
     include_bytes!("../icons/tray-proving-2.png"),
     include_bytes!("../icons/tray-proving-3.png"),
@@ -34,6 +34,18 @@ static ICON_PROVING: [&[u8]; 12] = [
     include_bytes!("../icons/tray-proving-10.png"),
     include_bytes!("../icons/tray-proving-11.png"),
     include_bytes!("../icons/tray-proving-12.png"),
+    include_bytes!("../icons/tray-proving-13.png"),
+    include_bytes!("../icons/tray-proving-14.png"),
+    include_bytes!("../icons/tray-proving-15.png"),
+    include_bytes!("../icons/tray-proving-16.png"),
+    include_bytes!("../icons/tray-proving-17.png"),
+    include_bytes!("../icons/tray-proving-18.png"),
+    include_bytes!("../icons/tray-proving-19.png"),
+    include_bytes!("../icons/tray-proving-20.png"),
+    include_bytes!("../icons/tray-proving-21.png"),
+    include_bytes!("../icons/tray-proving-22.png"),
+    include_bytes!("../icons/tray-proving-23.png"),
+    include_bytes!("../icons/tray-proving-24.png"),
 ];
 
 /// Returns true in debug builds (`cargo tauri dev`), false in release.
@@ -190,7 +202,7 @@ fn main() {
             let tray = TrayIconBuilder::new()
                 .icon(tray_icon)
                 .icon_as_template(true)
-                .tooltip("TeeRex Accelerator")
+                .tooltip("Aztec Accelerator")
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "quit" => app.exit(0),
@@ -228,7 +240,7 @@ fn main() {
                 let tray = tray.clone();
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    let mut interval = tokio::time::interval(Duration::from_millis(100));
+                    let mut interval = tokio::time::interval(Duration::from_millis(50));
                     let mut frame_idx: usize = 0;
                     let mut was_animating = false;
                     loop {
@@ -358,5 +370,5 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running TeeRex Accelerator");
+        .expect("error while running Aztec Accelerator");
 }
