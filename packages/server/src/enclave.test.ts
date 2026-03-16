@@ -198,6 +198,33 @@ describe("Enclave service", () => {
       expect(proofBytes[4]).toBe(0xaa);
     });
 
+    test("decrypts and proves with JSON { data: base64 } payload", async () => {
+      const publicKey = await encryption.getEncryptionPublicKey();
+      const fakeMsgpack = new Uint8Array([0x93, 0x01, 0x02, 0x03]);
+      const encrypted = await encryptForKey(fakeMsgpack, publicKey);
+      const base64Data = Buffer.from(encrypted).toString("base64");
+
+      const res = await fetch(`${baseUrl}/prove`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-aztec-version": "1.0.0-nightly.20260301",
+        },
+        body: JSON.stringify({ data: base64Data }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { proof: string };
+      expect(body.proof).toBeDefined();
+
+      const proofBytes = Buffer.from(body.proof, "base64");
+      expect(proofBytes[0]).toBe(0);
+      expect(proofBytes[1]).toBe(0);
+      expect(proofBytes[2]).toBe(0);
+      expect(proofBytes[3]).toBe(2);
+      expect(proofBytes[4]).toBe(0xaa);
+    });
+
     test("returns 400 for bad encryption", async () => {
       const res = await fetch(`${baseUrl}/prove`, {
         method: "POST",
@@ -214,6 +241,17 @@ describe("Enclave service", () => {
         body: new ArrayBuffer(0),
       });
       expect(res.status).toBe(400);
+    });
+
+    test("returns 400 for empty JSON data field", async () => {
+      const res = await fetch(`${baseUrl}/prove`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ data: "" }),
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("expected { data: string }");
     });
   });
 
