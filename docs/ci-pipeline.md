@@ -151,7 +151,7 @@ Note: `packages/sdk/**` was removed from the `servers` filter — the server has
 | `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
 | `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
 | `publish-sdk` | Resolve version (query npm for existing revisions, append `.N` suffix if needed), set SDK version, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
-| `validate-prod` | SSM tunnels to prod server (both ports on same instance), smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet. Runs even when server deploy is skipped (validates existing deployment). | ~7 min |
+| `validate-prod` | SSM tunnel to host (port 80), smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet. `TEE_URL = PROVER_URL` (host proxies to enclave). Runs even when server deploy is skipped (validates existing deployment). | ~7 min |
 
 ### Conditional behavior
 
@@ -230,8 +230,8 @@ Note: macOS code signing is deferred (TODO). Windows is not supported (no `bb` b
 | `_deploy-unified.yml` | Build Nitro + host images in parallel, push to ECR, start single EC2, deploy enclave + host container via SSM. bb binaries downloaded at runtime and uploaded to enclave. | `environment`, `nitro_image_tag`, `host_image_tag`, `base_tag`, `bb_versions` |
 | `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
-| `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnels to TEE/prover | `tee_url`, `prover_url`, `aztec_node_url` |
-| `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnels. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url` |
+| `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnel to prover/host | `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
+| `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnel. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
 
 ---
 
@@ -284,9 +284,9 @@ The base image is built once per Aztec version and cached in ECR. Host and encla
 | `validate-prod` is a hard gate (no `continue-on-error`) | Scoped to smoke tests (3 deploys) with `sendWithRetry` for reliability. Blocks `publish-sdk` on failure. |
 | `workflow_dispatch` overrides all filters | Manual runs should always deploy/test everything |
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
-| SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
+| SSM tunnels (no public ports) | EC2 instances have no public IPs; all CI access is via AWS SSM port forwarding to port 80 (single tunnel). `TEE_URL = PROVER_URL` since host proxies to enclave. |
 | `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows publishing from multiple workflows. AWS still uses OIDC (no stored keys). |
-| Consolidated EC2 (1 per env) | Single c7i.12xlarge runs both Nitro enclave (port 4000) and host container (port 80, `--network host`). Host proxies to enclave and manages bb version lifecycle. |
+| Consolidated EC2 (1 per env) | Single c7i.12xlarge runs Nitro enclave (localhost:4000 via socat, not externally accessible) and host container (port 80, `--network host`). All external traffic routes through the host; host proxies to enclave internally. |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
 | Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |
