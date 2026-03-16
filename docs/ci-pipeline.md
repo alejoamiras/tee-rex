@@ -7,8 +7,8 @@ How the tee-rex CI/CD system works. Last updated: 2026-03-12.
 ## Overview
 
 ```
-14 workflow files total:
-   9 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, deploy-prod, release-accelerator, release-please-accelerator)
+13 workflow files total:
+   8 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, deploy-prod, release-accelerator)
    5 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
@@ -204,31 +204,21 @@ The nightlies wrapper calls `_aztec-update.yml` with these inputs:
 
 ### `release-accelerator.yml`
 
-Tag-triggered workflow that builds and publishes the TeeRex Accelerator to GitHub Releases.
+Manual dispatch workflow that tags, builds, and publishes the Aztec Accelerator to GitHub Releases.
 
 ```mermaid
 graph LR
-    tag["Tag push\n(accelerator-v*)"] --> matrix["Matrix build"]
+    dispatch["workflow_dispatch\n(version input)"] --> tag["Create git tag\n(accelerator-v*)"]
+    tag --> matrix["Matrix build"]
     matrix --> mac_arm["macOS arm64\n(.dmg)"]
     matrix --> mac_x64["macOS x86_64\n(.dmg)"]
     matrix --> linux["Linux x86_64\n(.deb, .AppImage)"]
     mac_arm & mac_x64 & linux --> release["GitHub Release\n(upload artifacts)"]
 ```
 
-Trigger: tag push matching `accelerator-v*`. Each matrix job runs `cargo tauri build` with the appropriate target, then uploads the artifacts to the GitHub Release created by the tag.
+Trigger: `workflow_dispatch` with a `version` input (e.g. `1.2.0`). Creates git tag `accelerator-v{version}`, runs `cargo tauri build` for each platform, then creates a GitHub Release with the artifacts.
 
 Note: macOS code signing is deferred (TODO). Windows is not supported (no `bb` binary from Aztec).
-
-### `release-please-accelerator.yml`
-
-Automated version bumping and changelog generation via [release-please](https://github.com/googleapis/release-please-action).
-
-- Trigger: push to `main` with changes in `packages/accelerator/**`
-- On push: creates/updates a "Release PR" with version bump in `Cargo.toml` + `tauri.conf.json` + CHANGELOG
-- When Release PR is merged: creates a git tag `accelerator-v{version}` which triggers `release-accelerator.yml`
-- Uses `PAT_TOKEN` (not `GITHUB_TOKEN`) so tag pushes trigger other workflows
-- Config: `release-please-config.json` (Rust release type, `accelerator-v` tag prefix, RC prerelease)
-- Manifest: `.release-please-manifest.json` (tracks current version)
 
 ---
 
