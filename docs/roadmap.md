@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32, 33, 35)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32, 33, 34, 35)
 
 | Phase | Summary |
 |---|---|
@@ -98,8 +98,8 @@ aztec-nightlies.yml detects new version
 
     CloudFront (https://nextnet.tee-rex.dev)
       ├── /*           → S3 bucket (static Vite build)
-      ├── /prover/*    → EC2 (http, port 80)
-      └── /tee/*       → EC2 (http, port 4000)  ← same instance
+      ├── /prover/*    → EC2 host (http, port 80)
+      └── /tee/*       → EC2 host (http, port 80)  ← host proxies to enclave
 ```
 
 **Completed parts:**
@@ -403,7 +403,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 **Goal**: Consolidate 2 EC2 instances per environment (TEE m5.xlarge + prover t3.xlarge) into 1 m5.xlarge running both services. Saves ~$2,900/year (46% reduction).
 
-**Architecture**: Single m5.xlarge per env runs Nitro enclave on port 4000 (2 CPU + 8GB hugepages) and prover Docker container on port 80 (2 CPU + 8GB). CloudFront routes `/tee/*` and `/prover/*` to the same origin IP on different ports.
+**Architecture**: Single m5.xlarge per env runs Nitro enclave (localhost:4000 via socat, not externally accessible) and host Docker container on port 80 (2 CPU + 8GB). CloudFront routes both `/tee/*` and `/prover/*` through the host on port 80 — the host proxies to the enclave internally.
 
 **Changes:**
 
@@ -539,6 +539,24 @@ Replaced Express and 7 runtime dependencies (`express`, `cors`, `express-rate-li
 - Removed `setInterval` keepAlive hack (Bun.serve refs the event loop natively)
 - Removed `sysctl` workaround for silent port-bind failure (Bun.serve throws on bind errors)
 - **Behavioral change**: Oversized requests (>50MB) now return bare `413` from Bun.serve instead of JSON error body. SDK doesn't parse 413 bodies, so no client impact.
+
+---
+
+## Phase 34: Thin Enclave Architecture Cleanup — DONE (PR #201)
+
+**Goal**: Make the enclave truly internal-only. Remove CloudFront's direct route to port 4000, lock down the security group, and unify all CI workflows to use a single SSM tunnel through the host.
+
+**Changes:**
+
+| Item | Summary |
+|------|---------|
+| **CloudFront** | Removed `tee-ec2` origin (port 4000) from all 5 distributions. `/tee/*` now routes through `prover-ec2` (port 80, the host). |
+| **Security group** | Removed port 4000 ingress rule. Only port 80 is externally accessible. |
+| **Enclave** | Reverted PR #200's JSON content-type handling — enclave `/prove` only accepts raw binary from the host proxy. |
+| **socat** | Bound to `127.0.0.1` (defense-in-depth). Even if the SG were misconfigured, the enclave proxy only accepts local connections. |
+| **CI workflows** | Unified deploy-nightlies, deploy-devnet, deploy-prod, `_e2e-sdk`, `_e2e-app`, and infra to single SSM tunnel on port 80. `TEE_URL = PROVER_URL` (both go through host). |
+
+**Key insight**: The host already handled all endpoints (`/prove`, `/attestation`, `/public-key`, `/health`) and proxied to the enclave. The `tee-ec2` CloudFront origin was a leftover from before Phase 33 that was never cleaned up.
 
 ---
 
