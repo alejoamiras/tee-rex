@@ -2,7 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::menu::{
     CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
 };
@@ -16,6 +18,23 @@ use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+
+// Tray icon variants (44x44 RGBA PNGs, macOS template mode)
+static ICON_IDLE: &[u8] = include_bytes!("../icons/tray-idle.png");
+static ICON_PROVING: [&[u8]; 12] = [
+    include_bytes!("../icons/tray-proving-1.png"),
+    include_bytes!("../icons/tray-proving-2.png"),
+    include_bytes!("../icons/tray-proving-3.png"),
+    include_bytes!("../icons/tray-proving-4.png"),
+    include_bytes!("../icons/tray-proving-5.png"),
+    include_bytes!("../icons/tray-proving-6.png"),
+    include_bytes!("../icons/tray-proving-7.png"),
+    include_bytes!("../icons/tray-proving-8.png"),
+    include_bytes!("../icons/tray-proving-9.png"),
+    include_bytes!("../icons/tray-proving-10.png"),
+    include_bytes!("../icons/tray-proving-11.png"),
+    include_bytes!("../icons/tray-proving-12.png"),
+];
 
 /// Returns true in debug builds (`cargo tauri dev`), false in release.
 fn is_dev_mode() -> bool {
@@ -165,10 +184,8 @@ fn main() {
                     .build()?
             };
 
-            let tray_icon = {
-                let bytes = include_bytes!("../icons/tray-icon.png");
-                tauri::image::Image::from_bytes(bytes).expect("failed to load tray icon")
-            };
+            let tray_icon =
+                tauri::image::Image::from_bytes(ICON_IDLE).expect("failed to load tray icon");
 
             let tray = TrayIconBuilder::new()
                 .icon(tray_icon)
@@ -201,6 +218,49 @@ fn main() {
                     _ => {}
                 })
                 .build(app)?;
+
+            // Tray icon animation loop — pulses outward during proving.
+            // Both set_icon + set_icon_as_template must run in a single main-thread
+            // turn to avoid a black flash between the two calls.
+            let is_animating = Arc::new(AtomicBool::new(false));
+            {
+                let is_animating = is_animating.clone();
+                let tray = tray.clone();
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_millis(100));
+                    let mut frame_idx: usize = 0;
+                    let mut was_animating = false;
+                    loop {
+                        interval.tick().await;
+                        let animating = is_animating.load(Ordering::Relaxed);
+                        if animating {
+                            let tray = tray.clone();
+                            let frame = frame_idx;
+                            let _ = handle.run_on_main_thread(move || {
+                                if let Ok(icon) =
+                                    tauri::image::Image::from_bytes(ICON_PROVING[frame])
+                                {
+                                    let _ = tray.set_icon(Some(icon));
+                                    let _ = tray.set_icon_as_template(true);
+                                }
+                            });
+                            frame_idx = (frame_idx + 1) % ICON_PROVING.len();
+                            was_animating = true;
+                        } else if was_animating {
+                            let tray = tray.clone();
+                            let _ = handle.run_on_main_thread(move || {
+                                if let Ok(icon) = tauri::image::Image::from_bytes(ICON_IDLE) {
+                                    let _ = tray.set_icon(Some(icon));
+                                    let _ = tray.set_icon_as_template(true);
+                                }
+                            });
+                            frame_idx = 0;
+                            was_animating = false;
+                        }
+                    }
+                });
+            }
 
             let status_clone = status.clone();
             let tray_clone = tray.clone();
@@ -271,6 +331,7 @@ fn main() {
                     }
                 });
 
+            let is_animating_for_status = is_animating.clone();
             let state = AppState {
                 on_status: Some(Arc::new(move |text: &str| {
                     tracing::info!(text, "on_status callback fired");
@@ -280,6 +341,8 @@ fn main() {
                     if let Err(e) = tray_clone.set_tooltip(Some(text)) {
                         tracing::error!("set_tooltip failed: {e}");
                     }
+                    let active = text.contains("Proving") || text.contains("Downloading");
+                    is_animating_for_status.store(active, Ordering::Relaxed);
                 })),
                 bundled_version: Some(bundled_version),
                 on_versions_changed: Some(on_versions_changed),
