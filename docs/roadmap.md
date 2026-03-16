@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32, 33)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32, 33, 35)
 
 | Phase | Summary |
 |---|---|
@@ -33,6 +33,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **31** *(in progress)* | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics. See Phase 31 section for details. |
 | **32** | **CI/CD improvements** — narrow server change detection, smart `/health` version check in deploy-prod, devnet auto-merge fix, `api_version` in `/health`. See Phase 32 section. |
 | **33** | **Thin Enclave Architecture** — split monolithic server into host Express (`src/index.ts`) + thin enclave Bun.serve (`src/enclave.ts`). Host manages bb downloads/uploads, enclave handles keys, attestation, decryption, proving. bb SHA256 hashes embedded in NSM attestation `user_data`. Docker images no longer bake bb binaries. See Phase 33 section. |
+| **35** | **Deprecate Devnet** — removed devnet environment (v4.0.0, updated twice monthly, highest maintenance/lowest value). Deleted `aztec-devnet.yml`, `deploy-devnet.yml` workflows. Removed devnet CloudFront distribution, S3 bucket, IAM OIDC refs, variables, and outputs from Tofu. Removed devnet tier from `bb-versions.ts`, `download-bb.ts`, `update-aztec-version.ts` and their tests. Updated app badge colors. Reduced from 4→3 environments (mainnet, testnet, nightlies) served from 2 branches (`main`, `nightlies`). |
 
 ---
 

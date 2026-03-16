@@ -101,12 +101,6 @@ variable "nightlies_s3_bucket" {
   default     = "tee-rex-app-nightlies"
 }
 
-variable "devnet_s3_bucket" {
-  description = "S3 bucket name for devnet app"
-  type        = string
-  default     = "tee-rex-app-devnet"
-}
-
 # -----------------------------------------------------------------------------
 # ACM
 # -----------------------------------------------------------------------------
@@ -145,8 +139,3 @@ variable "nightlies_cloudfront_aliases" {
   default     = ["nightlies.tee-rex.dev"]
 }
 
-variable "devnet_cloudfront_aliases" {
-  description = "Alternate domain names for devnet CloudFront distribution"
-  type        = list(string)
-  default     = ["devnet.tee-rex.dev"]
-}

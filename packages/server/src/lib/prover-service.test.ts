@@ -10,7 +10,6 @@ import { classifyVersion, findBb, listCachedVersions, versionsToEvict } from "./
 
 describe("classifyVersion", () => {
   test("nightly", () => expect(classifyVersion("5.0.0-nightly.20260307")).toBe("nightly"));
-  test("devnet", () => expect(classifyVersion("5.0.0-devnet.1")).toBe("devnet"));
   test("testnet", () => expect(classifyVersion("5.0.0-rc.1")).toBe("testnet"));
   test("mainnet", () => expect(classifyVersion("5.0.0")).toBe("mainnet"));
   test("unknown prerelease defaults to mainnet", () =>
@@ -57,7 +56,6 @@ describe("versionsToEvict", () => {
       "5.0.0-nightly.20260301",
       "5.0.0-nightly.20260302",
       "5.0.0-nightly.20260303",
-      "5.0.0-devnet.1",
       "5.0.0-rc.1",
       "5.0.0",
     ];

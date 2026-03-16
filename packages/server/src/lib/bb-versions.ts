@@ -9,11 +9,10 @@ const logger = getLogger(["tee-rex", "server", "bb-versions"]);
 // Network tier classification — same logic as accelerator (versions.rs)
 // ---------------------------------------------------------------------------
 
-export type NetworkTier = "nightly" | "devnet" | "testnet" | "mainnet";
+export type NetworkTier = "nightly" | "testnet" | "mainnet";
 
 const RETENTION_LIMITS: Record<NetworkTier, number | null> = {
   nightly: 2,
-  devnet: 3,
   testnet: 5,
   mainnet: null, // keep all
 };
@@ -21,7 +20,6 @@ const RETENTION_LIMITS: Record<NetworkTier, number | null> = {
 export function classifyVersion(version: string): NetworkTier {
   const prerelease = version.split("-").slice(1).join("-");
   if (prerelease.startsWith("nightly")) return "nightly";
-  if (prerelease.startsWith("devnet")) return "devnet";
   if (prerelease.startsWith("rc")) return "testnet";
   return "mainnet";
 }
