@@ -122,27 +122,11 @@ async function handleProve(
   const aztecVersion = req.headers.get("x-aztec-version") ?? undefined;
   logger.info("Prove request received", { aztecVersion });
 
-  // Accept both raw binary (from host proxy) and JSON { data: base64 } (from SDK directly)
-  let encryptedBytes: Uint8Array;
-  const contentType = req.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    let body: { data?: unknown };
-    try {
-      body = await req.json();
-    } catch {
-      return Response.json({ error: "Malformed JSON body" }, { status: 400 });
-    }
-    if (typeof body?.data !== "string" || body.data.length === 0) {
-      return Response.json({ error: "Invalid body: expected { data: string }" }, { status: 400 });
-    }
-    encryptedBytes = new Uint8Array(Buffer.from(body.data, "base64"));
-  } else {
-    const raw = await req.arrayBuffer();
-    if (raw.byteLength === 0) {
-      return Response.json({ error: "Empty body" }, { status: 400 });
-    }
-    encryptedBytes = new Uint8Array(raw);
+  const raw = await req.arrayBuffer();
+  if (raw.byteLength === 0) {
+    return Response.json({ error: "Empty body" }, { status: 400 });
   }
+  const encryptedBytes = new Uint8Array(raw);
 
   let decryptedData: Uint8Array;
   const decryptStart = performance.now();

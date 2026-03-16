@@ -41,7 +41,7 @@ resource "aws_cloudfront_function" "strip_prefix" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "prod" {
-  comment             = "tee-rex production — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex production — app (S3) + prover (EC2)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -63,21 +63,6 @@ resource "aws_cloudfront_distribution" "prod" {
 
     custom_origin_config {
       http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 120
-      origin_keepalive_timeout = 5
-    }
-  }
-
-  # TEE EC2 origin (HTTP, port 4000)
-  origin {
-    domain_name = aws_eip.prod_tee.public_dns
-    origin_id   = "tee-ec2"
-
-    custom_origin_config {
-      http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
@@ -115,10 +100,10 @@ resource "aws_cloudfront_distribution" "prod" {
     }
   }
 
-  # /tee/* -> TEE EC2
+  # /tee/* -> Host EC2 (host proxies to enclave internally)
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
-    target_origin_id           = "tee-ec2"
+    target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
@@ -170,7 +155,7 @@ resource "aws_cloudfront_distribution" "prod" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "devnet" {
-  comment             = "tee-rex devnet — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex devnet — app (S3) + prover (EC2)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -192,21 +177,6 @@ resource "aws_cloudfront_distribution" "devnet" {
 
     custom_origin_config {
       http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 120
-      origin_keepalive_timeout = 5
-    }
-  }
-
-  # TEE EC2 origin (HTTP, port 4000) — shared prod instance
-  origin {
-    domain_name = aws_eip.prod_tee.public_dns
-    origin_id   = "tee-ec2"
-
-    custom_origin_config {
-      http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
@@ -244,10 +214,10 @@ resource "aws_cloudfront_distribution" "devnet" {
     }
   }
 
-  # /tee/* -> TEE EC2
+  # /tee/* -> Host EC2 (host proxies to enclave internally)
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
-    target_origin_id           = "tee-ec2"
+    target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
@@ -299,7 +269,7 @@ resource "aws_cloudfront_distribution" "devnet" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "mainnet" {
-  comment             = "tee-rex mainnet — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex mainnet — app (S3) + prover (EC2)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -319,20 +289,6 @@ resource "aws_cloudfront_distribution" "mainnet" {
 
     custom_origin_config {
       http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 120
-      origin_keepalive_timeout = 5
-    }
-  }
-
-  origin {
-    domain_name = aws_eip.prod_tee.public_dns
-    origin_id   = "tee-ec2"
-
-    custom_origin_config {
-      http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
@@ -370,7 +326,7 @@ resource "aws_cloudfront_distribution" "mainnet" {
 
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
-    target_origin_id           = "tee-ec2"
+    target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
@@ -417,7 +373,7 @@ resource "aws_cloudfront_distribution" "mainnet" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "testnet" {
-  comment             = "tee-rex testnet — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex testnet — app (S3) + prover (EC2)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -437,20 +393,6 @@ resource "aws_cloudfront_distribution" "testnet" {
 
     custom_origin_config {
       http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 120
-      origin_keepalive_timeout = 5
-    }
-  }
-
-  origin {
-    domain_name = aws_eip.prod_tee.public_dns
-    origin_id   = "tee-ec2"
-
-    custom_origin_config {
-      http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
@@ -488,7 +430,7 @@ resource "aws_cloudfront_distribution" "testnet" {
 
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
-    target_origin_id           = "tee-ec2"
+    target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
@@ -535,7 +477,7 @@ resource "aws_cloudfront_distribution" "testnet" {
 # -----------------------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "nightlies" {
-  comment             = "tee-rex nightlies — app (S3) + prover/TEE (EC2)"
+  comment             = "tee-rex nightlies — app (S3) + prover (EC2)"
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -555,20 +497,6 @@ resource "aws_cloudfront_distribution" "nightlies" {
 
     custom_origin_config {
       http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
-      origin_read_timeout      = 120
-      origin_keepalive_timeout = 5
-    }
-  }
-
-  origin {
-    domain_name = aws_eip.prod_tee.public_dns
-    origin_id   = "tee-ec2"
-
-    custom_origin_config {
-      http_port                = 4000
       https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1", "TLSv1.1", "TLSv1.2"]
@@ -606,7 +534,7 @@ resource "aws_cloudfront_distribution" "nightlies" {
 
   ordered_cache_behavior {
     path_pattern               = "/tee/*"
-    target_origin_id           = "tee-ec2"
+    target_origin_id           = "prover-ec2"
     viewer_protocol_policy     = "redirect-to-https"
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id

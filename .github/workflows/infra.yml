@@ -64,7 +64,7 @@ jobs:
     secrets: inherit
     with:
       aztec_node_url: https://rpc.testnet.aztec-labs.com
-      tee_url: http://localhost:4001
+      tee_url: http://localhost:4002
       prover_url: http://localhost:4002
       setup_prover_tunnel: true
 
@@ -77,7 +77,7 @@ jobs:
     secrets: inherit
     with:
       aztec_node_url: https://rpc.testnet.aztec-labs.com
-      tee_url: http://localhost:4001
+      tee_url: http://localhost:4002
       prover_url: http://localhost:4002
       setup_prover_tunnel: true
 

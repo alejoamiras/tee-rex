@@ -235,7 +235,7 @@ Requires=tee-rex-enclave.service
 
 [Service]
 EnvironmentFile=/etc/tee-rex/enclave.env
-ExecStart=/usr/bin/socat TCP-LISTEN:4000,fork,reuseaddr VSOCK-CONNECT:${ENCLAVE_CID}:5000
+ExecStart=/usr/bin/socat TCP-LISTEN:4000,bind=127.0.0.1,fork,reuseaddr VSOCK-CONNECT:${ENCLAVE_CID}:5000
 Restart=always
 RestartSec=3
 
