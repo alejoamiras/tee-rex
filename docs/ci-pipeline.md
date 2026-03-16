@@ -7,8 +7,8 @@ How the tee-rex CI/CD system works. Last updated: 2026-03-12.
 ## Overview
 
 ```
-16 workflow files total:
-  11 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, aztec-devnet, deploy-prod, deploy-devnet, release-accelerator, release-please-accelerator)
+14 workflow files total:
+   9 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, deploy-prod, release-accelerator, release-please-accelerator)
    5 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
@@ -184,31 +184,19 @@ graph LR
 
 The `test-infra` label triggers `infra.yml` which does a full TEE + prover deployment and e2e on CI instances, ensuring the new Aztec version works end-to-end before merging.
 
-### Devnet → devnet (`aztec-devnet.yml`)
-
-Weekly cron (Monday 09:00 UTC) checks for new devnet versions, creates a PR targeting the `devnet` branch, and auto-merges when CI passes. Pushing to `devnet` triggers `deploy-devnet.yml`.
-
-```mermaid
-graph LR
-    cron["Weekly Monday 09:00 UTC\n(aztec-devnet.yml)"] --> check["Check npm for\nnew devnet version"]
-    check -->|new version| update["Update @aztec/*\nin all package.json"]
-    update --> pr["Create PR\ntarget: devnet"]
-    pr --> ci["CI checks run"]
-    ci -->|all green| merge["Auto-merge\nto devnet"]
-    merge --> deploy["deploy-devnet.yml\ntriggers (push)"]
-```
-
 ### Shared workflow: `_aztec-update.yml`
 
-Both wrappers call `_aztec-update.yml` with these inputs:
+The nightlies wrapper calls `_aztec-update.yml` with these inputs:
 
-| Input | Nightlies | Devnet |
-|-------|-----------|--------|
-| `dist_tag` | `nightly` | `devnet` |
-| `target_branch` | `main` | `devnet` |
-| `branch_prefix` | `chore/aztec-nightlies` | `chore/aztec-devnet` |
-| `add_label` | `test-infra` | *(none)* |
-| `auto_merge` | `true` (waits for CI) | `true` (waits for CI) |
+| Input | Nightlies |
+|-------|-----------|
+| `dist_tag` | `nightly` |
+| `target_branch` | `main` |
+| `branch_prefix` | `chore/aztec-nightlies` |
+| `add_label` | `test-infra` |
+| `auto_merge` | `true` (waits for CI) |
+
+> **Note**: Devnet auto-update (`aztec-devnet.yml`) was deprecated in Phase 35.
 
 ---
 
@@ -307,11 +295,10 @@ The base image is built once per Aztec version and cached in ECR. Host and encla
 | `workflow_dispatch` overrides all filters | Manual runs should always deploy/test everything |
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all access is via AWS SSM port forwarding |
-| `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows both `deploy-prod.yml` and `deploy-devnet.yml` to publish. AWS still uses OIDC (no stored keys). |
+| `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows publishing from multiple workflows. AWS still uses OIDC (no stored keys). |
 | Consolidated EC2 (1 per env) | Single c7i.12xlarge runs both Nitro enclave (port 4000) and host container (port 80, `--network host`). Host proxies to enclave and manages bb version lifecycle. |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
 | Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |
-| `deploy-devnet.yml` push trigger | Pushes to `devnet` branch (from auto-update merges) automatically trigger deployment. Dual-trigger conditions: `github.event_name == 'push' \|\| inputs.<flag>`. |
 | Smart `/health` version check | Both `deploy-prod.yml` and `deploy-devnet.yml` SSM tunnel to the running server and check `/health` `available_versions` before rebuilding. Saves ~10 min on deploys where the required bb version is already cached (common after nightly auto-updates). `deploy-prod.yml` distinguishes `server_code` changes (always rebuild) from infra-only changes (check first). |
 | `api_version` in `/health` | Server returns `api_version: 1` in `/health` response. Enables SDK↔server compatibility checks and fail-fast detection of breaking API changes. |

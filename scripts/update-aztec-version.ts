@@ -5,7 +5,7 @@
  * Example: bun scripts/update-aztec-version.ts 5.0.0-nightly.20260220
  */
 
-const VERSION_PATTERN = /^\d+\.\d+\.\d+-(nightly\.\d{8}|devnet\.\d+(-patch\.\d+)?|rc\.\d+)$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+-(nightly\.\d{8}|rc\.\d+)$/;
 const AZTEC_VERSION_PATTERN = /^\d+\.\d+\.\d+-(nightly|spartan|devnet|rc)[\w.-]+$/;
 
 const PACKAGE_JSON_FILES = [
@@ -77,7 +77,7 @@ async function main() {
 
   if (!validateVersion(newVersion)) {
     console.error(
-      `Invalid version format: "${newVersion}". Expected: X.Y.Z-nightly.YYYYMMDD or X.Y.Z-devnet.N[-patch.N]`,
+      `Invalid version format: "${newVersion}". Expected: X.Y.Z-nightly.YYYYMMDD or X.Y.Z-rc.N`,
     );
     process.exit(1);
   }

@@ -49,7 +49,7 @@ export const TEE_CONFIGURED = !!process.env.TEE_URL;
 /** Display-friendly TEE URL for the services panel. */
 export const TEE_DISPLAY_URL = process.env.TEE_URL || "";
 
-/** Environment name: "mainnet", "testnet", "nightlies", "devnet", or undefined (local dev) */
+/** Environment name: "mainnet", "testnet", "nightlies", or undefined (local dev) */
 export const ENV_NAME = process.env.VITE_ENV_NAME || undefined;
 
 /** URL and name of the other environment (for switcher link), set at build time */

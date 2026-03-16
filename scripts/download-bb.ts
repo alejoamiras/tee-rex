@@ -8,7 +8,7 @@
  *
  * Examples:
  *   bun scripts/download-bb.ts 5.0.0-nightly.20260305
- *   bun scripts/download-bb.ts 5.0.0-nightly.20260305,5.0.0-devnet.1
+ *   bun scripts/download-bb.ts 5.0.0-nightly.20260305,5.0.0-rc.1
  *   bun scripts/download-bb.ts --list
  *
  * Downloads from Aztec GitHub releases into ~/.tee-rex/versions/{version}/bb
@@ -122,11 +122,10 @@ async function downloadBb(version: string): Promise<void> {
 // Retention cleanup — same logic as bb-versions.ts
 // ---------------------------------------------------------------------------
 
-type NetworkTier = "nightly" | "devnet" | "testnet" | "mainnet";
+type NetworkTier = "nightly" | "testnet" | "mainnet";
 
 const RETENTION_LIMITS: Record<NetworkTier, number | null> = {
   nightly: 2,
-  devnet: 3,
   testnet: 5,
   mainnet: null,
 };
@@ -134,7 +133,6 @@ const RETENTION_LIMITS: Record<NetworkTier, number | null> = {
 function classifyVersion(version: string): NetworkTier {
   const prerelease = version.split("-").slice(1).join("-");
   if (prerelease.startsWith("nightly")) return "nightly";
-  if (prerelease.startsWith("devnet")) return "devnet";
   if (prerelease.startsWith("rc")) return "testnet";
   return "mainnet";
 }

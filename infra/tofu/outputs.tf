@@ -72,17 +72,6 @@ output "nightlies_cloudfront_domain" {
   value       = aws_cloudfront_distribution.nightlies.domain_name
 }
 
-output "devnet_cloudfront_distribution_id" {
-  description = "Devnet CloudFront distribution ID"
-  value       = aws_cloudfront_distribution.devnet.id
-  sensitive   = true
-}
-
-output "devnet_cloudfront_domain" {
-  description = "Devnet CloudFront domain name"
-  value       = aws_cloudfront_distribution.devnet.domain_name
-}
-
 # -----------------------------------------------------------------------------
 # ECR
 # -----------------------------------------------------------------------------

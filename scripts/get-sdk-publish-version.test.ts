@@ -53,27 +53,9 @@ describe("resolvePublishVersion", () => {
 		).toBe("6.1.0-nightly.20260301.3");
 	});
 
-	test("works with devnet format", () => {
-		expect(
-			resolvePublishVersion("4.0.0-devnet.2-patch.1", [
-				"4.0.0-devnet.2-patch.1",
-			]),
-		).toBe("4.0.0-devnet.2-patch.1.1");
-	});
-
-	test("works with devnet format and existing revisions", () => {
-		expect(
-			resolvePublishVersion("4.0.0-devnet.2-patch.1", [
-				"4.0.0-devnet.2-patch.1",
-				"4.0.0-devnet.2-patch.1.1",
-			]),
-		).toBe("4.0.0-devnet.2-patch.1.2");
-	});
-
 	test("ignores unrelated versions in the list", () => {
 		expect(
 			resolvePublishVersion("5.0.0-nightly.20260224", [
-				"4.0.0-devnet.2-patch.1",
 				"5.0.0-nightly.20260220",
 				"5.0.0-nightly.20260224",
 				"5.0.0-nightly.20260224.1",

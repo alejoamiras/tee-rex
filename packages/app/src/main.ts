@@ -68,7 +68,6 @@ if (ENV_NAME) {
     mainnet: "border-emerald-700/50 text-emerald-500 bg-emerald-900/20",
     testnet: "border-yellow-700/50 text-yellow-500 bg-yellow-900/20",
     nightlies: "border-blue-700/50 text-blue-500 bg-blue-900/20",
-    devnet: "border-amber-700/50 text-amber-500 bg-amber-900/20",
   };
   badge.className = `${badgeBase} ${badgeColors[ENV_NAME] ?? badgeColors.mainnet}`;
 
