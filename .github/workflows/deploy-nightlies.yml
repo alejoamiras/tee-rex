@@ -163,41 +163,31 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Start SSM tunnels to shared instance
+      - name: Start SSM tunnel to host
         run: |
-          # Both services run on the shared prod instance (TEE on 4000, prover on 80)
+          # Single tunnel to the host (port 80) — host proxies to enclave in nitro mode
           aws ssm start-session \
             --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
             --document-name AWS-StartPortForwardingSession \
             --parameters '{"portNumber":["80"],"localPortNumber":["4002"]}' &
-          echo "PROVER_TUNNEL_PID=$!" >> "$GITHUB_ENV"
+          echo "HOST_TUNNEL_PID=$!" >> "$GITHUB_ENV"
 
-          aws ssm start-session \
-            --target "${{ secrets.PROD_TEE_INSTANCE_ID }}" \
-            --document-name AWS-StartPortForwardingSession \
-            --parameters '{"portNumber":["4000"],"localPortNumber":["4001"]}' &
-          echo "TEE_TUNNEL_PID=$!" >> "$GITHUB_ENV"
-
-          echo "Waiting for SSM tunnels..."
+          echo "Waiting for SSM tunnel..."
           for i in $(seq 1 30); do
-            PROVER_OK=false
-            TEE_OK=false
-            curl -sf --max-time 5 http://localhost:4002/attestation > /dev/null 2>&1 && PROVER_OK=true
-            curl -sf --max-time 5 http://localhost:4001/attestation > /dev/null 2>&1 && TEE_OK=true
-            if [ "$PROVER_OK" = "true" ] && [ "$TEE_OK" = "true" ]; then
-              echo "Both SSM tunnels ready (attempt $i)"
+            if curl -sf --max-time 5 http://localhost:4002/health > /dev/null 2>&1; then
+              echo "Host SSM tunnel ready (attempt $i)"
               exit 0
             fi
             sleep 2
           done
-          echo "SSM tunnels failed to connect after 60s"
+          echo "SSM tunnel failed to connect after 60s"
           exit 1
 
       - name: Run SDK E2E tests
         env:
           AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
-          TEE_URL: http://localhost:4001
+          TEE_URL: http://localhost:4002
           SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bun run --cwd packages/sdk test:e2e
 
@@ -208,16 +198,14 @@ jobs:
         env:
           AZTEC_NODE_URL: ${{ secrets.TESTNET_AZTEC_NODE_URL }}
           PROVER_URL: http://localhost:4002
-          TEE_URL: http://localhost:4001
+          TEE_URL: http://localhost:4002
           SPONSORED_FPC_SALT: ${{ secrets.SPONSORED_FPC_SALT }}
         run: bunx playwright test --project=smoke --workers=1
         working-directory: packages/app
 
-      - name: Cleanup SSM tunnels
+      - name: Cleanup SSM tunnel
         if: always()
-        run: |
-          kill "$PROVER_TUNNEL_PID" 2>/dev/null || true
-          kill "$TEE_TUNNEL_PID" 2>/dev/null || true
+        run: kill "$HOST_TUNNEL_PID" 2>/dev/null || true
 
   # ── Build & deploy app to S3 + invalidate CloudFront ────────────
   deploy-app:
