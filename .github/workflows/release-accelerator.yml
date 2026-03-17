@@ -139,8 +139,27 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: List artifacts
-        run: find artifacts -type f | head -20
+      - name: Rename artifacts for clarity
+        run: |
+          VERSION="${{ needs.tag.outputs.version }}"
+          cd artifacts
+
+          # Rename Tauri's default names to human-friendly ones
+          for f in *_aarch64.dmg; do
+            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-macOS-Apple-Silicon.dmg"
+          done
+          for f in *_x64.dmg; do
+            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-macOS-Intel.dmg"
+          done
+          for f in *_amd64.deb; do
+            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-Linux-x86_64.deb"
+          done
+          for f in *_amd64.AppImage; do
+            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage"
+          done
+
+          echo "Renamed artifacts:"
+          ls -la
 
       - name: Create release
         env:
@@ -150,7 +169,7 @@ jobs:
           TAG="${{ needs.tag.outputs.tag }}"
           VERSION="${{ needs.tag.outputs.version }}"
 
-          # Collect all bundle files into a null-delimited list (handles spaces in filenames)
+          # Collect all bundle files into a null-delimited list
           mapfile -d '' FILES < <(find artifacts -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0)
 
           if [ ${#FILES[@]} -eq 0 ]; then
@@ -168,22 +187,46 @@ jobs:
           fi
 
           echo "Creating release $TAG..."
-          gh release create "$TAG" \
-            --title "Aztec Accelerator $VERSION" \
-            --notes "$(cat <<EOF
-          ## Aztec Accelerator $VERSION
+
+          # Write release notes to file (avoids heredoc/YAML indentation issues)
+          cat > /tmp/release-notes.md << NOTES
+          ## Aztec Accelerator ${VERSION}
 
           Native proving accelerator for Aztec transactions.
 
           ### Downloads
-          - **macOS (Apple Silicon)**: \`.dmg\` (aarch64)
-          - **macOS (Intel)**: \`.dmg\` (x86_64)
-          - **Linux**: \`.deb\` and \`.AppImage\` (x86_64)
 
-          > **Note**: macOS builds are unsigned. Right-click → Open to bypass Gatekeeper on first launch.
+          | Platform | File |
+          |----------|------|
+          | **macOS (Apple Silicon)** — M1/M2/M3/M4 | \`Aztec-Accelerator-${VERSION}-macOS-Apple-Silicon.dmg\` |
+          | **macOS (Intel)** | \`Aztec-Accelerator-${VERSION}-macOS-Intel.dmg\` |
+          | **Linux (x86_64)** — Debian/Ubuntu | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.deb\` |
+          | **Linux (x86_64)** — Other distros | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage\` |
+
+          ### macOS: First Launch Setup
+
+          The app is not yet code-signed. macOS will show **"this app is damaged"** or block it on first launch.
+
+          **Option A — Terminal (recommended):**
+          \`\`\`sh
+          xattr -cr /Applications/Aztec\\ Accelerator.app
+          \`\`\`
+
+          **Option B — System Settings:**
+          1. Try to open the app (it will be blocked)
+          2. Go to **System Settings → Privacy & Security**
+          3. Scroll to **Security** and click **Open Anyway**
+
+          > Once allowed, you won't need to do this again. We're working on code signing to eliminate this step.
 
           ### Aztec Version
-          This release is built against Aztec \`$VERSION\`.
-          EOF
-          )" \
+          Built against Aztec \`${VERSION}\`.
+          NOTES
+
+          # Strip leading whitespace from each line (YAML indentation artifact)
+          sed -i 's/^          //' /tmp/release-notes.md
+
+          gh release create "$TAG" \
+            --title "Aztec Accelerator $VERSION" \
+            --notes-file /tmp/release-notes.md \
             "${FILES[@]}"
