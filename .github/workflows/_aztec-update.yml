@@ -42,7 +42,7 @@ jobs:
       new_version: ${{ steps.check.outputs.new_version }}
       current_version: ${{ steps.check.outputs.current_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.target_branch }}
 
@@ -89,7 +89,7 @@ jobs:
     env:
       NEW_VERSION: ${{ needs.check-update.outputs.new_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.target_branch }}
 
@@ -97,7 +97,7 @@ jobs:
         with:
           bun-version: latest
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ inputs.dist_tag }}-${{ needs.check-update.outputs.new_version }}
@@ -142,7 +142,7 @@ jobs:
       NEW_VERSION: ${{ needs.check-update.outputs.new_version }}
       CURRENT_VERSION: ${{ needs.check-update.outputs.current_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create or update PR
         run: |

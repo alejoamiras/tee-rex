@@ -21,7 +21,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # ── Read Aztec version to derive base image tag ────────────────
       - name: Read Aztec version
@@ -66,11 +66,11 @@ jobs:
       # ── Build & push base image (only if missing) ─────────────────
       - name: Set up Docker Buildx
         if: steps.check.outputs.exists == 'false'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push base image
         if: steps.check.outputs.exists == 'false'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.base
