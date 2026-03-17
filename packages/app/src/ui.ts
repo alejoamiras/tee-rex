@@ -26,6 +26,7 @@ export function resetLogCount(): void {
 export function appendLog(
   msg: string,
   level: "info" | "warn" | "error" | "success" = "info",
+  url?: string,
 ): void {
   diagLog(msg, level);
   const log = $("log");
@@ -34,7 +35,20 @@ export function appendLog(
   const prefix =
     level === "error" ? "ERR" : level === "warn" ? "WRN" : level === "success" ? " OK" : "   ";
   line.className = `log-${level}`;
-  line.textContent = `${time} ${prefix}  ${msg}`;
+
+  if (url) {
+    line.textContent = `${time} ${prefix}  `;
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className = "text-cyan-500/70 hover:text-cyan-400 underline";
+    link.textContent = msg;
+    line.appendChild(link);
+  } else {
+    line.textContent = `${time} ${prefix}  ${msg}`;
+  }
+
   log.appendChild(line);
   while (log.childElementCount > 500) {
     log.firstElementChild?.remove();

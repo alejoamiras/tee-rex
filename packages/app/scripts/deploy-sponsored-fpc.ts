@@ -95,6 +95,8 @@ console.log(`  Fee Juice token: ${portalManager.getTokenManager().tokenAddress.t
 // FeeJuice protocol contract at canonical address 0x05
 const FEE_JUICE_ADDRESS = AztecAddress.fromBigInt(5n);
 
+const explorerUrl = (txHash: string) => `https://testnet.aztecscan.xyz/tx-effects/${txHash}`;
+
 // ── Helper: wait for L2 to advance N blocks ───────────────────────────
 async function waitForBlocks(n: number, timeoutMs = 600_000) {
   const startBlock = await node.getBlockNumber();
@@ -151,7 +153,8 @@ async function bootstrapAccount(): Promise<{
     fee: { paymentMethod: feeMethod },
     wait: { returnReceipt: true },
   });
-  console.log(`  Account deployed in block ${receipt.blockNumber}\n`);
+  console.log(`  Account deployed in block ${receipt.blockNumber}`);
+  console.log(`  TX: ${explorerUrl(receipt.txHash.toString())}\n`);
 
   return { wallet: wallet as EmbeddedWallet, deployerAddress };
 }
@@ -169,7 +172,8 @@ async function bridgeAndClaimForFpc(wallet: EmbeddedWallet, deployerAddress: Azt
   const { receipt } = await feeJuice.methods
     .claim(fpcInstance.address, claim.claimAmount, claim.claimSecret, claim.messageLeafIndex)
     .send({ from: deployerAddress, wait: { returnReceipt: true } });
-  console.log(`  Claimed! tx fee: ${receipt.transactionFee}, block: ${receipt.blockNumber}\n`);
+  console.log(`  Claimed! tx fee: ${receipt.transactionFee}, block: ${receipt.blockNumber}`);
+  console.log(`  TX: ${explorerUrl(receipt.txHash.toString())}\n`);
 }
 
 // ── Main flow ─────────────────────────────────────────────────────────
@@ -203,7 +207,8 @@ if (!fundOnly) {
       wait: { returnReceipt: true },
     });
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-    console.log(`  SponsoredFPC deployed in block ${receipt.blockNumber} (${elapsed}s)\n`);
+    console.log(`  SponsoredFPC deployed in block ${receipt.blockNumber} (${elapsed}s)`);
+    console.log(`  TX: ${explorerUrl(receipt.txHash.toString())}\n`);
   }
 
   console.log("Step 2: Funding FPC...");
