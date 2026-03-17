@@ -245,24 +245,7 @@ jobs:
     with:
       build_accelerator: true
 
-  # ── Publish SDK to npm (mainnet gets 'latest' tag) ─────────────────
-  # Uses NPM_TOKEN (automation token) — OIDC trusted publishing only supports
-  # one workflow file per package, which doesn't work with multiple deploy workflows.
-  # Gated on validate-mainnet + validate-accelerator + connectivity-check.
-  publish-sdk:
-    name: Publish SDK
-    needs: [validate-mainnet, validate-accelerator, connectivity-check]
-    if: |
-      always()
-      && (needs.validate-mainnet.result == 'success' || needs.validate-mainnet.result == 'skipped')
-      && (needs.validate-accelerator.result == 'success' || needs.validate-accelerator.result == 'skipped')
-      && needs.connectivity-check.result == 'success'
-      && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/'))
-    uses: ./.github/workflows/_publish-sdk.yml
-    secrets: inherit
-    with:
-      dist_tag: latest
-      latest: true
+  # ── SDK publishing handled by deploy-testnet.yml (same branch, tags testnet + latest) ──
 
   # ── Post-deploy validation against mainnet ───────────────────────
   validate-mainnet:

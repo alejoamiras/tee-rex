@@ -4,26 +4,26 @@ on:
   workflow_dispatch:
     inputs:
       dist_tag:
-        description: "npm dist-tag (e.g. nightlies, devnet)"
+        description: "npm dist-tag (e.g. testnet, nightlies)"
         required: true
         type: string
-        default: nightlies
+        default: testnet
       latest:
-        description: "Whether the GitHub release should be marked as --latest"
+        description: "Also set this version as npm 'latest' and mark GitHub release as --latest"
         required: false
         type: boolean
-        default: true
+        default: false
   workflow_call:
     inputs:
       dist_tag:
-        description: "npm dist-tag (e.g. nightlies, devnet)"
+        description: "npm dist-tag (e.g. testnet, nightlies)"
         required: true
         type: string
       latest:
-        description: "Whether the GitHub release should be marked as --latest"
+        description: "Also set this version as npm 'latest' and mark GitHub release as --latest"
         required: false
         type: boolean
-        default: true
+        default: false
 
 jobs:
   publish:
@@ -97,12 +97,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag ${{ inputs.dist_tag }} --workspaces=false
 
-      - name: Add mainnet dist-tag alias
-        if: inputs.dist_tag == 'latest'
+      - name: Also tag as 'latest' on npm
+        if: inputs.latest && inputs.dist_tag != 'latest'
         working-directory: packages/sdk
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm dist-tag add "@alejoamiras/tee-rex@${{ steps.sdk-version.outputs.version }}" mainnet
+        run: npm dist-tag add "@alejoamiras/tee-rex@${{ steps.sdk-version.outputs.version }}" latest
 
       - name: Create git tag and GitHub release
         env:

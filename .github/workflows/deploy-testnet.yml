@@ -266,4 +266,4 @@ jobs:
     secrets: inherit
     with:
       dist_tag: testnet
-      latest: false
+      latest: true
