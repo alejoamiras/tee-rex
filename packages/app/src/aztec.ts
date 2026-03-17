@@ -16,7 +16,11 @@ import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contra
 import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 import type { WalletProvider } from "./wallet-connect";
 
-export type LogFn = (msg: string, level?: "info" | "warn" | "error" | "success") => void;
+export type LogFn = (
+  msg: string,
+  level?: "info" | "warn" | "error" | "success",
+  url?: string,
+) => void;
 
 export type UiMode = "local" | "uee" | "tee" | "accelerated";
 
@@ -252,7 +256,7 @@ export async function initializeFPC(wallet: Wallet, log: LogFn): Promise<void> {
   );
   await wallet.registerContract(fpcInstance, SponsoredFPCContract.artifact);
   state.feePaymentMethod = new SponsoredFeePaymentMethod(fpcInstance.address);
-  log(`Sponsored FPC registered — ${fpcInstance.address.toString().slice(0, 20)}...`, "success");
+  log("Sponsored FPC registered", "success");
 }
 
 async function doInitializeWallet(log: LogFn): Promise<boolean> {
@@ -417,6 +421,8 @@ export interface StepTiming {
   confirmMs?: number;
 }
 
+const EXPLORER_BASE = "https://testnet.aztecscan.xyz/tx-effects";
+
 export interface DeployResult {
   address: string;
   steps: StepTiming[];
@@ -487,7 +493,7 @@ async function executeStep(opts: {
   sendOpts: Record<string, unknown>;
   log: LogFn;
   onConfirming: () => void;
-}): Promise<StepTiming> {
+}): Promise<{ timing: StepTiming; txHash: string }> {
   const { step, method, sendOpts, log, onConfirming } = opts;
   const stepStart = Date.now();
 
@@ -495,15 +501,18 @@ async function executeStep(opts: {
   const simulation = extractSimDetail(simResult);
 
   const sendStart = Date.now();
-  const txHash = await sendWithRetry(method, sendOpts, log);
+  const hash = await sendWithRetry(method, sendOpts, log);
   const proveSendMs = Date.now() - sendStart;
 
   onConfirming();
   const confirmStart = Date.now();
-  await waitForTx(txHash);
+  await waitForTx(hash);
   const confirmMs = Date.now() - confirmStart;
 
-  return { step, durationMs: Date.now() - stepStart, simulation, proveSendMs, confirmMs };
+  return {
+    timing: { step, durationMs: Date.now() - stepStart, simulation, proveSendMs, confirmMs },
+    txHash: hash.toString(),
+  };
 }
 
 /** Poll until a transaction is no longer pending. Throws on dropped or timed-out txs. */
@@ -556,7 +565,7 @@ export async function deployTestAccount(
     const deployMethod = await accountManager.getDeployMethod();
 
     steps.push({ step: "create account", durationMs: Date.now() - stepStart });
-    log(`Account: ${accountManager.address.toString().slice(0, 20)}...`);
+    log(`Account: ${accountManager.address.toString()}`);
 
     const sendOpts = {
       from: state.proofsRequired ? AztecAddress.ZERO : state.registeredAddresses[0],
@@ -599,6 +608,8 @@ export async function deployTestAccount(
     await waitForTx(txHash);
     const confirmMs = Date.now() - confirmStart;
 
+    const deployTxHash = txHash.toString();
+
     steps.push({
       step: "prove + send",
       durationMs: proveSendMs + confirmMs,
@@ -609,8 +620,9 @@ export async function deployTestAccount(
     const totalDurationMs = Date.now() - totalStart;
     const address = accountManager.address.toString();
     log(
-      `Deployed in ${(totalDurationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`,
+      `Deployed in ${(totalDurationMs / 1000).toFixed(1)}s → ${address}`,
       "success",
+      `${EXPLORER_BASE}/${deployTxHash}`,
     );
 
     // On live networks, store the deployed address for use in subsequent operations
@@ -650,7 +662,7 @@ export async function deployToken(
     onStep(`deploying token [${modeLabel}]`);
     log(`Deploying TokenContract (admin=Alice) [${modeLabel}]...`);
     const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
-    const tokenStep = await executeStep({
+    const { timing: tokenStep, txHash: tokenTxHash } = await executeStep({
       step: "deploy token",
       method: tokenDeploy,
       sendOpts: { from: alice, fee: { paymentMethod: state.feePaymentMethod! } },
@@ -662,8 +674,9 @@ export async function deployToken(
     const address = tokenDeploy.address!.toString();
     const totalDurationMs = Date.now() - totalStart;
     log(
-      `Token deployed in ${(totalDurationMs / 1000).toFixed(1)}s — ${address.slice(0, 20)}...`,
+      `Token deployed in ${(totalDurationMs / 1000).toFixed(1)}s → ${address}`,
       "success",
+      `${EXPLORER_BASE}/${tokenTxHash}`,
     );
 
     return { address, steps, totalDurationMs, mode };
@@ -715,7 +728,7 @@ export async function runTokenFlow(
         fee,
         additionalScopes: [bobManager.address],
       };
-      const bobStep = await executeStep({
+      const { timing: bobStep, txHash: bobTxHash } = await executeStep({
         step: "deploy bob",
         method: bobDeploy,
         sendOpts: bobSendOpts,
@@ -725,14 +738,18 @@ export async function runTokenFlow(
       bob = bobManager.address;
       state.registeredAddresses.push(bob);
       steps.push(bobStep);
-      log(`Bob deployed in ${(bobStep.durationMs / 1000).toFixed(1)}s`, "success");
+      log(
+        `Bob deployed in ${(bobStep.durationMs / 1000).toFixed(1)}s`,
+        "success",
+        `${EXPLORER_BASE}/${bobTxHash}`,
+      );
     }
 
     // Step 1: Deploy TokenContract
     onStep(`deploying token [${modeLabel}]`);
     log(`Deploying TokenContract (admin=Alice) [${modeLabel}]...`);
     const tokenDeploy = TokenContract.deploy(state.wallet, alice, "TeeRex", "TREX", 18);
-    const tokenStep = await executeStep({
+    const { timing: tokenStep, txHash: tokenTxHash } = await executeStep({
       step: "deploy token",
       method: tokenDeploy,
       sendOpts: { from: alice, fee },
@@ -742,14 +759,15 @@ export async function runTokenFlow(
     const token = TokenContract.at(tokenDeploy.address!, state.wallet);
     steps.push(tokenStep);
     log(
-      `Token deployed in ${(tokenStep.durationMs / 1000).toFixed(1)}s — ${token.address.toString().slice(0, 20)}...`,
+      `Token deployed in ${(tokenStep.durationMs / 1000).toFixed(1)}s → ${token.address.toString()}`,
       "success",
+      `${EXPLORER_BASE}/${tokenTxHash}`,
     );
 
     // Step 2: Mint 1000 TREX to Alice (private)
     onStep(`minting 1000 TREX [${modeLabel}]`);
     log(`Minting 1000 TREX to Alice [${modeLabel}]...`);
-    const mintStep = await executeStep({
+    const { timing: mintStep, txHash: mintTxHash } = await executeStep({
       step: "mint to private",
       method: token.methods.mint_to_private(alice, 1000n),
       sendOpts: { from: alice, fee },
@@ -757,12 +775,16 @@ export async function runTokenFlow(
       onConfirming: () => onStep(`confirming mint [${modeLabel}]`),
     });
     steps.push(mintStep);
-    log(`Minted in ${(mintStep.durationMs / 1000).toFixed(1)}s`, "success");
+    log(
+      `Minted in ${(mintStep.durationMs / 1000).toFixed(1)}s`,
+      "success",
+      `${EXPLORER_BASE}/${mintTxHash}`,
+    );
 
     // Step 3: Transfer 500 TREX Alice → Bob (private)
     onStep(`transferring 500 TREX [${modeLabel}]`);
     log(`Transferring 500 TREX Alice → Bob [${modeLabel}]...`);
-    const transferStep = await executeStep({
+    const { timing: transferStep, txHash: transferTxHash } = await executeStep({
       step: "private transfer",
       method: token.methods.transfer(bob, 500n),
       sendOpts: { from: alice, fee },
@@ -770,7 +792,11 @@ export async function runTokenFlow(
       onConfirming: () => onStep(`confirming transfer [${modeLabel}]`),
     });
     steps.push(transferStep);
-    log(`Transferred in ${(transferStep.durationMs / 1000).toFixed(1)}s`, "success");
+    log(
+      `Transferred in ${(transferStep.durationMs / 1000).toFixed(1)}s`,
+      "success",
+      `${EXPLORER_BASE}/${transferTxHash}`,
+    );
 
     // Step 4: Check balances (simulate, no proof needed)
     onStep("checking balances");

@@ -210,6 +210,8 @@ console.log("Step 3: Bootstrapping ephemeral L2 account...");
 
 const FEE_JUICE_ADDRESS = AztecAddress.fromBigInt(5n);
 
+const explorerUrl = (txHash: string) => `https://testnet.aztecscan.xyz/tx-effects/${txHash}`;
+
 async function waitForBlocks(n: number, timeoutMs = 600_000) {
   const startBlock = await node.getBlockNumber();
   const target = startBlock + n;
@@ -263,7 +265,8 @@ const { receipt: deployReceipt } = await deployMethod.send({
   fee: { paymentMethod: feeMethod },
   wait: { returnReceipt: true },
 });
-console.log(`  Account deployed in block ${deployReceipt.blockNumber}\n`);
+console.log(`  Account deployed in block ${deployReceipt.blockNumber}`);
+console.log(`  TX: ${explorerUrl(deployReceipt.txHash.toString())}\n`);
 
 // ── Step 4: Claim bridged FJ for FPC on L2 ──────────────────────────
 const fundedFJ = Number(bridgeAmount / 10n ** 18n);
@@ -277,8 +280,9 @@ const { receipt: claimReceipt } = await feeJuice.methods
   .claim(fpcInstance.address, claim.claimAmount, claim.claimSecret, claim.messageLeafIndex)
   .send({ from: deployerAddress, wait: { returnReceipt: true } });
 console.log(
-  `  Claimed! tx fee: ${claimReceipt.transactionFee}, block: ${claimReceipt.blockNumber}\n`,
+  `  Claimed! tx fee: ${claimReceipt.transactionFee}, block: ${claimReceipt.blockNumber}`,
 );
+console.log(`  TX: ${explorerUrl(claimReceipt.txHash.toString())}\n`);
 
 // ── Done ─────────────────────────────────────────────────────────────
 const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(0);
