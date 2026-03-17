@@ -1,15 +1,15 @@
 # CI Pipeline
 
-How the tee-rex CI/CD system works. Last updated: 2026-03-12.
+How the tee-rex CI/CD system works. Last updated: 2026-03-17.
 
 ---
 
 ## Overview
 
 ```
-13 workflow files total:
-   8 main workflows   (sdk, app, server, accelerator, infra, aztec-nightlies, deploy-prod, release-accelerator)
-   5 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
+18 workflow files total:
+  12 main workflows   (sdk, app, server, accelerator, actionlint, infra, aztec-nightlies, aztec-stable, deploy-mainnet, deploy-testnet, deploy-nightlies, release-accelerator)
+   6 reusable         (_build-base, _deploy-unified, _publish-sdk, _aztec-update, _e2e-sdk, _e2e-app)
    2 composite actions (setup-aztec, start-services)
 ```
 
@@ -101,9 +101,13 @@ Infra workflows use concurrency groups to cancel in-progress runs when new commi
 
 ---
 
-## 3. Deploy Production
+## 3. Deploy Workflows
 
-Triggers on push to `main` (excluding docs, lessons, tests, and Playwright configs). Uses `dorny/paths-filter` to deploy only the components that changed.
+Three deploy workflows handle the three environments. All share the same EC2 instance and use smart version checking to skip rebuilds.
+
+### `deploy-mainnet.yml` (push to `main`)
+
+Deploys server + app to mainnet. Uses `dorny/paths-filter` to deploy only changed components. Does **not** publish SDK (handled by testnet).
 
 ```mermaid
 graph TD
@@ -111,56 +115,85 @@ graph TD
 
     changes -->|servers changed| check["check-server\n(SSM → /health\nversion check)"]
     changes -->|app changed| app["deploy-app\n(S3 + CloudFront)"]
-    push --> nextnet["nextnet-check\n(SDK smoke test)"]
 
     check -->|needs rebuild| base["ensure-base\n(Build Base Image)"]
     check -->|version cached| skip_server["Skip server deploy"]
 
-    base --> server["deploy-server\n(_deploy-unified.yml)\n(enclave + host on 1 EC2)"]
+    base --> server["deploy-server\n(_deploy-unified.yml)"]
 
-    server & app --> validate["validate-prod\n(smoke Playwright:\n3 deploys vs nextnet)"]
+    server & app --> validate["validate-mainnet\n(smoke Playwright)"]
     skip_server --> validate
 
-    validate & nextnet -->|aztec auto-update only| publish["publish-sdk\n(npm + git tag + release)"]
-
     style validate fill:#afa,stroke:#333
-    style nextnet fill:#ffa,stroke:#333
     style check fill:#ffc,stroke:#333
 ```
 
-### Change detection outputs
+### `deploy-testnet.yml` (push to `main`)
+
+Deploys server + app to testnet, validates, then publishes SDK to npm with `testnet` + `latest` tags. This is the primary SDK publishing pipeline.
+
+```mermaid
+graph TD
+    push["Push to main"] --> check["check-server\n(SSM → /health)"]
+    push --> app["deploy-app\n(S3 + CloudFront)"]
+
+    check -->|needs rebuild| base["ensure-base"]
+    check -->|version cached| skip["Skip rebuild"]
+
+    base --> server["rebuild-server\n(_deploy-unified.yml)"]
+
+    server & skip --> validate["validate-testnet\n(SDK E2E + Playwright)"]
+    app --> validate
+
+    validate --> publish["publish-sdk\n(testnet + latest)"]
+
+    style validate fill:#afa,stroke:#333
+    style publish fill:#aaf,stroke:#333
+```
+
+### `deploy-nightlies.yml` (push to `nightlies`)
+
+Same pattern but for the nightlies branch. Publishes SDK with `nightlies` tag only (not `latest`).
+
+### Change detection (mainnet only)
 
 | Output | Triggers on | Gates |
 |--------|------------|-------|
-| `servers` | `packages/server/**`, `Dockerfile*`, `infra/**`, `.github/workflows/_deploy-*/_build-*/deploy-prod.yml`, `.github/actions/**`, `package.json`, `bun.lock` | `check-server` |
+| `servers` | `packages/server/**`, `Dockerfile*`, `infra/**`, `.github/workflows/_deploy-*/_build-*/deploy-mainnet.yml`, `.github/actions/**`, `package.json`, `bun.lock` | `check-server` |
 | `server_code` | `packages/server/**`, `Dockerfile*`, `package.json`, `bun.lock` | Forces rebuild in `check-server` (skips version check) |
-| `app` | `packages/app/**`, `packages/sdk/**`, `.github/workflows/deploy-prod.yml`, `package.json`, `bun.lock` | `deploy-app` |
+| `app` | `packages/app/**`, `packages/sdk/**`, `.github/workflows/deploy-mainnet.yml`, `package.json`, `bun.lock` | `deploy-app` |
 
-`workflow_dispatch` overrides all three to `true` (deploys everything). `validate-prod` runs when either `servers` or `app` is `true`.
+`workflow_dispatch` overrides all three to `true` (deploys everything). Testnet and nightlies always run all jobs on push (no path filtering for server).
 
 Note: `packages/sdk/**` was removed from the `servers` filter — the server has zero `@aztec/*` runtime dependencies, so SDK-only changes don't require a server rebuild.
 
-### Job details
+### Shared job details
 
 | Job | What it does | Duration |
 |-----|-------------|----------|
-| `changes` | `dorny/paths-filter` to detect server vs app changes, plus `server_code` subset | ~5s |
-| `check-server` | SSM tunnel to prod instance, query `/health` for `available_versions`. Outputs `needs_rebuild=true` when: server code changed, `workflow_dispatch`, server unreachable, or bb version not cached. Skips SSM when force-rebuild is needed. | ~30s–2 min |
+| `check-server` | SSM tunnel to prod instance, query `/health` for `available_versions`. Outputs `needs_rebuild=true` when: server code changed, `workflow_dispatch`, server unreachable, or bb version not cached. Skips SSM when force-rebuild is needed. | ~30s-2 min |
 | `ensure-base` | Checks ECR for base image, builds + pushes only if missing. Only runs when `needs_rebuild=true`. | ~1-5 min |
-| `deploy-server` | Build Nitro + host images in parallel, push to ECR, start single EC2, deploy enclave + host container via SSM (`_deploy-unified.yml`). Host downloads bb from GitHub releases and uploads to enclave at runtime. Only runs when `needs_rebuild=true`. | ~25 min |
-| `deploy-app` | Build Vite app with prod URLs, sync to S3, invalidate CloudFront | ~3 min |
-| `nextnet-check` | Run SDK connectivity smoke test against nextnet | ~1 min |
-| `publish-sdk` | Resolve version (query npm for existing revisions, append `.N` suffix if needed), set SDK version, `npm publish --provenance`, git tag + GitHub release. Gated by validate-prod + nextnet-check. | ~2 min |
-| `validate-prod` | SSM tunnel to host (port 80), smoke Playwright e2e (3 deploys: TEE, remote, local) vs nextnet. `TEE_URL = PROVER_URL` (host proxies to enclave). Runs even when server deploy is skipped (validates existing deployment). | ~7 min |
+| `deploy-server` / `rebuild-server` | Build Nitro + host images in parallel, push to ECR, deploy enclave + host container via SSM (`_deploy-unified.yml`). bb downloaded at runtime. Only when `needs_rebuild=true`. | ~25 min |
+| `deploy-app` | Build Vite app with env-specific URLs, sync to S3, invalidate CloudFront | ~3 min |
+| `validate-*` | SSM tunnel to host (port 80), SDK E2E + smoke Playwright. Runs even when server deploy is skipped. | ~7-15 min |
+| `publish-sdk` | Resolve version (query npm, append `.N` suffix if needed), `npm publish --provenance`, git tag + GitHub release. Testnet sets `latest` tag; nightlies does not. | ~2 min |
+
+### SDK publishing strategy
+
+| Workflow | dist-tag | Sets `latest`? | Trigger |
+|----------|----------|---------------|---------|
+| `deploy-testnet.yml` | `testnet` | Yes | Push to `main` or manual dispatch |
+| `deploy-nightlies.yml` | `nightlies` | No | Push to `nightlies` or manual dispatch |
+| `_publish-sdk.yml` | Any | Configurable | Manual `workflow_dispatch` (for retries) |
 
 ### Conditional behavior
 
-- **Workflow/infra-only changes** (no server code): `check-server` queries `/health` — if bb version is already cached, skips rebuild entirely (~10 min saved)
+- **Smart rebuild**: All deploy workflows check `/health` `available_versions` before rebuilding. Skips rebuild when bb version is already cached (~10 min saved).
 - **Server code changes**: `check-server` detects `server_code=true` and forces rebuild (no version check)
-- **App-only changes**: Only `deploy-app` runs, server jobs skip entirely
-- **SDK-only changes**: Only `deploy-app` runs (SDK is in app filter but not server filter)
-- **`publish-sdk`**: Only runs when commit message starts with `chore: update @aztec/` (auto-update merges) or on manual dispatch. Gated by `validate-prod` (must pass or be skipped) AND `nextnet-check` (must pass). Can also be triggered standalone via `workflow_dispatch` on `_publish-sdk.yml` for manual retries.
-- **`validate-prod`**: Hard gate (no `continue-on-error`). Runs smoke tests (`--project=smoke`, 3 deploys) for faster, more reliable validation. App uses `sendWithRetry` (via `E2E_RETRY_STALE_HEADER`) to handle stale block headers during proving.
+- **App-only changes** (mainnet): Only `deploy-app` runs, server jobs skip entirely
+- **`validate-*`**: Hard gate (no `continue-on-error`). Blocks `publish-sdk` on failure.
+- **`publish-sdk`** (testnet): Runs on every push to `main` or manual dispatch. Gated by validation.
+- **`validate-accelerator`** (mainnet only): Pre-publish check that builds the headless accelerator and runs SDK E2E with `ACCELERATOR_URL`. Only runs on `workflow_dispatch` or aztec auto-update commits.
 
 ---
 
@@ -179,7 +212,7 @@ graph LR
     update --> pr["Create PR\n+ label: test-infra"]
     pr --> ci["All CI runs:\nsdk + app + server\n+ infra (deploy + e2e)"]
     ci -->|all green| merge["Auto-merge\nto main"]
-    merge --> deploy["deploy-prod.yml\ntriggers"]
+    merge --> deploy["deploy-mainnet.yml\ntriggers"]
 ```
 
 The `test-infra` label triggers `infra.yml` which does a full TEE + prover deployment and e2e on CI instances, ensuring the new Aztec version works end-to-end before merging.
@@ -228,8 +261,8 @@ Note: macOS code signing is deferred (TODO). Windows is not supported (no `bb` b
 |----------|---------|-----------|
 | `_build-base.yml` | Idempotent base image build (Bun + system deps + `bun install`). Checks ECR first, builds only if missing. | None. Outputs: `base_tag` |
 | `_deploy-unified.yml` | Build Nitro + host images in parallel, push to ECR, start single EC2, deploy enclave + host container via SSM. bb binaries downloaded at runtime and uploaded to enclave. | `environment`, `nitro_image_tag`, `host_image_tag`, `base_tag`, `bb_versions` |
-| `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
-| `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-devnet.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
+| `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. When `latest: true`, also sets npm `latest` dist-tag. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
+| `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-stable.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnel to prover/host | `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
 | `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnel. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
 
@@ -285,10 +318,10 @@ The base image is built once per Aztec version and cached in ECR. Host and encla
 | `workflow_dispatch` overrides all filters | Manual runs should always deploy/test everything |
 | ECR registry cache (not GHA cache) | Shared across workflows, no size limits, faster for large Docker images |
 | SSM tunnels (no public ports) | EC2 instances have no public IPs; all CI access is via AWS SSM port forwarding to port 80 (single tunnel). `TEE_URL = PROVER_URL` since host proxies to enclave. |
-| `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows publishing from multiple workflows. AWS still uses OIDC (no stored keys). |
+| `NPM_TOKEN` for npm publishing | OIDC trusted publishing only supports one workflow per package; `NPM_TOKEN` automation token allows `deploy-testnet.yml` and `deploy-nightlies.yml` to publish. AWS still uses OIDC (no stored keys). |
 | Consolidated EC2 (1 per env) | Single c7i.12xlarge runs Nitro enclave (localhost:4000 via socat, not externally accessible) and host container (port 80, `--network host`). All external traffic routes through the host; host proxies to enclave internally. |
 | Base image split | Avoids re-downloading ~2.4 GB of dependencies on every deploy; only app code changes |
 | GHA outputs can't contain secrets | Workflow outputs containing secret values are silently redacted. Pass non-secret identifiers and reconstruct URIs in consumers. |
 | Reusable workflows can't have `concurrency`/`permissions` at workflow level | `workflow_call` workflows inherit or get these from the caller. Put `concurrency` and `permissions` on the calling workflow, not the reusable one — otherwise GitHub reports `startup_failure`. |
-| Smart `/health` version check | Both `deploy-prod.yml` and `deploy-devnet.yml` SSM tunnel to the running server and check `/health` `available_versions` before rebuilding. Saves ~10 min on deploys where the required bb version is already cached (common after nightly auto-updates). `deploy-prod.yml` distinguishes `server_code` changes (always rebuild) from infra-only changes (check first). |
+| Smart `/health` version check | Deploy workflows SSM tunnel to the running server and check `/health` `available_versions` before rebuilding. Saves ~10 min on deploys where the required bb version is already cached (common after nightly auto-updates). Distinguishes `server_code` changes (always rebuild) from infra-only changes (check first). |
 | `api_version` in `/health` | Server returns `api_version: 1` in `/health` response. Enables SDK↔server compatibility checks and fail-fast detection of breaking API changes. |
