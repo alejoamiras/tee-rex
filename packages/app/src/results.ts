@@ -102,6 +102,19 @@ export function renderSteps(container: HTMLElement, steps: StepTiming[]): void {
         }
       }
 
+      // Pure proving time (subset of prove + send)
+      if (step.proveMs != null) {
+        sub.appendChild(
+          buildDotRow(
+            "step-sim-row",
+            "prove",
+            "text-gray-600",
+            formatMs(step.proveMs),
+            "tabular-nums",
+          ),
+        );
+      }
+
       // Prove + send / confirm sub-rows
       if (step.proveSendMs != null) {
         sub.appendChild(

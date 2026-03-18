@@ -180,7 +180,7 @@ function updateAcceleratorLabel(available: boolean): void {
 }
 
 /** Handle a prover phase: feed the animation and react to fallback. */
-function handleProverPhase(ascii: AsciiController, phase: string): void {
+function handleProverPhase(ascii: AsciiController, phase: string, _data?: unknown): void {
   ascii.pushPhase(phase as Parameters<typeof ascii.pushPhase>[0]);
   if (phase === "fallback") {
     updateAcceleratorLabel(false);
@@ -216,7 +216,7 @@ $("deploy-btn").addEventListener("click", async () => {
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
-      (phase) => handleProverPhase(ascii, phase),
+      (phase, data) => handleProverPhase(ascii, phase, data),
     );
     diagMemory("deploy-end");
 
@@ -262,7 +262,7 @@ $("token-flow-btn").addEventListener("click", async () => {
         const phase = stepToPhase(stepName);
         if (phase) ascii.pushPhase(phase);
       },
-      (phase) => handleProverPhase(ascii, phase),
+      (phase, data) => handleProverPhase(ascii, phase, data),
     );
     diagMemory("token-flow-end");
 

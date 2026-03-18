@@ -75,21 +75,43 @@ sequenceDiagram
   participant BB as bb binary (native)
 
   C->>A: GET /health
-  A-->>C: { status, aztec_version, bb }
+  A-->>C: { status, aztec_version, available_versions, bb }
 
   Note over C: Check version compatibility<br/>Fall back to WASM on mismatch
 
-  C->>A: POST /prove (msgpack body)
+  C->>A: POST /prove (msgpack body, x-aztec-version header)
 
   A->>BB: bb prove --scheme chonk (temp files)
   BB-->>A: proof bytes
 
-  A-->>C: { proof: "<base64>" }
+  A-->>C: { proof: "<base64>" }<br/>x-prove-duration-ms header
 
-  Note over C: Deserialize proof<br/>Return to PXE
+  Note over C: Emit "proved" phase with timing<br/>Deserialize proof<br/>Return to PXE
 ```
 
 If the accelerator is unavailable or returns a version mismatch, the SDK emits a `"fallback"` phase and proves via WASM instead.
+
+## SDK Phase Lifecycle
+
+The SDK emits phase callbacks during proof generation for UI animation and timing. All modes follow the same pattern, ending with a `"proved"` phase that carries the actual proving duration:
+
+| Phase | Description | Emitted by |
+|-------|-------------|------------|
+| `detect` | Checking accelerator availability | Accelerated |
+| `serialize` | Serializing witness data (msgpack) | UEE, Accelerated |
+| `fetch-attestation` | Fetching enclave attestation document | UEE/TEE |
+| `encrypt` | Encrypting payload with enclave public key | UEE/TEE |
+| `transmit` | Sending payload to server | UEE, Accelerated |
+| `proving` | Proof generation in progress | All modes |
+| `proved` | Proof complete — carries `{ durationMs }` | All modes |
+| `receive` | Deserializing proof response | All modes |
+| `fallback` | Accelerator unavailable, falling back to WASM | Accelerated |
+| `downloading` | Accelerator downloading bb for new version | Accelerated |
+
+The `"proved"` phase timing comes from:
+- **WASM**: `performance.now()` around the local proof call
+- **UEE/TEE**: `x-prove-duration-ms` response header from the server
+- **Accelerated**: `x-prove-duration-ms` response header from the accelerator
 
 ## Package Structure
 

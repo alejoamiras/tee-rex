@@ -38,18 +38,14 @@ pub async fn start(state: AppState) -> Result<(), Box<dyn std::error::Error + Se
 }
 
 pub fn router(state: AppState) -> Router {
-    let mut cors = CorsLayer::new()
+    let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
         .allow_headers([
             http::header::CONTENT_TYPE,
             http::header::HeaderName::from_static("x-aztec-version"),
-        ]);
-
-    #[cfg(debug_assertions)]
-    {
-        cors = cors.expose_headers([http::header::HeaderName::from_static("x-prove-duration-ms")]);
-    }
+        ])
+        .expose_headers([http::header::HeaderName::from_static("x-prove-duration-ms")]);
 
     Router::new()
         .route("/health", get(health))
@@ -76,6 +72,7 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         }
     }
 
+    #[allow(unused_mut)]
     let mut body = json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
@@ -208,18 +205,11 @@ async fn prove(
     let proof = result.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &proof);
 
-    // Timing header only in debug builds — avoid leaking user hardware performance info
-    #[cfg(debug_assertions)]
-    let response = {
-        let mut r = axum::Json(json!({ "proof": encoded })).into_response();
-        r.headers_mut().insert(
-            "x-prove-duration-ms",
-            HeaderValue::from_str(&elapsed.as_millis().to_string()).unwrap(),
-        );
-        r
-    };
-    #[cfg(not(debug_assertions))]
-    let response = axum::Json(json!({ "proof": encoded })).into_response();
+    let mut response = axum::Json(json!({ "proof": encoded })).into_response();
+    response.headers_mut().insert(
+        "x-prove-duration-ms",
+        HeaderValue::from_str(&elapsed.as_millis().to_string()).unwrap(),
+    );
 
     Ok(response)
 }
