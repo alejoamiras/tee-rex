@@ -23,11 +23,11 @@
     "test:unit": "bun test src/"
   },
   "dependencies": {
-    "@aztec/bb-prover": "4.1.0-rc.3",
-    "@aztec/foundation": "4.1.0-rc.3",
-    "@aztec/noir-acvm_js": "4.1.0-rc.3",
-    "@aztec/noir-noirc_abi": "4.1.0-rc.3",
-    "@aztec/stdlib": "4.1.0-rc.3",
+    "@aztec/bb-prover": "4.1.0-rc.4",
+    "@aztec/foundation": "4.1.0-rc.4",
+    "@aztec/noir-acvm_js": "4.1.0-rc.4",
+    "@aztec/noir-noirc_abi": "4.1.0-rc.4",
+    "@aztec/stdlib": "4.1.0-rc.4",
     "@logtape/logtape": "^2.0",
     "@peculiar/x509": "^1.12.0",
     "cbor-x": "^1.6.0",
@@ -40,12 +40,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@aztec/accounts": "4.1.0-rc.3",
-    "@aztec/aztec.js": "4.1.0-rc.3",
-    "@aztec/noir-contracts.js": "4.1.0-rc.3",
-    "@aztec/pxe": "4.1.0-rc.3",
-    "@aztec/simulator": "4.1.0-rc.3",
-    "@aztec/wallets": "4.1.0-rc.3",
+    "@aztec/accounts": "4.1.0-rc.4",
+    "@aztec/aztec.js": "4.1.0-rc.4",
+    "@aztec/noir-contracts.js": "4.1.0-rc.4",
+    "@aztec/pxe": "4.1.0-rc.4",
+    "@aztec/simulator": "4.1.0-rc.4",
+    "@aztec/wallets": "4.1.0-rc.4",
     "@types/ms": "^2.1.0"
   },
   "publishConfig": {
