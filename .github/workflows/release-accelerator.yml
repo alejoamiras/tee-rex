@@ -107,14 +107,13 @@ jobs:
       - name: Build Tauri bundle
         run: npx @tauri-apps/cli@^2 build --target ${{ matrix.target }}
         working-directory: packages/accelerator
-        # TODO: macOS code signing — uncomment and set secrets when ready
-        # env:
-        #   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-        #   APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        #   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        #   APPLE_ID: ${{ secrets.APPLE_ID }}
-        #   APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-        #   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -203,21 +202,9 @@ jobs:
           | **Linux (x86_64)** — Debian/Ubuntu | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.deb\` |
           | **Linux (x86_64)** — Other distros | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage\` |
 
-          ### macOS: First Launch Setup
+          ### macOS: First Launch
 
-          The app is not yet code-signed. macOS will show **"this app is damaged"** or block it on first launch.
-
-          **Option A — Terminal (recommended):**
-          \`\`\`sh
-          xattr -cr /Applications/Aztec\\ Accelerator.app
-          \`\`\`
-
-          **Option B — System Settings:**
-          1. Try to open the app (it will be blocked)
-          2. Go to **System Settings → Privacy & Security**
-          3. Scroll to **Security** and click **Open Anyway**
-
-          > Once allowed, you won't need to do this again. We're working on code signing to eliminate this step.
+          The app is **code-signed and notarized** by Apple. Double-click the DMG, drag to Applications, and launch — no extra steps needed.
 
           ### Aztec Version
           Built against Aztec \`${VERSION}\`.
