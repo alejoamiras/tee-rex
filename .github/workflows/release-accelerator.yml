@@ -138,27 +138,19 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Rename artifacts for clarity
+      - name: Flatten and rename artifacts
         run: |
           VERSION="${{ needs.tag.outputs.version }}"
-          cd artifacts
+          mkdir -p release-files
 
-          # Rename Tauri's default names to human-friendly ones
-          for f in *_aarch64.dmg; do
-            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-macOS-Apple-Silicon.dmg"
-          done
-          for f in *_x64.dmg; do
-            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-macOS-Intel.dmg"
-          done
-          for f in *_amd64.deb; do
-            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-Linux-x86_64.deb"
-          done
-          for f in *_amd64.AppImage; do
-            [ -f "$f" ] && mv "$f" "Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage"
-          done
+          # Find all bundle files (nested in subdirs from upload-artifact) and rename to human-friendly names
+          find artifacts -name '*_aarch64.dmg' -exec mv {} "release-files/Aztec-Accelerator-${VERSION}-macOS-Apple-Silicon.dmg" \;
+          find artifacts -name '*_x64.dmg'     -exec mv {} "release-files/Aztec-Accelerator-${VERSION}-macOS-Intel.dmg" \;
+          find artifacts -name '*_amd64.deb'   -exec mv {} "release-files/Aztec-Accelerator-${VERSION}-Linux-x86_64.deb" \;
+          find artifacts -name '*_amd64.AppImage' -exec mv {} "release-files/Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage" \;
 
-          echo "Renamed artifacts:"
-          ls -la
+          echo "Release files:"
+          ls -la release-files/
 
       - name: Create release
         env:
@@ -169,7 +161,7 @@ jobs:
           VERSION="${{ needs.tag.outputs.version }}"
 
           # Collect all bundle files into a null-delimited list
-          mapfile -d '' FILES < <(find artifacts -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0)
+          mapfile -d '' FILES < <(find release-files -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0)
 
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No artifacts found!"
@@ -197,14 +189,14 @@ jobs:
 
           | Platform | File |
           |----------|------|
-          | **macOS (Apple Silicon)** — M1/M2/M3/M4 | \`Aztec-Accelerator-${VERSION}-macOS-Apple-Silicon.dmg\` |
+          | **macOS (Apple Silicon)** | \`Aztec-Accelerator-${VERSION}-macOS-Apple-Silicon.dmg\` |
           | **macOS (Intel)** | \`Aztec-Accelerator-${VERSION}-macOS-Intel.dmg\` |
-          | **Linux (x86_64)** — Debian/Ubuntu | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.deb\` |
-          | **Linux (x86_64)** — Other distros | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage\` |
+          | **Linux (Debian/Ubuntu)** | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.deb\` |
+          | **Linux (Other distros)** | \`Aztec-Accelerator-${VERSION}-Linux-x86_64.AppImage\` |
 
           ### macOS: First Launch
 
-          The app is **code-signed and notarized** by Apple. Double-click the DMG, drag to Applications, and launch — no extra steps needed.
+          The app is **code-signed and notarized** by Apple. Double-click the DMG, drag to Applications, and launch.
 
           ### Aztec Version
           Built against Aztec \`${VERSION}\`.
