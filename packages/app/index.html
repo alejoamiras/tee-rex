@@ -146,38 +146,50 @@
             <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">proving mode</span>
           </div>
           <div id="proving-mode-container" class="p-3">
-            <div id="proving-mode-buttons" class="grid grid-cols-4 gap-2">
-              <button
-                id="mode-local"
-                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
-              >
-                <span>▸ Local <span class="normal-case tracking-normal opacity-80">(wasm)</span></span>
-                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">slow · fully private</span>
-              </button>
-              <button
-                id="mode-accelerated"
-                disabled
-                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
-              >
-                <span>▸ Accel <span class="text-gray-600 normal-case tracking-normal">(native)</span></span>
-                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fastest · fully private</span>
-              </button>
-              <button
-                id="mode-uee"
-                disabled
-                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
-              >
-                <span>▸ UEE <span class="text-gray-600 normal-case tracking-normal">(server)</span></span>
-                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fast · not private</span>
-              </button>
-              <button
-                id="mode-tee"
-                disabled
-                class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
-              >
-                <span>▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span></span>
-                <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fast · private · attested</span>
-              </button>
+            <div id="proving-mode-buttons" class="space-y-3">
+              <!-- Local group -->
+              <div>
+                <div class="text-[9px] uppercase tracking-[0.15em] text-gray-600 mb-1.5 pl-0.5">local</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    id="mode-local"
+                    class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 mode-active"
+                  >
+                    <span>▸ WASM</span>
+                    <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">slow · fully private</span>
+                  </button>
+                  <button
+                    id="mode-accelerated"
+                    disabled
+                    class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                  >
+                    <span>▸ Accel <span class="text-gray-600 normal-case tracking-normal">(native)</span></span>
+                    <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fastest · fully private</span>
+                  </button>
+                </div>
+              </div>
+              <!-- Remote group -->
+              <div>
+                <div class="text-[9px] uppercase tracking-[0.15em] text-gray-600 mb-1.5 pl-0.5">remote</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    id="mode-uee"
+                    disabled
+                    class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                  >
+                    <span>▸ UEE <span class="text-gray-600 normal-case tracking-normal">(server)</span></span>
+                    <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fast · not private</span>
+                  </button>
+                  <button
+                    id="mode-tee"
+                    disabled
+                    class="mode-btn flex flex-col items-center py-2.5 px-2 text-xs font-medium uppercase tracking-wider border transition-all duration-150 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                  >
+                    <span>▸ TEE <span class="text-gray-600 normal-case tracking-normal">(nitro)</span></span>
+                    <span class="mode-hint text-[9px] normal-case tracking-normal mt-1 opacity-60">fast · private · attested</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -213,30 +225,42 @@
           <div class="border-b border-gray-800 px-4 py-1.5">
             <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600">results</span>
           </div>
-          <div class="p-3 grid grid-cols-4 gap-2">
-            <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
-              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Local (wasm)</div>
-              <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-              <div id="tag-local" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-              <div id="steps-local" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+          <div class="p-3 space-y-3">
+            <!-- Local results -->
+            <div>
+              <div class="text-[9px] uppercase tracking-[0.15em] text-gray-600 mb-1.5 pl-0.5">local</div>
+              <div class="grid grid-cols-2 gap-2">
+                <div id="result-local" class="border border-gray-800 p-4 text-center transition-colors">
+                  <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">WASM</div>
+                  <div id="time-local" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+                  <div id="tag-local" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+                  <div id="steps-local" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+                </div>
+                <div id="result-accelerated" class="border border-gray-800 p-4 text-center transition-colors">
+                  <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Accel (native)</div>
+                  <div id="time-accelerated" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+                  <div id="tag-accelerated" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+                  <div id="steps-accelerated" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+                </div>
+              </div>
             </div>
-            <div id="result-accelerated" class="border border-gray-800 p-4 text-center transition-colors">
-              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">Accel (native)</div>
-              <div id="time-accelerated" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-              <div id="tag-accelerated" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-              <div id="steps-accelerated" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
-            </div>
-            <div id="result-uee" class="border border-gray-800 p-4 text-center transition-colors">
-              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">UEE (server)</div>
-              <div id="time-uee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-              <div id="tag-uee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-              <div id="steps-uee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
-            </div>
-            <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
-              <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>
-              <div id="time-tee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
-              <div id="tag-tee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
-              <div id="steps-tee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+            <!-- Remote results -->
+            <div>
+              <div class="text-[9px] uppercase tracking-[0.15em] text-gray-600 mb-1.5 pl-0.5">remote</div>
+              <div class="grid grid-cols-2 gap-2">
+                <div id="result-uee" class="border border-gray-800 p-4 text-center transition-colors">
+                  <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">UEE (server)</div>
+                  <div id="time-uee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+                  <div id="tag-uee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+                  <div id="steps-uee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+                </div>
+                <div id="result-tee" class="border border-gray-800 p-4 text-center transition-colors">
+                  <div class="text-[10px] uppercase tracking-[0.15em] text-gray-600 mb-2">TEE (nitro)</div>
+                  <div id="time-tee" class="text-3xl font-bold tabular-nums text-gray-700">—</div>
+                  <div id="tag-tee" class="mt-1.5 text-[10px] uppercase tracking-widest text-gray-700"></div>
+                  <div id="steps-tee" class="hidden mt-2 pt-2 border-t border-gray-800/40 text-left"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
