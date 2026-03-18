@@ -1,4 +1,9 @@
-import { type ProverPhase, type ProvingMode, TeeRexProver } from "@alejoamiras/tee-rex";
+import {
+  type ProverPhase,
+  type ProverPhaseData,
+  type ProvingMode,
+  TeeRexProver,
+} from "@alejoamiras/tee-rex";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing/lazy";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { NO_WAIT } from "@aztec/aztec.js/contracts";
@@ -417,11 +422,15 @@ export interface StepTiming {
   step: string;
   durationMs: number;
   simulation?: SimStepDetail;
+  proveMs?: number;
   proveSendMs?: number;
   confirmMs?: number;
 }
 
 const EXPLORER_BASE = "https://testnet.aztecscan.xyz/tx-effects";
+
+/** Captured from the `"proved"` phase callback — read and reset after each send. */
+let _lastProveMs: number | undefined;
 
 export interface DeployResult {
   address: string;
@@ -503,6 +512,8 @@ async function executeStep(opts: {
   const sendStart = Date.now();
   const hash = await sendWithRetry(method, sendOpts, log);
   const proveSendMs = Date.now() - sendStart;
+  const proveMs = _lastProveMs;
+  _lastProveMs = undefined;
 
   onConfirming();
   const confirmStart = Date.now();
@@ -510,7 +521,14 @@ async function executeStep(opts: {
   const confirmMs = Date.now() - confirmStart;
 
   return {
-    timing: { step, durationMs: Date.now() - stepStart, simulation, proveSendMs, confirmMs },
+    timing: {
+      step,
+      durationMs: Date.now() - stepStart,
+      simulation,
+      proveMs,
+      proveSendMs,
+      confirmMs,
+    },
     txHash: hash.toString(),
   };
 }
@@ -535,7 +553,7 @@ export async function deployTestAccount(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
   onStep: (stepName: string) => void,
-  onPhase?: (phase: ProverPhase) => void,
+  onPhase?: (phase: ProverPhase, data?: ProverPhaseData) => void,
 ): Promise<DeployResult> {
   if (!state.embeddedWallet) {
     throw new Error("Embedded wallet not initialized");
@@ -547,7 +565,14 @@ export async function deployTestAccount(
   const mode = state.uiMode;
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
-  state.prover?.setOnPhase(onPhase ?? null);
+  state.prover?.setOnPhase(
+    onPhase
+      ? (phase, data) => {
+          if (phase === "proved" && data?.durationMs) _lastProveMs = data.durationMs;
+          onPhase(phase, data);
+        }
+      : null,
+  );
 
   const interval = setInterval(() => {
     onTick(Date.now() - totalStart);
@@ -602,6 +627,8 @@ export async function deployTestAccount(
 
     const txHash = await sendWithRetry(deployMethod, sendOpts, log);
     const proveSendMs = Date.now() - stepStart;
+    const proveMs = _lastProveMs;
+    _lastProveMs = undefined;
 
     onStep(`confirming [${mode}]`);
     const confirmStart = Date.now();
@@ -613,6 +640,7 @@ export async function deployTestAccount(
     steps.push({
       step: "prove + send",
       durationMs: proveSendMs + confirmMs,
+      proveMs,
       proveSendMs,
       confirmMs,
     });
@@ -641,7 +669,7 @@ export async function deployToken(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
   onStep: (stepName: string) => void,
-  onPhase?: (phase: ProverPhase) => void,
+  onPhase?: (phase: ProverPhase, data?: ProverPhaseData) => void,
 ): Promise<DeployResult> {
   if (!state.wallet || state.registeredAddresses.length < 1) {
     throw new Error("Wallet not initialized — no registered addresses");
@@ -652,7 +680,14 @@ export async function deployToken(
   const alice = state.registeredAddresses[state.selectedAccountIndex];
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
-  state.prover?.setOnPhase(onPhase ?? null);
+  state.prover?.setOnPhase(
+    onPhase
+      ? (phase, data) => {
+          if (phase === "proved" && data?.durationMs) _lastProveMs = data.durationMs;
+          onPhase(phase, data);
+        }
+      : null,
+  );
 
   const interval = setInterval(() => {
     onTick(Date.now() - totalStart);
@@ -690,7 +725,7 @@ export async function runTokenFlow(
   log: LogFn,
   onTick: (elapsedMs: number) => void,
   onStep: (stepName: string) => void,
-  onPhase?: (phase: ProverPhase) => void,
+  onPhase?: (phase: ProverPhase, data?: ProverPhaseData) => void,
 ): Promise<TokenFlowResult> {
   if (!state.wallet || state.registeredAddresses.length < 1) {
     throw new Error("Wallet not initialized — deploy at least one account first");
@@ -702,7 +737,14 @@ export async function runTokenFlow(
   const fee = { paymentMethod: state.feePaymentMethod! };
   const steps: StepTiming[] = [];
   const totalStart = Date.now();
-  state.prover?.setOnPhase(onPhase ?? null);
+  state.prover?.setOnPhase(
+    onPhase
+      ? (phase, data) => {
+          if (phase === "proved" && data?.durationMs) _lastProveMs = data.durationMs;
+          onPhase(phase, data);
+        }
+      : null,
+  );
 
   const interval = setInterval(() => {
     onTick(Date.now() - totalStart);

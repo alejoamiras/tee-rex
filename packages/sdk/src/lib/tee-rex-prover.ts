@@ -29,9 +29,15 @@ export type ProverPhase =
   | "encrypt"
   | "transmit"
   | "proving"
+  | "proved"
   | "receive"
   | "fallback"
   | "downloading";
+
+/** Data payload for the `"proved"` phase — carries the actual proving duration. */
+export interface ProverPhaseData {
+  durationMs: number;
+}
 
 export interface TeeRexAttestationConfig {
   /** When true, reject servers running in standard (non-TEE) mode. Default: false. */
@@ -79,7 +85,7 @@ export interface AcceleratorStatus {
 export class TeeRexProver extends BBLazyPrivateKernelProver {
   #provingMode: ProvingMode = ProvingMode.uee;
   #attestationConfig: TeeRexAttestationConfig = {};
-  #onPhase: ((phase: ProverPhase) => void) | null = null;
+  #onPhase: ((phase: ProverPhase, data?: ProverPhaseData) => void) | null = null;
   #acceleratorPort: number;
   #acceleratorHost: string;
 
@@ -116,7 +122,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   }
 
   /** Register a callback for proof generation sub-phase transitions (for UI animation). */
-  setOnPhase(callback: ((phase: ProverPhase) => void) | null) {
+  setOnPhase(callback: ((phase: ProverPhase, data?: ProverPhaseData) => void) | null) {
     this.#onPhase = callback;
   }
 
@@ -192,9 +198,9 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         this.#onPhase?.("proving");
         const start = performance.now();
         const result = await super.createChonkProof(executionSteps);
-        logger.info("Local proof completed", {
-          durationMs: Math.round(performance.now() - start),
-        });
+        const localDurationMs = Math.round(performance.now() - start);
+        logger.info("Local proof completed", { durationMs: localDurationMs });
+        this.#onPhase?.("proved", { durationMs: localDurationMs });
         this.#onPhase?.("receive");
         return result;
       }
@@ -244,6 +250,9 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
         proveDurationMs: proveDurationMs ? Number(proveDurationMs) : undefined,
         decryptDurationMs: decryptDurationMs ? Number(decryptDurationMs) : undefined,
       });
+    }
+    if (proveDurationMs) {
+      this.#onPhase?.("proved", { durationMs: Number(proveDurationMs) });
     }
     const response = await res.json();
     this.#onPhase?.("receive");
@@ -298,6 +307,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     const proveDurationMs = res.headers.get("x-prove-duration-ms");
     if (proveDurationMs) {
       logger.info("Accelerator server-side timing", { proveDurationMs: Number(proveDurationMs) });
+      this.#onPhase?.("proved", { durationMs: Number(proveDurationMs) });
     }
     const response = await res.json<{ proof: string }>();
 
