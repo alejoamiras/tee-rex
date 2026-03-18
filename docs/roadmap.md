@@ -5,7 +5,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 32, 33, 34, 35)
+## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 31, 32, 33, 34, 35, 36)
 
 | Phase | Summary |
 |---|---|
@@ -30,7 +30,7 @@ Full history of completed phases, architectural decisions, and backlog items.
 | **18C** | Attribution update — "made with ♥ by alejo · inspired by nemi.fi" across all READMEs and app footer |
 | **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
 | **30** | **Wallet SDK integration** — `@aztec/wallet-sdk` for external wallet (browser extension) support. Dual-path: embedded wallet auto-inits as before + "Connect External" button triggers SDK discovery → emoji verification → capability request. External wallet replaces embedded for all operations; proving mode grayed out ("handled by wallet"); deploy disabled (wallet provides accounts). `?wallet=embedded` URL param bypasses external UI for e2e tests. New files: `wallet-connect.ts` (pure logic), UI section in `index.html`, wiring in `main.ts`. `AztecState` extended with `walletType`, `embeddedWallet`, `externalProvider`. |
-| **31** *(in progress)* | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics. See Phase 31 section for details. |
+| **31** | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics, macOS code signing & notarization. See Phase 31 section for details. |
 | **32** | **CI/CD improvements** — narrow server change detection, smart `/health` version check in deploy-prod, devnet auto-merge fix, `api_version` in `/health`. See Phase 32 section. |
 | **33** | **Thin Enclave Architecture** — split monolithic server into host Express (`src/index.ts`) + thin enclave Bun.serve (`src/enclave.ts`). Host manages bb downloads/uploads, enclave handles keys, attestation, decryption, proving. bb SHA256 hashes embedded in NSM attestation `user_data`. Docker images no longer bake bb binaries. See Phase 33 section. |
 | **35** | **Deprecate Devnet** — removed devnet environment (v4.0.0, updated twice monthly, highest maintenance/lowest value). Deleted `aztec-devnet.yml`, `deploy-devnet.yml` workflows. Removed devnet CloudFront distribution, S3 bucket, IAM OIDC refs, variables, and outputs from Tofu. Removed devnet tier from `bb-versions.ts`, `download-bb.ts`, `update-aztec-version.ts` and their tests. Updated app badge colors. Reduced from 4→3 environments (mainnet, testnet, nightlies) served from 2 branches (`main`, `nightlies`). |
@@ -423,7 +423,7 @@ No branch protection ruleset on `devnet` — the workflow itself is the quality 
 
 ---
 
-## Phase 31: Local Native Accelerator — IN PROGRESS
+## Phase 31: Local Native Accelerator — DONE
 
 **Goal**: Bypass browser WASM throttling by routing proving to a native `bb` binary on the user's machine via a lightweight desktop app.
 
@@ -557,6 +557,25 @@ Replaced Express and 7 runtime dependencies (`express`, `cors`, `express-rate-li
 | **CI workflows** | Unified deploy-nightlies, deploy-devnet, deploy-prod, `_e2e-sdk`, `_e2e-app`, and infra to single SSM tunnel on port 80. `TEE_URL = PROVER_URL` (both go through host). |
 
 **Key insight**: The host already handled all endpoints (`/prove`, `/attestation`, `/public-key`, `/health`) and proxied to the enclave. The `tee-ec2` CloudFront origin was a leftover from before Phase 33 that was never cleaned up.
+
+---
+
+## Phase 36: Expose Proving Time in UI Step Breakdown — DONE
+
+**Goal**: Show actual proving time alongside roundtrip time in the step breakdown, for all modes (WASM, UEE/TEE, Accelerated).
+
+**Problem**: The "prove + send" time displayed in the UI includes network latency, encryption, and tx submission — making remote proving look slower than it actually is. The server/accelerator already measured this via `x-prove-duration-ms` but the SDK only logged it.
+
+**Changes:**
+
+| File | Change |
+|------|--------|
+| `packages/sdk/src/lib/tee-rex-prover.ts` | Added `"proved"` to `ProverPhase` union, new `ProverPhaseData` interface with `durationMs`. Callback extended to `(phase, data?) => void`. All three paths emit `"proved"` with timing. |
+| `packages/app/src/aztec.ts` | Added `proveMs?` to `StepTiming`. Module-level capture from `"proved"` callback, read/reset after each `sendWithRetry`. |
+| `packages/app/src/results.ts` | Renders "prove" sub-row before "prove + send" in step breakdown. |
+| `packages/accelerator/src-tauri/src/server.rs` | Removed `#[cfg(debug_assertions)]` guards — `x-prove-duration-ms` header always exposed in CORS and always included in response. |
+
+**Key decision**: The original debug-only guard on the accelerator was about not leaking hardware info (thread count in `/health`), not proving time. Proving duration is safe to expose — it's a localhost-only app on the user's own machine.
 
 ---
 

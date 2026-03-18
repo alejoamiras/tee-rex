@@ -18,17 +18,11 @@ Download the latest release from [GitHub Releases](https://github.com/alejoamira
 
 ### macOS Gatekeeper
 
-The app is currently unsigned. On first launch, macOS will block it. To allow it:
+The app is code-signed and notarized by Apple. It should open without any Gatekeeper warnings. If macOS still blocks it (e.g., a local build), allow it via:
 
 1. Open **System Settings → Privacy & Security**
 2. Scroll to the "Security" section
 3. Click **Open Anyway** next to the TeeRex Accelerator message
-
-Or from the terminal:
-
-```sh
-xattr -cr /Applications/TeeRex\ Accelerator.app
-```
 
 ## How It Works
 
@@ -42,6 +36,10 @@ Browser (SDK)  →  HTTP POST /prove  →  Accelerator  →  bb binary  →  pro
 ```
 
 The SDK auto-detects the accelerator on port 59833 when set to `ProvingMode.accelerated`. If the accelerator is unavailable or has a version mismatch, the SDK automatically falls back to WASM proving.
+
+### Proving Timing
+
+Every `/prove` response includes an `x-prove-duration-ms` header with the actual `bb` proving time in milliseconds. The SDK surfaces this via the `"proved"` phase callback, and the frontend displays it in the step breakdown — making it easy to see how much time is pure proving vs. network/serialization overhead.
 
 ## Configuration
 
