@@ -256,7 +256,23 @@ fn main() {
                 let show_logs = MenuItemBuilder::with_id("show_logs", "Show Logs").build(app)?;
                 let separator = PredefinedMenuItem::separator(app)?;
 
-                MenuBuilder::new(app)
+                #[cfg(target_os = "macos")]
+                let menu = MenuBuilder::new(app)
+                    .items(&[
+                        &status,
+                        &versions_submenu,
+                        &show_logs,
+                        &autostart,
+                        &safari_support,
+                        &separator,
+                        &version_text,
+                        &github,
+                        &quit,
+                    ])
+                    .build()?;
+
+                #[cfg(not(target_os = "macos"))]
+                let menu = MenuBuilder::new(app)
                     .items(&[
                         &status,
                         &versions_submenu,
@@ -267,7 +283,9 @@ fn main() {
                         &github,
                         &quit,
                     ])
-                    .build()?
+                    .build()?;
+
+                menu
             } else {
                 let separator = PredefinedMenuItem::separator(app)?;
 
