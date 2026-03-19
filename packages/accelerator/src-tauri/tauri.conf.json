@@ -22,6 +22,11 @@
       "icons/icon.png",
       "icons/icon.icns"
     ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "main.desktop"
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15"
     }

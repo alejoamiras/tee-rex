@@ -24,6 +24,18 @@ The app is code-signed and notarized by Apple. It should open without any Gateke
 2. Scroll to the "Security" section
 3. Click **Open Anyway** next to the TeeRex Accelerator message
 
+### Linux
+
+**Wayland tray icon limitation:** Tauri's system tray does not render on GNOME Wayland ([tauri-apps/tauri#14234](https://github.com/tauri-apps/tauri/issues/14234)). The `.deb` package includes a workaround that forces the X11 GDK backend via the `.desktop` file, so the tray icon appears correctly out of the box.
+
+If you use the `.AppImage` on Wayland and the tray icon is missing, launch with:
+
+```sh
+GDK_BACKEND=x11 ./aztec-accelerator.AppImage
+```
+
+For a tray-only app with no visible window, X11 mode has zero downsides.
+
 ## How It Works
 
 The accelerator runs as a **menu bar / system tray app** with no window — just a tray icon with a status menu.
