@@ -157,7 +157,7 @@ function encryptFrames(): FrameFn {
 
 function detectFrames(): FrameFn {
   return (tick) =>
-    box([`> checking accelerator ${spin(tick)}`, "  localhost:59833"], "round", "health check");
+    box([`> checking accelerator ${spin(tick)}`, "  localhost"], "round", "health check");
 }
 
 function fallbackFrames(): FrameFn {

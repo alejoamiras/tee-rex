@@ -11,9 +11,9 @@ use tauri::menu::{
 use tauri::tray::TrayIconBuilder;
 use tauri::AppHandle;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use tee_rex_accelerator::log_dir;
-use tee_rex_accelerator::server::AppState;
+use tee_rex_accelerator::server::{AppState, HTTPS_PORT};
 use tee_rex_accelerator::versions;
+use tee_rex_accelerator::{certs, config, log_dir};
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -105,6 +105,77 @@ fn build_versions_submenu(
     Ok(builder.build()?)
 }
 
+/// Show a native macOS dialog asking the user to confirm Safari Support setup.
+/// Returns true if the user clicks "Continue", false otherwise.
+#[cfg(target_os = "macos")]
+fn show_safari_support_dialog() -> bool {
+    let script = r#"display dialog "To work with Safari, the Accelerator needs to install a local security certificate.\n\nmacOS will ask for your password — this is a one-time setup." with title "Enable Safari Support" buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel""#;
+    std::process::Command::new("osascript")
+        .args(["-e", script])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Show a native macOS error dialog.
+#[cfg(target_os = "macos")]
+fn show_error_dialog(message: &str) {
+    let script = format!(
+        r#"display dialog "{message}" with title "Safari Support Error" buttons {{"OK"}} default button "OK" with icon stop"#,
+    );
+    let _ = std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .output();
+}
+
+/// Try to start HTTPS server if Safari Support is configured and certs are valid.
+/// Returns the HTTPS port if started, None otherwise.
+fn try_start_https() -> Option<u16> {
+    let cfg = config::load();
+    if !cfg.safari_support {
+        return None;
+    }
+    if !certs::certs_exist() {
+        tracing::warn!("Safari Support enabled but certs missing — resetting config");
+        let _ = config::save(&config::AcceleratorConfig {
+            safari_support: false,
+        });
+        return None;
+    }
+
+    // Auto-renew leaf cert if expiring
+    if let Err(e) = certs::regenerate_leaf_if_expiring() {
+        tracing::warn!("Failed to check/renew leaf cert: {e}");
+    }
+
+    // Verify CA is still trusted (macOS only)
+    if !certs::is_ca_trusted() {
+        tracing::warn!("CA not trusted in Keychain — skipping HTTPS");
+        return None;
+    }
+
+    match certs::load_rustls_config() {
+        Ok(tls_config) => {
+            let state_for_https = AppState {
+                https_port: Some(HTTPS_PORT),
+                ..Default::default()
+            };
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) =
+                    tee_rex_accelerator::server::start_https(state_for_https, tls_config).await
+                {
+                    tracing::error!("HTTPS server error: {e}");
+                }
+            });
+            Some(HTTPS_PORT)
+        }
+        Err(e) => {
+            tracing::warn!("Failed to load TLS config: {e} — skipping HTTPS");
+            None
+        }
+    }
+}
+
 fn main() {
     let log_path = log_dir();
     std::fs::create_dir_all(&log_path).ok();
@@ -156,6 +227,15 @@ fn main() {
                 .checked(autostart_enabled)
                 .build(app)?;
 
+            // Safari Support toggle (macOS only)
+            #[cfg(target_os = "macos")]
+            let safari_support = {
+                let cfg = config::load();
+                CheckMenuItemBuilder::with_id("toggle_safari", "Safari Support")
+                    .checked(cfg.safari_support)
+                    .build(app)?
+            };
+
             // About section: version info + GitHub link (always shown)
             let app_version = env!("CARGO_PKG_VERSION");
             let aztec_bb_version = env!("AZTEC_BB_VERSION");
@@ -191,9 +271,24 @@ fn main() {
             } else {
                 let separator = PredefinedMenuItem::separator(app)?;
 
-                MenuBuilder::new(app)
+                #[cfg(target_os = "macos")]
+                let menu = MenuBuilder::new(app)
+                    .items(&[
+                        &autostart,
+                        &safari_support,
+                        &separator,
+                        &version_text,
+                        &github,
+                        &quit,
+                    ])
+                    .build()?;
+
+                #[cfg(not(target_os = "macos"))]
+                let menu = MenuBuilder::new(app)
                     .items(&[&autostart, &separator, &version_text, &github, &quit])
-                    .build()?
+                    .build()?;
+
+                menu
             };
 
             let tray_icon =
@@ -225,6 +320,72 @@ fn main() {
                             tee_rex_accelerator::crash_recovery::enable_crash_recovery();
                             let _ = autostart.set_checked(true);
                             tracing::info!("Auto-start on login enabled");
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    "toggle_safari" => {
+                        let safari_support = safari_support.clone();
+                        let currently_enabled = config::load().safari_support;
+                        if currently_enabled {
+                            // Disable: save config, note restart needed
+                            let _ = config::save(&config::AcceleratorConfig {
+                                safari_support: false,
+                            });
+                            let _ = safari_support.set_checked(false);
+                            tracing::info!("Safari Support disabled (HTTPS stops on next restart)");
+                        } else {
+                            // Enable: show dialog, generate certs, install trust, start HTTPS
+                            let _ = safari_support.set_checked(false); // Don't check until success
+                            std::thread::spawn(move || {
+                                if !show_safari_support_dialog() {
+                                    tracing::info!("Safari Support setup cancelled by user");
+                                    return;
+                                }
+
+                                if let Err(e) = certs::generate_and_save() {
+                                    tracing::error!("Failed to generate certs: {e}");
+                                    show_error_dialog("Failed to generate certificates.");
+                                    return;
+                                }
+
+                                if let Err(e) = certs::install_ca_trust() {
+                                    tracing::error!("Failed to install CA trust: {e}");
+                                    show_error_dialog(
+                                        "Certificate trust was not granted. Safari Support was not enabled.",
+                                    );
+                                    return;
+                                }
+
+                                // Trust succeeded — save config and start HTTPS
+                                let _ = config::save(&config::AcceleratorConfig {
+                                    safari_support: true,
+                                });
+                                let _ = safari_support.set_checked(true);
+
+                                // Start HTTPS server
+                                match certs::load_rustls_config() {
+                                    Ok(tls_config) => {
+                                        let state = AppState {
+                                            https_port: Some(HTTPS_PORT),
+                                            ..Default::default()
+                                        };
+                                        tauri::async_runtime::spawn(async move {
+                                            if let Err(e) =
+                                                tee_rex_accelerator::server::start_https(
+                                                    state, tls_config,
+                                                )
+                                                .await
+                                            {
+                                                tracing::error!("HTTPS server error: {e}");
+                                            }
+                                        });
+                                        tracing::info!("Safari Support enabled, HTTPS server started");
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Failed to load TLS config: {e}");
+                                    }
+                                }
+                            });
                         }
                     }
                     _ => {}
@@ -343,6 +504,9 @@ fn main() {
                     }
                 });
 
+            // Auto-start HTTPS if Safari Support is configured
+            let https_port = try_start_https();
+
             let is_animating_for_status = is_animating.clone();
             let state = AppState {
                 on_status: Some(Arc::new(move |text: &str| {
@@ -358,6 +522,7 @@ fn main() {
                 })),
                 bundled_version: Some(bundled_version),
                 on_versions_changed: Some(on_versions_changed),
+                https_port,
             };
 
             // Spawn the HTTP server on the Tokio runtime

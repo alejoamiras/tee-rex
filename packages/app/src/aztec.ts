@@ -110,9 +110,17 @@ export const state: AztecState = {
 
 export async function checkAccelerator(): Promise<boolean> {
   try {
-    const res = await fetch("http://127.0.0.1:59833/health", {
-      signal: AbortSignal.timeout(2000),
-    });
+    // Probe both HTTP (59833) and HTTPS (59834) in parallel.
+    // Chrome/Firefox: HTTP responds instantly. Safari: HTTPS needed (mixed-content block).
+    const { res } = await Promise.any([
+      fetch("http://127.0.0.1:59833/health", { signal: AbortSignal.timeout(2000) }).then((res) => ({
+        res,
+        protocol: "http" as const,
+      })),
+      fetch("https://127.0.0.1:59834/health", { signal: AbortSignal.timeout(2000) }).then(
+        (res) => ({ res, protocol: "https" as const }),
+      ),
+    ]);
     return res.ok;
   } catch {
     return false;
