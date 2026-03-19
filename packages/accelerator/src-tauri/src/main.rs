@@ -109,7 +109,7 @@ fn build_versions_submenu(
 /// Returns true if the user clicks "Continue", false otherwise.
 #[cfg(target_os = "macos")]
 fn show_safari_support_dialog() -> bool {
-    let script = r#"display dialog "To work with Safari, the Accelerator needs to install a local security certificate.\n\nmacOS will ask for your password — this is a one-time setup." with title "Enable Safari Support" buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel""#;
+    let script = r#"display dialog "Safari blocks requests to localhost unless you install a local certificate.\n\nmacOS will ask for your password once to trust it." with title "Enable Safari Support" buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel""#;
     std::process::Command::new("osascript")
         .args(["-e", script])
         .output()
