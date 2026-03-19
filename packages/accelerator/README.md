@@ -114,6 +114,28 @@ Dev builds include **Status** text, the **Versions** submenu (lists bundled + ca
 
 When enabled, the accelerator launches automatically when you log in to your computer. Uses platform-native mechanisms (LaunchAgent on macOS, autostart on Linux).
 
+### Safari Support (macOS only)
+
+Safari blocks mixed content — an HTTPS page cannot `fetch()` from `http://127.0.0.1`. Chrome and Firefox exempt localhost, but Safari does not. This means accelerated proving silently falls back to WASM for Safari users.
+
+To fix this, enable **Safari Support** from the tray menu:
+
+1. Click **☐ Safari Support** in the tray menu
+2. A dialog explains what will happen — click **Continue**
+3. macOS will ask for your password to trust the certificate (one-time setup)
+4. The accelerator starts an HTTPS listener on port **59834**
+
+The SDK automatically probes both HTTP (59833) and HTTPS (59834) in parallel via `Promise.any`. Chrome/Firefox use HTTP (faster), Safari uses HTTPS. Zero impact on non-Safari users.
+
+**What it installs:** A local Certificate Authority (`TeeRex Accelerator Local CA`) with Name Constraints limiting it to `127.0.0.1`, `::1`, and `localhost` only. The CA is installed in your macOS login Keychain.
+
+**To remove:** Open **Keychain Access**, search for "TeeRex Accelerator Local CA", delete it, then disable Safari Support in the tray menu.
+
+**Certificate details:**
+- CA: ECDSA P-256, 10-year validity, Name Constraints (localhost only)
+- Leaf: ECDSA P-256, 825-day validity (Apple TLS maximum), auto-renewed
+- Storage: `~/.tee-rex-accelerator/certs/`
+
 ## Version Compatibility
 
 The accelerator supports multiple Aztec versions simultaneously. The `/health` endpoint reports the bundled version and all cached versions:

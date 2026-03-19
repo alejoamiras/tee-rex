@@ -11,12 +11,14 @@ use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::{bb, versions};
 
 const PORT: u16 = 59833;
+pub const HTTPS_PORT: u16 = 59834;
 
 pub type StatusCallback = Arc<dyn Fn(&str) + Send + Sync>;
 pub type VersionsChangedCallback = Arc<dyn Fn() + Send + Sync>;
@@ -26,6 +28,7 @@ pub struct AppState {
     pub on_status: Option<StatusCallback>,
     pub bundled_version: Option<String>,
     pub on_versions_changed: Option<VersionsChangedCallback>,
+    pub https_port: Option<u16>,
 }
 
 pub async fn start(state: AppState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -35,6 +38,58 @@ pub async fn start(state: AppState) -> Result<(), Box<dyn std::error::Error + Se
     tracing::info!("Accelerator server listening on {addr}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// Start an HTTPS listener using the provided TLS config.
+/// Runs independently from HTTP — errors are logged but never crash the app.
+pub async fn start_https(
+    state: AppState,
+    tls_config: Arc<tokio_rustls::rustls::ServerConfig>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let app = router(state);
+    let addr = SocketAddr::from(([127, 0, 0, 1], HTTPS_PORT));
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::warn!("HTTPS port {HTTPS_PORT} unavailable: {e} — continuing HTTP-only");
+            return Ok(());
+        }
+    };
+
+    let acceptor = TlsAcceptor::from(tls_config);
+    tracing::info!("HTTPS server listening on {addr}");
+
+    loop {
+        let (stream, _peer) = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::debug!("TCP accept error: {e}");
+                continue;
+            }
+        };
+
+        let acceptor = acceptor.clone();
+        let app = app.clone();
+
+        tokio::spawn(async move {
+            let tls_stream = match acceptor.accept(stream).await {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::debug!("TLS handshake failed: {e}");
+                    return;
+                }
+            };
+            let io = hyper_util::rt::TokioIo::new(tls_stream);
+            let hyper_service = hyper_util::service::TowerToHyperService::new(app);
+            if let Err(e) =
+                hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                    .serve_connection(io, hyper_service)
+                    .await
+            {
+                tracing::debug!("HTTPS connection error: {e}");
+            }
+        });
+    }
 }
 
 pub fn router(state: AppState) -> Router {
@@ -80,6 +135,10 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         "available_versions": available,
         "bb_available": bb::find_bb(None).is_ok(),
     });
+
+    if let Some(port) = state.https_port {
+        body["https_port"] = json!(port);
+    }
 
     // Runtime diagnostics only in debug builds — avoid leaking user hardware info in production
     #[cfg(debug_assertions)]
@@ -329,6 +388,14 @@ mod tests {
 
     #[tokio::test]
     async fn prove_returns_error_when_bb_not_found() {
+        // This test exercises the "bb not found" error path. When bb IS installed
+        // on the dev machine, find_bb() succeeds and the real bb binary runs with
+        // garbage input — taking 60+ seconds to error out. Skip in that case.
+        if bb::find_bb(None).is_ok() {
+            eprintln!("skipping: bb is available on this machine");
+            return;
+        }
+
         let app = router(AppState::default());
         let response: axum::http::Response<_> = app
             .oneshot(

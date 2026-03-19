@@ -223,6 +223,31 @@ Option B — **Full encryption** (reuses existing code):
 4. Accelerator decrypts with private key
 5. Estimated effort: ~50 lines of code (reuses `encrypt.ts` and `encryption-service.ts`)
 
+### 7. HTTPS Port: 59834 (Safari Mixed Content)
+
+**Decision**: Add optional HTTPS on port `59834` via auto-provisioned local certificates, opt-in via tray menu toggle.
+
+**Problem**: Safari blocks mixed content — an HTTPS page cannot `fetch()` from `http://127.0.0.1`. Chrome and Firefox exempt localhost per the [Secure Contexts spec](https://www.chromium.org/Home/chromium-security/prefer-secure-origins-for-powerful-new-features/), but Safari does not. This means accelerated proving silently falls back to WASM for all Safari users.
+
+**Alternatives rejected**:
+- **Browser extension**: Overkill for just bypassing mixed-content (Decision #1 already rejected this)
+- **Service Worker proxy**: Cannot intercept requests to different origins (`127.0.0.1`)
+- **Custom URL scheme**: Not supported by `fetch()` API
+- **WebSocket upgrade**: Complex, doesn't solve the initial HTTPS handshake
+
+**Solution**: Same approach as `mkcert` and TypingMind's MCP connector:
+1. Generate a local CA + leaf certificate (ECDSA P-256)
+2. Install CA in macOS Keychain (one password prompt, ever)
+3. Serve HTTPS on port 59834 alongside HTTP on 59833
+4. SDK probes both ports with `Promise.any` — HTTP wins for Chrome/Firefox, HTTPS wins for Safari
+
+**Safety rules**:
+- Config only saved AFTER trust verified (never write `safari_support: true` before `security add-trusted-cert` exits 0)
+- HTTPS failure never crashes HTTP (independent server tasks)
+- Name Constraints on CA limit it to `127.0.0.1`/`::1`/`localhost` only
+- macOS only (hidden on Linux via `#[cfg]`)
+- CA removed from Keychain by user → detected on next launch, HTTPS skipped gracefully
+
 ### 6. Repository: Monorepo (packages/accelerator)
 
 **Decision**: The accelerator lives in this monorepo as `packages/accelerator`.

@@ -127,6 +127,7 @@ Accelerated mode routes proving to a native `bb` binary running on your machine 
 - **Zero config** — just set `ProvingMode.accelerated`; the SDK auto-detects the accelerator on `127.0.0.1:59833`
 - **Auto-download** — the accelerator automatically downloads the correct `bb` binary version when needed, matching the SDK's Aztec version
 - **Transparent fallback** — if the accelerator isn't running or has a version mismatch, the SDK silently falls back to WASM proving. No errors, no broken UX
+- **Safari compatible** — enable "Safari Support" in the accelerator tray menu to serve HTTPS on port 59834 (one-time certificate setup). The SDK probes both HTTP and HTTPS automatically via `Promise.any`
 
 ```ts
 // custom port (default: 59833)

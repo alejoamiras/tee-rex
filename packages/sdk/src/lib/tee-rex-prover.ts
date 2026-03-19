@@ -50,8 +50,10 @@ export interface TeeRexAttestationConfig {
 }
 
 export interface TeeRexAcceleratorConfig {
-  /** Port the accelerator listens on. Default: 59833. */
+  /** Port the accelerator listens on (HTTP). Default: 59833. */
   port?: number;
+  /** Port the accelerator listens on (HTTPS, for Safari). Default: 59834. */
+  httpsPort?: number;
   /** Host the accelerator binds to. Default: "127.0.0.1". */
   host?: string;
 }
@@ -145,6 +147,7 @@ function createLazySimulator(): CircuitSimulator {
 }
 
 const DEFAULT_ACCELERATOR_PORT = 59833;
+const DEFAULT_ACCELERATOR_HTTPS_PORT = 59834;
 const DEFAULT_ACCELERATOR_HOST = "127.0.0.1";
 
 /** Status of the local native accelerator, returned by {@link TeeRexProver.checkAcceleratorStatus}. */
@@ -159,6 +162,8 @@ export interface AcceleratorStatus {
   availableVersions?: string[];
   /** The Aztec version this SDK expects (from its `@aztec/stdlib` dependency). */
   sdkAztecVersion?: string;
+  /** Which protocol was used to reach the accelerator (`"http"` or `"https"`). */
+  protocol?: "http" | "https";
 }
 
 /**
@@ -176,7 +181,9 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   #attestationConfig: TeeRexAttestationConfig = {};
   #onPhase: ((phase: ProverPhase, data?: ProverPhaseData) => void) | null = null;
   #acceleratorPort: number;
+  #acceleratorHttpsPort: number;
   #acceleratorHost: string;
+  #acceleratorProtocol: "http" | "https" | null = null;
   #apiUrl: string | undefined;
 
   /** @deprecated Use the options constructor instead: `new TeeRexProver({ apiUrl })` */
@@ -197,6 +204,8 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
       if (opts.onPhase) this.#onPhase = opts.onPhase;
       if (opts.accelerator) {
         if (opts.accelerator.port !== undefined) this.#acceleratorPort = opts.accelerator.port;
+        if (opts.accelerator.httpsPort !== undefined)
+          this.#acceleratorHttpsPort = opts.accelerator.httpsPort;
         if (opts.accelerator.host !== undefined) this.#acceleratorHost = opts.accelerator.host;
       }
 
@@ -222,8 +231,13 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
 
     const envPort =
       typeof process !== "undefined" ? process.env?.TEE_REX_ACCELERATOR_PORT : undefined;
+    const envHttpsPort =
+      typeof process !== "undefined" ? process.env?.TEE_REX_ACCELERATOR_HTTPS_PORT : undefined;
     // Only override if not already set by options
     this.#acceleratorPort ??= envPort ? Number.parseInt(envPort, 10) : DEFAULT_ACCELERATOR_PORT;
+    this.#acceleratorHttpsPort ??= envHttpsPort
+      ? Number.parseInt(envHttpsPort, 10)
+      : DEFAULT_ACCELERATOR_HTTPS_PORT;
     this.#acceleratorHost ??= DEFAULT_ACCELERATOR_HOST;
   }
 
@@ -266,10 +280,12 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#attestationConfig = config;
   }
 
-  /** Configure the local accelerator connection (port, host). */
+  /** Configure the local accelerator connection (port, host). Resets cached protocol. */
   setAcceleratorConfig(config: TeeRexAcceleratorConfig) {
     if (config.port !== undefined) this.#acceleratorPort = config.port;
+    if (config.httpsPort !== undefined) this.#acceleratorHttpsPort = config.httpsPort;
     if (config.host !== undefined) this.#acceleratorHost = config.host;
+    this.#acceleratorProtocol = null;
   }
 
   /** Register a callback for proof generation sub-phase transitions (for UI animation). */
@@ -278,6 +294,9 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   }
 
   get #acceleratorBaseUrl(): string {
+    if (this.#acceleratorProtocol === "https") {
+      return `https://${this.#acceleratorHost}:${this.#acceleratorHttpsPort}`;
+    }
     return `http://${this.#acceleratorHost}:${this.#acceleratorPort}`;
   }
 
@@ -288,11 +307,29 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
    */
   async checkAcceleratorStatus(): Promise<AcceleratorStatus> {
     const sdkAztecVersion = this.#getAztecVersion();
+    const httpUrl = `http://${this.#acceleratorHost}:${this.#acceleratorPort}/health`;
+    const httpsUrl = `https://${this.#acceleratorHost}:${this.#acceleratorHttpsPort}/health`;
+
     try {
-      const response = await fetch(joinURL(this.#acceleratorBaseUrl, "health"), {
-        signal: AbortSignal.timeout(2000),
-      });
-      if (!response.ok) return { available: false, needsDownload: false, sdkAztecVersion };
+      // Probe both HTTP and HTTPS in parallel — whichever responds first wins.
+      // Chrome/Firefox: HTTP responds (~1ms), HTTPS rejection silently ignored.
+      // Safari with HTTPS enabled: HTTP blocked (mixed content), HTTPS responds.
+      // Both offline: AggregateError → { available: false }.
+      const { res: response, protocol } = await Promise.any([
+        fetch(httpUrl, { signal: AbortSignal.timeout(2000) }).then((res) => ({
+          res,
+          protocol: "http" as const,
+        })),
+        fetch(httpsUrl, { signal: AbortSignal.timeout(2000) }).then((res) => ({
+          res,
+          protocol: "https" as const,
+        })),
+      ]);
+
+      this.#acceleratorProtocol = protocol;
+
+      if (!response.ok)
+        return { available: false, needsDownload: false, sdkAztecVersion, protocol };
 
       const data = (await response.json()) as {
         aztec_version?: string;
@@ -311,6 +348,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
           sdkAztecVersion,
           availableVersions,
           needsDownload,
+          protocol,
         });
         return {
           available: true,
@@ -318,6 +356,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
           acceleratorVersion,
           availableVersions,
           sdkAztecVersion,
+          protocol,
         };
       }
 
@@ -328,11 +367,24 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
             accelerator: acceleratorVersion,
             sdk: sdkAztecVersion,
           });
-          return { available: false, needsDownload: false, acceleratorVersion, sdkAztecVersion };
+          return {
+            available: false,
+            needsDownload: false,
+            acceleratorVersion,
+            sdkAztecVersion,
+            protocol,
+          };
         }
       }
-      return { available: true, needsDownload: false, acceleratorVersion, sdkAztecVersion };
+      return {
+        available: true,
+        needsDownload: false,
+        acceleratorVersion,
+        sdkAztecVersion,
+        protocol,
+      };
     } catch {
+      this.#acceleratorProtocol = null;
       return { available: false, needsDownload: false, sdkAztecVersion };
     }
   }

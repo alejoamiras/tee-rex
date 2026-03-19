@@ -25,6 +25,12 @@ tauri-plugin-autostart = "2"
 reqwest = { version = "0.12", features = ["stream"] }
 flate2 = "1"
 tar = "0.4"
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+rustls-pemfile = "2"
+tokio-rustls = "0.26"
+time = "0.3"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto", "service"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
