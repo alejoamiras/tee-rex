@@ -147,17 +147,11 @@ describe("checkTeeAttestation", () => {
 // ── setUiMode ──
 describe("setUiMode", () => {
   const mockSetProvingMode = mock();
-  const mockSetApiUrl = mock();
-  const mockSetAttestationConfig = mock();
 
   beforeEach(() => {
     mockSetProvingMode.mockClear();
-    mockSetApiUrl.mockClear();
-    mockSetAttestationConfig.mockClear();
     state.prover = {
       setProvingMode: mockSetProvingMode,
-      setApiUrl: mockSetApiUrl,
-      setAttestationConfig: mockSetAttestationConfig,
     } as any;
     state.provingMode = "uee";
     state.uiMode = "uee";
@@ -176,17 +170,13 @@ describe("setUiMode", () => {
     expect(state.uiMode).toBe("local");
     expect(state.provingMode).toBe("local");
     expect(mockSetProvingMode).toHaveBeenCalledWith("local");
-    expect(mockSetApiUrl).toHaveBeenCalledWith("/prover");
-    expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
   });
 
   test("uee mode sets correct state and prover config", () => {
     setUiMode("uee");
     expect(state.uiMode).toBe("uee");
     expect(state.provingMode).toBe("uee");
-    expect(mockSetProvingMode).toHaveBeenCalledWith("uee");
-    expect(mockSetApiUrl).toHaveBeenCalledWith("/prover");
-    expect(mockSetAttestationConfig).toHaveBeenCalledWith({});
+    expect(mockSetProvingMode).toHaveBeenCalledWith("uee", { apiUrl: "/prover" });
   });
 
   test("tee mode sets uee proving with custom URL and attestation", () => {
@@ -194,15 +184,19 @@ describe("setUiMode", () => {
     expect(state.uiMode).toBe("tee");
     expect(state.provingMode).toBe("uee");
     expect(state.teeServerUrl).toBe("https://tee.example.com:4000");
-    expect(mockSetProvingMode).toHaveBeenCalledWith("uee");
-    expect(mockSetApiUrl).toHaveBeenCalledWith("https://tee.example.com:4000");
-    expect(mockSetAttestationConfig).toHaveBeenCalledWith({ requireAttestation: true });
+    expect(mockSetProvingMode).toHaveBeenCalledWith("tee", {
+      apiUrl: "https://tee.example.com:4000",
+      attestation: { requireAttestation: true },
+    });
   });
 
   test("tee mode without URL uses existing teeServerUrl", () => {
     state.teeServerUrl = "https://existing.example.com";
     setUiMode("tee");
-    expect(mockSetApiUrl).toHaveBeenCalledWith("https://existing.example.com");
+    expect(mockSetProvingMode).toHaveBeenCalledWith("tee", {
+      apiUrl: "https://existing.example.com",
+      attestation: { requireAttestation: true },
+    });
   });
 });
 

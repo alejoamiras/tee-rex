@@ -142,18 +142,18 @@ The SDK (`TeeRexProver`) is a drop-in replacement for Aztec's local prover. It e
 ```typescript
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-const prover = new TeeRexProver("https://tee-rex.example.com", wasmSimulator);
+// UEE mode (default when apiUrl is provided)
+const prover = new TeeRexProver({ apiUrl: "https://tee-rex.example.com" });
 
-// Switch between local (WASM) and UEE (TEE) proving
-prover.setProvingMode("uee");
-
-// Optionally require attestation verification with PCR pinning
-prover.setAttestationConfig({
-  requireAttestation: true,
-  expectedPCRs: {
-    0: "8ea65149c7369a...", // Hash of enclave image
+// TEE mode with attestation verification and PCR pinning
+const prover = new TeeRexProver({
+  provingMode: "tee",
+  apiUrl: "https://tee-rex.example.com",
+  attestation: {
+    requireAttestation: true,
+    expectedPCRs: { 0: "8ea65149c7369a..." },
+    maxAgeMs: 300_000,
   },
-  maxAgeMs: 300_000, // 5 minutes
 });
 
 // Use it like any other Aztec prover — the SDK handles

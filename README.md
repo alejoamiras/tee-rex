@@ -43,10 +43,9 @@ npm add @alejoamiras/tee-rex
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { createPXE } from "@aztec/pxe/client/lazy";
 import { getPXEConfig } from "@aztec/pxe/config";
-import { WASMSimulator } from "@aztec/simulator/client";
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-const prover = new TeeRexProver("https://testnet.tee-rex.dev/prover", new WASMSimulator());
+const prover = new TeeRexProver({ apiUrl: "https://testnet.tee-rex.dev/prover" });
 const pxe = await createPXE(node, getPXEConfig(), { proverOrOptions: prover });
 
 // use the PXE as usual -- proving is delegated to the TEE

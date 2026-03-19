@@ -30,18 +30,18 @@ A lightweight native desktop application that runs the Barretenberg (`bb`) provi
 ### Developer Experience
 
 ```typescript
-import { TeeRexProver, ProvingMode } from "@alejoamiras/tee-rex";
+import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-const prover = new TeeRexProver("https://nextnet.tee-rex.dev/prover", new WASMSimulator());
+// Accelerated mode (default when no apiUrl — auto-falls back to WASM)
+const prover = new TeeRexProver();
 
-// Explicit: use accelerator, fallback to WASM if unavailable
-prover.setProvingMode(ProvingMode.accelerated);
+// Or with explicit mode
+const prover = new TeeRexProver({ provingMode: "accelerated" });
 
-// Or: always WASM (current "local" mode, renamed for clarity)
-prover.setProvingMode(ProvingMode.wasm);
-
-// Or: always remote TEE server
-prover.setProvingMode(ProvingMode.remote);
+// Switch modes at runtime
+prover.setProvingMode("accelerated");
+prover.setProvingMode("local");
+prover.setProvingMode("uee", { apiUrl: "https://testnet.tee-rex.dev/prover" });
 ```
 
 Any dApp using `@alejoamiras/tee-rex` gets accelerator support with zero code changes if they're already on `ProvingMode.local` (which becomes `ProvingMode.accelerated` with WASM fallback).
