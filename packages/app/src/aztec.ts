@@ -16,7 +16,6 @@ import { createStore } from "@aztec/kv-store/indexeddb";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
-import { WASMSimulator } from "@aztec/simulator/client";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
 import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 import type { WalletProvider } from "./wallet-connect";
@@ -216,8 +215,10 @@ export async function initializeNode(log: LogFn): Promise<{
   >;
 }> {
   log("Creating TeeRexProver...");
-  state.prover = new TeeRexProver(PROVER_PROXY_PATH, new WASMSimulator());
-  state.prover.setProvingMode(state.provingMode);
+  state.prover = new TeeRexProver({
+    apiUrl: PROVER_PROXY_PATH,
+    provingMode: state.provingMode,
+  });
 
   log("Connecting to Aztec node...");
   state.node = createAztecNodeClient(AZTEC_NODE_URL);
@@ -371,24 +372,21 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
   if (!state.prover) return;
 
   switch (mode) {
-    case "local":
-      state.provingMode = "local";
-      state.prover.setProvingMode("local");
-      state.prover.setApiUrl(PROVER_PROXY_PATH);
-      state.prover.setAttestationConfig({});
-      break;
-    case "uee":
-      state.provingMode = "uee";
-      state.prover.setProvingMode("uee");
-      state.prover.setApiUrl(PROVER_PROXY_PATH);
-      state.prover.setAttestationConfig({});
-      break;
     case "tee":
       if (teeUrl) state.teeServerUrl = teeUrl;
       state.provingMode = "uee";
-      state.prover.setProvingMode("uee");
-      state.prover.setApiUrl(state.teeServerUrl);
-      state.prover.setAttestationConfig({ requireAttestation: true });
+      state.prover.setProvingMode("tee", {
+        apiUrl: state.teeServerUrl,
+        attestation: { requireAttestation: true },
+      });
+      break;
+    case "uee":
+      state.provingMode = "uee";
+      state.prover.setProvingMode("uee", { apiUrl: PROVER_PROXY_PATH });
+      break;
+    case "local":
+      state.provingMode = "local";
+      state.prover.setProvingMode("local");
       break;
     case "accelerated":
       state.provingMode = "accelerated";

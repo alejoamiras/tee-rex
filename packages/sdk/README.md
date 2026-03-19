@@ -40,12 +40,11 @@ Drop `TeeRexProver` into your PXE as a custom prover:
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { createPXE } from "@aztec/pxe/client/lazy";
 import { getPXEConfig } from "@aztec/pxe/config";
-import { WASMSimulator } from "@aztec/simulator/client";
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 const node = createAztecNodeClient("<your-aztec-node-url>");
 
-const prover = new TeeRexProver("https://testnet.tee-rex.dev/prover", new WASMSimulator());
+const prover = new TeeRexProver({ apiUrl: "https://testnet.tee-rex.dev/prover" });
 const pxe = await createPXE(node, getPXEConfig(), {
   proverOrOptions: prover,
 });
@@ -60,13 +59,12 @@ The most common production pattern uses `TeeRexProver` with Aztec's `EmbeddedWal
 ```ts
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { createPXE, getPXEConfig } from "@aztec/pxe/client/lazy";
-import { WASMSimulator } from "@aztec/simulator/client";
 import { createStore } from "@aztec/kv-store/indexeddb";
 import { EmbeddedWallet, WalletDB } from "@aztec/wallets/embedded";
 import { TeeRexProver } from "@alejoamiras/tee-rex";
 
 // 1. Create prover and connect to an Aztec node
-const prover = new TeeRexProver("https://testnet.tee-rex.dev/prover", new WASMSimulator());
+const prover = new TeeRexProver({ apiUrl: "https://testnet.tee-rex.dev/prover" });
 const node = createAztecNodeClient("<your-aztec-node-url>");
 
 // 2. Initialize PXE with the TEE-Rex prover
@@ -92,17 +90,32 @@ const account = await wallet.createSchnorrAccount(secret, salt, signingKey);
 
 ## Mode Switching
 
+The proving mode can be set via the constructor or at runtime:
+
 ```ts
-import { ProvingMode } from "@alejoamiras/tee-rex";
+import { TeeRexProver } from "@alejoamiras/tee-rex";
 
-// delegate proving to a UEE server (default)
-prover.setProvingMode(ProvingMode.uee);
+// UEE mode (default when apiUrl is provided)
+const prover = new TeeRexProver({ apiUrl: "https://testnet.tee-rex.dev/prover" });
 
-// use local native accelerator (auto-falls back to WASM if not running)
-prover.setProvingMode(ProvingMode.accelerated);
+// Accelerated mode (default when no apiUrl — auto-falls back to WASM)
+const prover = new TeeRexProver();
 
-// or prove locally in WASM
-prover.setProvingMode(ProvingMode.local);
+// TEE mode (apiUrl + attestation required by TypeScript)
+const prover = new TeeRexProver({
+  provingMode: "tee",
+  apiUrl: "https://testnet.tee-rex.dev/tee",
+  attestation: { requireAttestation: true },
+});
+
+// Switch modes at runtime
+prover.setProvingMode("uee", { apiUrl: "https://testnet.tee-rex.dev/prover" });
+prover.setProvingMode("tee", {
+  apiUrl: "https://testnet.tee-rex.dev/tee",
+  attestation: { requireAttestation: true },
+});
+prover.setProvingMode("accelerated");
+prover.setProvingMode("local");
 ```
 
 ### Accelerated Mode
@@ -126,12 +139,21 @@ prover.setAcceleratorConfig({ port: 51337 });
 ## Attestation Configuration
 
 ```ts
+// Via constructor
+const prover = new TeeRexProver({
+  provingMode: "tee",
+  apiUrl: "https://testnet.tee-rex.dev/tee",
+  attestation: {
+    requireAttestation: true,
+    expectedPCRs: { 0: "abc123..." },
+    maxAgeMs: 5 * 60 * 1000,
+  },
+});
+
+// Or at runtime
 prover.setAttestationConfig({
-  // reject servers not running in a TEE
   requireAttestation: true,
-  // verify enclave identity via PCR values
   expectedPCRs: { 0: "abc123..." },
-  // attestation freshness (default: 5 minutes)
   maxAgeMs: 5 * 60 * 1000,
 });
 ```
@@ -145,8 +167,12 @@ tee-rex server (Nitro Enclave), or via a local native accelerator.
 
 ```ts
 class TeeRexProver extends BBLazyPrivateKernelProver {
-  constructor(apiUrl: string, ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>)
-  setProvingMode(mode: ProvingMode): void
+  constructor(options?: TeeRexProverOptions)
+  constructor(apiUrl: string, ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>)  // deprecated
+  setProvingMode(mode: "local"): void
+  setProvingMode(mode: "uee", opts: { apiUrl: string; attestation?: TeeRexAttestationConfig }): void
+  setProvingMode(mode: "tee", opts: { apiUrl: string; attestation: TeeRexAttestationConfig }): void
+  setProvingMode(mode: "accelerated"): void
   setApiUrl(url: string): void
   setAttestationConfig(config: TeeRexAttestationConfig): void
   setAcceleratorConfig(config: TeeRexAcceleratorConfig): void
@@ -154,13 +180,28 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
 }
 ```
 
-- **`apiUrl`** — TEE-Rex server endpoint (e.g. `https://testnet.tee-rex.dev/prover`)
-- **`...args`** — forwarded to `BBLazyPrivateKernelProver` (typically a `CircuitSimulator` instance)
-- **`setProvingMode(mode)`** — switch between `"uee"` (TEE), `"local"` (WASM), or `"accelerated"` (native) proving
+- **`options.apiUrl`** — TEE-Rex server endpoint (e.g. `https://testnet.tee-rex.dev/prover`)
+- **`options.provingMode`** — `"local"`, `"uee"`, `"tee"`, or `"accelerated"`. Defaults to `"uee"` when `apiUrl` is set, `"accelerated"` otherwise
+- **`options.simulator`** — circuit simulator instance. Defaults to a lazy-loaded `WASMSimulator` (auto-imports `@aztec/simulator/client` on first use)
+- **`options.attestation`** — attestation config (required for `"tee"` mode, optional for `"uee"`, forbidden for `"local"`/`"accelerated"`)
+- **`options.accelerator`** — accelerator connection config (port, host)
+- **`options.onPhase`** — phase transition callback for UI animation
+- **`setProvingMode(mode, opts?)`** — switch proving mode at runtime with mode-specific options
 - **`setApiUrl(url)`** — update the tee-rex server URL at runtime
 - **`setAttestationConfig(config)`** — configure attestation verification (PCR checks, freshness, require TEE)
 - **`setAcceleratorConfig(config)`** — configure the local accelerator connection (port, host)
 - **`createChonkProof(steps)`** — overrides the parent to route proofs based on the current proving mode
+
+### `TeeRexProverOptions`
+
+Discriminated union on `provingMode`:
+
+| Mode | `apiUrl` | `attestation` |
+|------|----------|---------------|
+| `"local"` | optional | forbidden |
+| `"uee"` (default with apiUrl) | **required** | optional |
+| `"tee"` | **required** | **required** |
+| `"accelerated"` (default without apiUrl) | optional | forbidden |
 
 ### `ProvingMode`
 

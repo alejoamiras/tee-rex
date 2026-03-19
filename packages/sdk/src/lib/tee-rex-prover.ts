@@ -1,4 +1,5 @@
 import { BBLazyPrivateKernelProver } from "@aztec/bb-prover/client/lazy";
+import type { CircuitSimulator } from "@aztec/simulator/client";
 import { type PrivateExecutionStep, serializePrivateExecutionSteps } from "@aztec/stdlib/kernel";
 import { ChonkProofWithPublicInputs } from "@aztec/stdlib/proofs";
 import { schemas } from "@aztec/stdlib/schemas";
@@ -55,6 +56,94 @@ export interface TeeRexAcceleratorConfig {
   host?: string;
 }
 
+/** Fields shared by all proving modes. */
+interface TeeRexProverBaseOptions {
+  /** Circuit simulator. Defaults to WASMSimulator (lazy-loaded from @aztec/simulator/client). */
+  simulator?: CircuitSimulator;
+  /** Accelerator connection config (port, host). */
+  accelerator?: TeeRexAcceleratorConfig;
+  /** Phase transition callback for UI animation. */
+  onPhase?: (phase: ProverPhase, data?: ProverPhaseData) => void;
+}
+
+/** Local WASM proving — no server, no attestation. */
+interface TeeRexLocalOptions extends TeeRexProverBaseOptions {
+  provingMode: "local";
+  apiUrl?: string;
+  attestation?: never;
+}
+
+/** UEE server proving — apiUrl required, attestation optional. */
+interface TeeRexUeeOptions extends TeeRexProverBaseOptions {
+  provingMode?: "uee";
+  /** TEE-Rex server URL. Required for UEE mode. */
+  apiUrl: string;
+  /** Attestation verification config (optional for UEE). */
+  attestation?: TeeRexAttestationConfig;
+}
+
+/** TEE proving — apiUrl AND attestation required. */
+interface TeeRexTeeOptions extends TeeRexProverBaseOptions {
+  provingMode: "tee";
+  /** TEE-Rex server URL. Required. */
+  apiUrl: string;
+  /** Attestation verification config. Required for TEE — proves the server runs in an enclave. */
+  attestation: TeeRexAttestationConfig;
+}
+
+/** Accelerated native proving — no server needed. */
+interface TeeRexAcceleratedOptions extends TeeRexProverBaseOptions {
+  provingMode?: "accelerated";
+  apiUrl?: string;
+  attestation?: never;
+}
+
+export type TeeRexProverOptions =
+  | TeeRexLocalOptions
+  | TeeRexUeeOptions
+  | TeeRexTeeOptions
+  | TeeRexAcceleratedOptions;
+
+/**
+ * Create a lazy-loading proxy for CircuitSimulator that dynamically imports
+ * `@aztec/simulator/client` on first method call. This avoids adding
+ * `@aztec/simulator` as a runtime dependency of the SDK.
+ */
+function createLazySimulator(): CircuitSimulator {
+  let instance: CircuitSimulator | null = null;
+  let loading: Promise<CircuitSimulator> | null = null;
+
+  async function getInstance(): Promise<CircuitSimulator> {
+    if (instance) return instance;
+    if (!loading) {
+      loading = import("@aztec/simulator/client")
+        .then((mod) => {
+          instance = new mod.WASMSimulator();
+          return instance;
+        })
+        .catch(() => {
+          loading = null;
+          throw new Error(
+            "No simulator provided and @aztec/simulator/client could not be loaded. " +
+              "Install @aztec/simulator or pass a simulator in the constructor options.",
+          );
+        });
+    }
+    return loading;
+  }
+
+  // Return a proxy that forwards all property access to the lazy-loaded instance.
+  return new Proxy({} as CircuitSimulator, {
+    get(_target, prop) {
+      // Return an async function that loads the simulator then delegates.
+      return async (...args: unknown[]) => {
+        const sim = await getInstance();
+        return (sim as any)[prop](...args);
+      };
+    },
+  });
+}
+
 const DEFAULT_ACCELERATOR_PORT = 59833;
 const DEFAULT_ACCELERATOR_HOST = "127.0.0.1";
 
@@ -88,26 +177,88 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   #onPhase: ((phase: ProverPhase, data?: ProverPhaseData) => void) | null = null;
   #acceleratorPort: number;
   #acceleratorHost: string;
+  #apiUrl: string | undefined;
 
-  constructor(
-    private apiUrl: string,
-    ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>
-  ) {
-    super(...args);
+  /** @deprecated Use the options constructor instead: `new TeeRexProver({ apiUrl })` */
+  constructor(apiUrl: string, ...args: ConstructorParameters<typeof BBLazyPrivateKernelProver>);
+  constructor(options?: TeeRexProverOptions);
+  constructor(apiUrlOrOptions?: string | TeeRexProverOptions, ...args: unknown[]) {
+    if (typeof apiUrlOrOptions === "string") {
+      // Legacy positional API: new TeeRexProver(url, simulator, options?)
+      super(...(args as ConstructorParameters<typeof BBLazyPrivateKernelProver>));
+      this.#apiUrl = apiUrlOrOptions;
+    } else {
+      // New options API: new TeeRexProver({ apiUrl, simulator, ... }) or new TeeRexProver()
+      const opts = apiUrlOrOptions ?? {};
+      super(opts.simulator ?? createLazySimulator());
+      this.#apiUrl = opts.apiUrl;
+
+      // Apply options
+      if (opts.onPhase) this.#onPhase = opts.onPhase;
+      if (opts.accelerator) {
+        if (opts.accelerator.port !== undefined) this.#acceleratorPort = opts.accelerator.port;
+        if (opts.accelerator.host !== undefined) this.#acceleratorHost = opts.accelerator.host;
+      }
+
+      // Determine proving mode
+      const mode = opts.provingMode;
+      if (mode === "tee") {
+        // "tee" is a constructor convenience — maps to UEE + requireAttestation
+        this.#provingMode = ProvingMode.uee;
+        this.#attestationConfig = { ...opts.attestation, requireAttestation: true };
+      } else if (mode) {
+        this.#provingMode = mode;
+        if ("attestation" in opts && opts.attestation) {
+          this.#attestationConfig = opts.attestation;
+        }
+      } else {
+        // Smart default: apiUrl → UEE, no apiUrl → accelerated
+        this.#provingMode = opts.apiUrl ? ProvingMode.uee : ProvingMode.accelerated;
+        if ("attestation" in opts && opts.attestation) {
+          this.#attestationConfig = opts.attestation;
+        }
+      }
+    }
+
     const envPort =
       typeof process !== "undefined" ? process.env?.TEE_REX_ACCELERATOR_PORT : undefined;
-    this.#acceleratorPort = envPort ? Number.parseInt(envPort, 10) : DEFAULT_ACCELERATOR_PORT;
-    this.#acceleratorHost = DEFAULT_ACCELERATOR_HOST;
+    // Only override if not already set by options
+    this.#acceleratorPort ??= envPort ? Number.parseInt(envPort, 10) : DEFAULT_ACCELERATOR_PORT;
+    this.#acceleratorHost ??= DEFAULT_ACCELERATOR_HOST;
   }
 
   /** Switch between local WASM, UEE (server), or accelerated (native) proving. */
-  setProvingMode(mode: ProvingMode) {
-    this.#provingMode = mode;
+  setProvingMode(mode: "local"): void;
+  setProvingMode(
+    mode: "uee",
+    opts: { apiUrl: string; attestation?: TeeRexAttestationConfig },
+  ): void;
+  setProvingMode(mode: "tee", opts: { apiUrl: string; attestation: TeeRexAttestationConfig }): void;
+  setProvingMode(mode: "accelerated"): void;
+  /** @deprecated Pass mode-specific options for type safety. */
+  setProvingMode(mode: ProvingMode): void;
+  setProvingMode(
+    mode: ProvingMode | "tee",
+    opts?: { apiUrl?: string; attestation?: TeeRexAttestationConfig },
+  ): void {
+    if (mode === "tee") {
+      this.#provingMode = ProvingMode.uee;
+      this.#apiUrl = opts?.apiUrl ?? this.#apiUrl;
+      this.#attestationConfig = { ...opts?.attestation, requireAttestation: true };
+    } else {
+      this.#provingMode = mode;
+      if (opts?.apiUrl !== undefined) this.#apiUrl = opts.apiUrl;
+      if (opts?.attestation !== undefined) {
+        this.#attestationConfig = opts.attestation;
+      } else if (mode === "local" || mode === "accelerated") {
+        this.#attestationConfig = {};
+      }
+    }
   }
 
   /** Update the tee-rex server URL used for UEE/TEE proving. */
   setApiUrl(url: string) {
-    this.apiUrl = url;
+    this.#apiUrl = url;
   }
 
   /** Configure attestation verification (PCR checks, freshness, require TEE). */
@@ -221,7 +372,12 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   async #ueeCreateChonkProof(
     executionSteps: PrivateExecutionStep[],
   ): Promise<ChonkProofWithPublicInputs> {
-    logger.info("Creating chonk proof", { apiUrl: this.apiUrl });
+    if (!this.#apiUrl) {
+      throw new Error(
+        "apiUrl is required for UEE proving mode. Pass it in constructor options or call setApiUrl().",
+      );
+    }
+    logger.info("Creating chonk proof", { apiUrl: this.#apiUrl });
     this.#onPhase?.("serialize");
     const msgpack = serializePrivateExecutionSteps(executionSteps);
     logger.debug("Serialized payload", { bytes: msgpack.byteLength });
@@ -237,7 +393,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
     this.#onPhase?.("transmit");
     this.#onPhase?.("proving");
     const aztecVersion = this.#getAztecVersion();
-    const res = await ky.post(joinURL(this.apiUrl, "prove"), {
+    const res = await ky.post(joinURL(this.#apiUrl, "prove"), {
       json: { data: encryptedData },
       timeout: ms("5 min"),
       retry: 2,
@@ -321,7 +477,7 @@ export class TeeRexProver extends BBLazyPrivateKernelProver {
   }
 
   async #fetchEncryptionPublicKey() {
-    const response = await ky.get(joinURL(this.apiUrl, "attestation"), { retry: 2 }).json();
+    const response = await ky.get(joinURL(this.#apiUrl!, "attestation"), { retry: 2 }).json();
     const data = z
       .discriminatedUnion("mode", [
         z.object({ mode: z.literal("standard"), publicKey: z.string() }),
