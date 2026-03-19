@@ -388,6 +388,14 @@ mod tests {
 
     #[tokio::test]
     async fn prove_returns_error_when_bb_not_found() {
+        // This test exercises the "bb not found" error path. When bb IS installed
+        // on the dev machine, find_bb() succeeds and the real bb binary runs with
+        // garbage input — taking 60+ seconds to error out. Skip in that case.
+        if bb::find_bb(None).is_ok() {
+            eprintln!("skipping: bb is available on this machine");
+            return;
+        }
+
         let app = router(AppState::default());
         let response: axum::http::Response<_> = app
             .oneshot(
