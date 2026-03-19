@@ -130,8 +130,8 @@ fn write_pem_file(
 /// Load the leaf cert + key from PEM files and build a rustls ServerConfig.
 pub fn load_rustls_config(
 ) -> Result<Arc<rustls::ServerConfig>, Box<dyn std::error::Error + Send + Sync>> {
-    let cert_pem = std::fs::read(&leaf_cert_path())?;
-    let key_pem = std::fs::read(&leaf_key_path())?;
+    let cert_pem = std::fs::read(leaf_cert_path())?;
+    let key_pem = std::fs::read(leaf_key_path())?;
 
     let certs: Vec<_> =
         rustls_pemfile::certs(&mut BufReader::new(&cert_pem[..])).collect::<Result<Vec<_>, _>>()?;
