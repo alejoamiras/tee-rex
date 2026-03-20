@@ -1,8 +1,7 @@
 /**
- * Connectivity tests — verify Aztec node, tee-rex server, and accelerator are reachable.
+ * Connectivity tests — verify Aztec node and tee-rex server are reachable.
  *
  * Services must be running before tests start (asserted by e2e-setup.ts preload).
- * Accelerator health check requires ACCELERATOR_URL env var — skipped when not set.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -31,16 +30,6 @@ describe("Service Connectivity", () => {
 
       expect(data.publicKey).toBeDefined();
       expect(data.publicKey).toContain("BEGIN PGP PUBLIC KEY BLOCK");
-    });
-  });
-
-  describe.skipIf(!process.env.ACCELERATOR_URL)("Accelerator", () => {
-    test("should return health status", async () => {
-      const response = await fetch(`${process.env.ACCELERATOR_URL}/health`);
-      const data = await response.json();
-
-      expect(data.status).toBe("ok");
-      logger.info("Accelerator healthy", data);
     });
   });
 });

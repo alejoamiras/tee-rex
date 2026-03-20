@@ -161,10 +161,9 @@ const prover = new TeeRexProver({
 const proof = await prover.createChonkProof(executionSteps);
 ```
 
-Three modes:
+Two modes:
 - **`"local"`** — proves using WASM Barretenberg locally (default, always works)
 - **`"uee"`** — encrypts and delegates to the TEE server
-- **`"accelerated"`** — routes to the native TeeRex Accelerator on localhost (runs `bb` binary natively, bypassing WASM throttling). Auto-falls back to `"local"` if the accelerator is unavailable or has a version mismatch.
 
 ## Docker Images
 
@@ -219,5 +218,4 @@ The `libnsm.so` library is what lets the enclave talk to the NSM hardware device
 | **PXE** | Private eXecution Environment — Aztec's client-side execution engine |
 | **Chonk Proof** | The output format of Aztec's client prover |
 | **OpenPGP** | Encryption standard (RFC 4880) used for key exchange and payload encryption |
-| **Accelerator** | TeeRex Accelerator — native desktop tray app that runs `bb` on localhost, bypassing browser WASM throttling |
 | **EIF** | Enclave Image File — the packaged enclave image that Nitro boots |

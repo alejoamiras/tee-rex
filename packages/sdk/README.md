@@ -98,7 +98,7 @@ import { TeeRexProver } from "@alejoamiras/tee-rex";
 // UEE mode (default when apiUrl is provided)
 const prover = new TeeRexProver({ apiUrl: "https://testnet.tee-rex.dev/prover" });
 
-// Accelerated mode (default when no apiUrl — auto-falls back to WASM)
+// Local mode (WASM proving, always works)
 const prover = new TeeRexProver();
 
 // TEE mode (apiUrl + attestation required by TypeScript)
@@ -114,27 +114,7 @@ prover.setProvingMode("tee", {
   apiUrl: "https://testnet.tee-rex.dev/tee",
   attestation: { requireAttestation: true },
 });
-prover.setProvingMode("accelerated");
 prover.setProvingMode("local");
-```
-
-### Accelerated Mode
-
-Accelerated mode routes proving to a native `bb` binary running on your machine via the [TeeRex Accelerator](../accelerator/) — a lightweight desktop app that sits in your system tray.
-
-**Why it matters for the ecosystem**: if every dApp uses `TeeRexProver` with accelerated mode, then any user who installs the accelerator gets instant proving across all apps — no per-app configuration, no WASM overhead, just native speed. The more apps that adopt it, the more value the single install provides.
-
-- **Zero config** — just set `ProvingMode.accelerated`; the SDK auto-detects the accelerator on `127.0.0.1:59833`
-- **Auto-download** — the accelerator automatically downloads the correct `bb` binary version when needed, matching the SDK's Aztec version
-- **Transparent fallback** — if the accelerator isn't running or has a version mismatch, the SDK silently falls back to WASM proving. No errors, no broken UX
-- **Safari compatible** — enable "Safari Support" in the accelerator tray menu to serve HTTPS on port 59834 (one-time certificate setup). The SDK probes both HTTP and HTTPS automatically via `Promise.any`
-
-```ts
-// custom port (default: 59833)
-prover.setAcceleratorConfig({ port: 51337 });
-
-// or via environment variable (read at construction time)
-// TEE_REX_ACCELERATOR_PORT=51337
 ```
 
 ## Attestation Configuration
@@ -163,8 +143,8 @@ prover.setAttestationConfig({
 
 ### `TeeRexProver`
 
-Aztec private kernel prover that can generate proofs locally (WASM), on a UEE
-tee-rex server (Nitro Enclave), or via a local native accelerator.
+Aztec private kernel prover that can generate proofs locally (WASM) or on a UEE/TEE
+tee-rex server (Nitro Enclave).
 
 ```ts
 class TeeRexProver extends BBLazyPrivateKernelProver {
@@ -173,24 +153,20 @@ class TeeRexProver extends BBLazyPrivateKernelProver {
   setProvingMode(mode: "local"): void
   setProvingMode(mode: "uee", opts: { apiUrl: string; attestation?: TeeRexAttestationConfig }): void
   setProvingMode(mode: "tee", opts: { apiUrl: string; attestation: TeeRexAttestationConfig }): void
-  setProvingMode(mode: "accelerated"): void
   setApiUrl(url: string): void
   setAttestationConfig(config: TeeRexAttestationConfig): void
-  setAcceleratorConfig(config: TeeRexAcceleratorConfig): void
   createChonkProof(executionSteps: PrivateExecutionStep[]): Promise<ChonkProofWithPublicInputs>
 }
 ```
 
 - **`options.apiUrl`** — TEE-Rex server endpoint (e.g. `https://testnet.tee-rex.dev/prover`)
-- **`options.provingMode`** — `"local"`, `"uee"`, `"tee"`, or `"accelerated"`. Defaults to `"uee"` when `apiUrl` is set, `"accelerated"` otherwise
+- **`options.provingMode`** — `"local"`, `"uee"`, or `"tee"`. Defaults to `"uee"` when `apiUrl` is set, `"local"` otherwise
 - **`options.simulator`** — circuit simulator instance. Defaults to a lazy-loaded `WASMSimulator` (auto-imports `@aztec/simulator/client` on first use)
-- **`options.attestation`** — attestation config (required for `"tee"` mode, optional for `"uee"`, forbidden for `"local"`/`"accelerated"`)
-- **`options.accelerator`** — accelerator connection config (port, host)
+- **`options.attestation`** — attestation config (required for `"tee"` mode, optional for `"uee"`, forbidden for `"local"`)
 - **`options.onPhase`** — phase transition callback for UI animation
 - **`setProvingMode(mode, opts?)`** — switch proving mode at runtime with mode-specific options
 - **`setApiUrl(url)`** — update the tee-rex server URL at runtime
 - **`setAttestationConfig(config)`** — configure attestation verification (PCR checks, freshness, require TEE)
-- **`setAcceleratorConfig(config)`** — configure the local accelerator connection (port, host)
 - **`createChonkProof(steps)`** — overrides the parent to route proofs based on the current proving mode
 
 ### `TeeRexProverOptions`
@@ -199,16 +175,15 @@ Discriminated union on `provingMode`:
 
 | Mode | `apiUrl` | `attestation` |
 |------|----------|---------------|
-| `"local"` | optional | forbidden |
+| `"local"` (default without apiUrl) | optional | forbidden |
 | `"uee"` (default with apiUrl) | **required** | optional |
 | `"tee"` | **required** | **required** |
-| `"accelerated"` (default without apiUrl) | optional | forbidden |
 
 ### `ProvingMode`
 
 ```ts
-const ProvingMode = { local: "local", uee: "uee", accelerated: "accelerated" } as const;
-type ProvingMode = "local" | "uee" | "accelerated";
+const ProvingMode = { local: "local", uee: "uee", tee: "tee" } as const;
+type ProvingMode = "local" | "uee" | "tee";
 ```
 
 ### `TeeRexAttestationConfig`
@@ -218,15 +193,6 @@ interface TeeRexAttestationConfig {
   requireAttestation?: boolean;  // reject servers in standard (non-TEE) mode
   expectedPCRs?: Record<number, string>;  // expected PCR values (hex strings)
   maxAgeMs?: number;  // max attestation age in ms (default: 5 min)
-}
-```
-
-### `TeeRexAcceleratorConfig`
-
-```ts
-interface TeeRexAcceleratorConfig {
-  port?: number;  // accelerator port (default: 59833)
-  host?: string;  // accelerator host (default: "127.0.0.1")
 }
 ```
 

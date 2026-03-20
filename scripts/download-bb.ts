@@ -19,7 +19,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
-// Platform detection — matches accelerator's current_platform() (versions.rs)
+// Platform detection — Aztec release naming convention
 // Aztec release naming: arm64-darwin, amd64-darwin, amd64-linux, arm64-linux
 // ---------------------------------------------------------------------------
 
