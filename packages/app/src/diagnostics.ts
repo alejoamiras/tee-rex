@@ -8,11 +8,6 @@
 //   3. main.ts — remove diagnostic imports, install*() calls, diagMemory() calls, export btn listener
 //   4. index.html — remove the #export-diagnostics-btn button
 //
-// ROLLBACK (accelerator):
-//   1. main.rs — revert to `tracing_subscriber::fmt::init()`, remove log_dir(), Show Logs menu item
-//   2. server.rs — revert health() to `json!({ "status": "ok" })`
-//   3. Cargo.toml — remove `tracing-appender`, remove `registry` from tracing-subscriber features
-//
 // Or simply: `git revert <diagnostics-commit>`
 
 interface DiagEntry {

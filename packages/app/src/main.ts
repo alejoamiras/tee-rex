@@ -3,7 +3,6 @@ import { AsciiController } from "./ascii-animation";
 import {
   AZTEC_DISPLAY_URL,
   AZTEC_SDK_VERSION,
-  checkAccelerator,
   checkAztecNode,
   checkTeeAttestation,
   checkTeeRexServer,
@@ -92,15 +91,6 @@ async function checkEmbeddedServices(): Promise<void> {
     }
   }
 
-  const accel = await checkAccelerator();
-  $btn("mode-accelerated").disabled = false;
-  updateAcceleratorLabel(accel);
-  if (accel) {
-    appendLog("Native accelerator detected on localhost:59833", "success");
-  } else {
-    appendLog("Accelerator not detected — ACCEL mode will fall back to WASM", "warn");
-  }
-
   if (TEE_CONFIGURED) {
     $("tee-url").textContent = TEE_DISPLAY_URL;
     appendLog(`TEE_URL configured (${TEE_DISPLAY_URL}) — checking attestation...`);
@@ -133,7 +123,6 @@ const ACTIVE_BTN =
 function updateModeUI(mode: UiMode): void {
   const buttons: Record<UiMode, HTMLElement> = {
     local: $("mode-local"),
-    accelerated: $("mode-accelerated"),
     uee: $("mode-uee"),
     tee: $("mode-tee"),
   };
@@ -164,28 +153,11 @@ $("mode-tee").addEventListener("click", () => {
   appendLog("Switched to TEE proving mode");
 });
 
-$("mode-accelerated").addEventListener("click", () => {
-  if (deploying || $btn("mode-accelerated").disabled) return;
-  setUiMode("accelerated");
-  updateModeUI("accelerated");
-  appendLog("Switched to accelerated proving mode");
-});
-
 // ── Shared helpers ──
 
-/** Update the accelerator service label and button state. */
-function updateAcceleratorLabel(available: boolean): void {
-  setStatus("accelerator-status", available);
-  $("accelerator-label").textContent = available ? "available" : "not detected — fallback: wasm";
-}
-
-/** Handle a prover phase: feed the animation and react to fallback. */
+/** Handle a prover phase: feed the animation. */
 function handleProverPhase(ascii: AsciiController, phase: string, _data?: unknown): void {
   ascii.pushPhase(phase as Parameters<typeof ascii.pushPhase>[0]);
-  if (phase === "fallback") {
-    updateAcceleratorLabel(false);
-    appendLog("Accelerator offline — falling back to WASM (this will be slower)", "warn");
-  }
 }
 
 function setActionButtonsDisabled(disabled: boolean): void {

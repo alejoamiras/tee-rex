@@ -155,18 +155,8 @@ function encryptFrames(): FrameFn {
   };
 }
 
-function detectFrames(): FrameFn {
-  return (tick) =>
-    box([`> checking accelerator ${spin(tick)}`, "  localhost"], "round", "health check");
-}
-
-function fallbackFrames(): FrameFn {
-  return (tick) =>
-    box([`  accelerator offline  ${spin(tick)}`, "  falling back to wasm"], "round", "⚠ FALLBACK");
-}
-
 function transmitFrames(mode: UiMode): FrameFn {
-  const target = mode === "tee" ? "ENCLAVE" : mode === "accelerated" ? "ACCELERATOR" : "SERVER";
+  const target = mode === "tee" ? "ENCLAVE" : "SERVER";
   const trackW = 24;
   const slots = trackW - 4; // positions for >>> within the track
   return (tick) => {
@@ -180,7 +170,6 @@ const MODE_CONFIG: Record<UiMode, { border: Border; title: string; wrap?: Border
   tee: { border: "double", title: "AWS NITRO ENCLAVE" },
   uee: { border: "single", title: "UEE SERVER" },
   local: { border: "single", title: "wasm prover", wrap: "round" },
-  accelerated: { border: "single", title: "NATIVE ACCELERATOR", wrap: "round" },
 };
 
 function provingFrames(mode: UiMode): FrameFn {
@@ -292,10 +281,6 @@ function confirmFrames(): FrameFn {
 /** Return the frame generator for a given (mode, phase) combination. */
 export function getFrameFn(mode: UiMode, phase: AnimationPhase): FrameFn {
   switch (phase) {
-    case "detect":
-      return detectFrames();
-    case "fallback":
-      return fallbackFrames();
     case "app:simulate":
       return simulateFrames();
     case "serialize":

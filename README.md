@@ -11,7 +11,6 @@
   [![SDK](https://github.com/alejoamiras/tee-rex/actions/workflows/sdk.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/sdk.yml)
   [![App](https://github.com/alejoamiras/tee-rex/actions/workflows/app.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/app.yml)
   [![Server](https://github.com/alejoamiras/tee-rex/actions/workflows/server.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/server.yml)
-  [![Accelerator](https://github.com/alejoamiras/tee-rex/actions/workflows/accelerator.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/accelerator.yml)
   [![Deploy Mainnet](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-mainnet.yml/badge.svg)](https://github.com/alejoamiras/tee-rex/actions/workflows/deploy-mainnet.yml)
 
   **[mainnet.tee-rex.dev](https://mainnet.tee-rex.dev)** · **[testnet.tee-rex.dev](https://testnet.tee-rex.dev)** · **[nightlies.tee-rex.dev](https://nightlies.tee-rex.dev)**
@@ -30,8 +29,8 @@ Prove [Aztec](https://aztec.network) transactions inside an AWS Nitro Enclave. T
 - Verify Nitro attestation documents (COSE_Sign1, certificate chain, PCR values)
 - Drop-in replacement for Aztec's default prover ([SDK docs](packages/sdk/README.md))
 - Seamless fallback to local WASM proving
-- Native proving accelerator — bypass WASM throttling with a desktop tray app, auto-fallback on mismatch
 - Use the hosted TEE or run your own
+- For native desktop proving, see the [Aztec Accelerator](https://github.com/alejoamiras/aztec-accelerator) companion project
 
 ## Quick Start
 
@@ -61,12 +60,10 @@ To run your own TEE-Rex server, see the [Server README](packages/server/README.m
 tee-rex/
 ├── packages/
 │   ├── sdk/          → @alejoamiras/tee-rex (npm package)
-│   │                   Drop-in Aztec prover: local (WASM), UEE (TEE), or accelerated (native)
+│   │                   Drop-in Aztec prover: local (WASM) or UEE/TEE (server)
 │   ├── server/       → Express server (runs in Nitro Enclave or standalone)
 │   │                   Handles /prove, /attestation endpoints
-│   ├── app/          → Vite frontend demo (local/UEE/TEE mode toggle)
-│   └── accelerator/  → Tauri tray app — native proving on localhost:59833
-│                       Runs bb binary natively, auto-detected by SDK
+│   └── app/          → Vite frontend demo (local/UEE/TEE mode toggle)
 ├── infra/            → Deploy scripts, IAM policies, CloudFront config
 └── docs/             → Architecture diagrams, CI pipeline reference
 ```
@@ -100,7 +97,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 |----------|-------------|
 | [SDK README](packages/sdk/README.md) | SDK installation, API reference, usage examples |
 | [Server README](packages/server/README.md) | Self-hosting guide, API reference, Docker setup |
-| [Accelerator README](packages/accelerator/README.md) | Native proving accelerator — installation, configuration, troubleshooting |
 | [Architecture](docs/architecture.md) | System diagrams, proving flow, Docker strategy |
 | [CI Pipeline](docs/ci-pipeline.md) | Workflow reference, change detection, deploy logic |
 

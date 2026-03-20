@@ -234,17 +234,6 @@ jobs:
             echo "::warning::Mainnet node at ${MAINNET_URL} is not reachable. This is expected if mainnet is not yet live."
           fi
 
-  # ── Pre-publish accelerator validation ────────────────────────────
-  # Builds the headless accelerator binary and runs SDK e2e with
-  # ACCELERATOR_URL to ensure ProvingMode.accelerated works before publish.
-  validate-accelerator:
-    name: Validate Accelerator
-    if: "github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: update @aztec/')"
-    uses: ./.github/workflows/_e2e-sdk.yml
-    secrets: inherit
-    with:
-      build_accelerator: true
-
   # ── SDK publishing handled by deploy-testnet.yml (same branch, tags testnet + latest) ──
 
   # ── Post-deploy validation against mainnet ───────────────────────

@@ -1,9 +1,0 @@
-{
-  "name": "@alejoamiras/tee-rex-accelerator",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Native proving accelerator for Aztec transactions — bypasses browser WASM throttling",
-  "scripts": {
-    "prebuild": "bun scripts/copy-bb.ts"
-  }
-}

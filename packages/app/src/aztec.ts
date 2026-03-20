@@ -26,7 +26,7 @@ export type LogFn = (
   url?: string,
 ) => void;
 
-export type UiMode = "local" | "uee" | "tee" | "accelerated";
+export type UiMode = "local" | "uee" | "tee";
 
 const AZTEC_NODE_URL = process.env.AZTEC_NODE_URL || "/aztec";
 /** Vite dev server / CloudFront proxy path for the prover (not the actual URL). */
@@ -107,25 +107,6 @@ export const state: AztecState = {
   proofsRequired: false,
   feePaymentMethod: undefined,
 };
-
-export async function checkAccelerator(): Promise<boolean> {
-  try {
-    // Probe both HTTP (59833) and HTTPS (59834) in parallel.
-    // Chrome/Firefox: HTTP responds instantly. Safari: HTTPS needed (mixed-content block).
-    const { res } = await Promise.any([
-      fetch("http://127.0.0.1:59833/health", { signal: AbortSignal.timeout(2000) }).then((res) => ({
-        res,
-        protocol: "http" as const,
-      })),
-      fetch("https://127.0.0.1:59834/health", { signal: AbortSignal.timeout(2000) }).then(
-        (res) => ({ res, protocol: "https" as const }),
-      ),
-    ]);
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 export async function checkAztecNode(): Promise<{ reachable: boolean; nodeVersion?: string }> {
   try {
@@ -395,10 +376,6 @@ export function setUiMode(mode: UiMode, teeUrl?: string): void {
     case "local":
       state.provingMode = "local";
       state.prover.setProvingMode("local");
-      break;
-    case "accelerated":
-      state.provingMode = "accelerated";
-      state.prover.setProvingMode("accelerated");
       break;
   }
 }

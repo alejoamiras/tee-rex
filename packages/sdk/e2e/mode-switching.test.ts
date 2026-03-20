@@ -2,11 +2,10 @@
  * Mode-switching e2e tests
  *
  * Validates that switching between proving modes mid-session works correctly.
- * Deploys accounts with UEE, local, accelerated, and TEE proving using the
+ * Deploys accounts with UEE, local, and TEE proving using the
  * same TeeRexProver instance.
  *
  * Network-agnostic: always uses Sponsored FPC + from: AztecAddress.ZERO.
- * Accelerated transitions require ACCELERATOR_URL env var — skipped when not set.
  * TEE transitions require TEE_URL env var — skipped when not set.
  *
  * Services must be running before tests start (asserted by e2e-setup.ts preload).
@@ -94,33 +93,6 @@ describe("Mode Switching", () => {
       logger.info("Switched to local proving mode");
 
       await deploySchnorrAccount(wallet, feePaymentMethod, "local mode");
-    }, 600000);
-  });
-
-  describe.skipIf(!process.env.ACCELERATOR_URL)("Accelerated Mode Transitions", () => {
-    test("should switch from UEE to accelerated and deploy", async () => {
-      expect(wallet).toBeDefined();
-
-      prover.setProvingMode(ProvingMode.accelerated);
-      if (process.env.ACCELERATOR_URL) {
-        const url = new URL(process.env.ACCELERATOR_URL);
-        prover.setAcceleratorConfig({
-          host: url.hostname,
-          port: Number.parseInt(url.port, 10),
-        });
-      }
-      logger.info("Switched to accelerated mode", { url: process.env.ACCELERATOR_URL });
-
-      await deploySchnorrAccount(wallet, feePaymentMethod, "accelerated mode");
-    }, 600000);
-
-    test("should switch from accelerated to local and deploy", async () => {
-      expect(wallet).toBeDefined();
-
-      prover.setProvingMode(ProvingMode.local);
-      logger.info("Switched from accelerated to local proving mode");
-
-      await deploySchnorrAccount(wallet, feePaymentMethod, "local after accelerated");
     }, 600000);
   });
 

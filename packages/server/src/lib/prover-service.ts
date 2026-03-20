@@ -51,7 +51,7 @@ export class ProverService {
       const rawProof = new Uint8Array(await Bun.file(join(outputDir, "proof")).arrayBuffer());
 
       // Prepend 4-byte field count header (big-endian u32) — same format as
-      // ChonkProofWithPublicInputs.fromBuffer() expects and the accelerator produces.
+      // ChonkProofWithPublicInputs.fromBuffer() expects.
       const numFields = rawProof.length / 32;
       const header = Buffer.alloc(4);
       header.writeUInt32BE(numFields);
