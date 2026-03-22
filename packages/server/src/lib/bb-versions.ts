@@ -6,7 +6,7 @@ import { getLogger } from "@logtape/logtape";
 const logger = getLogger(["tee-rex", "server", "bb-versions"]);
 
 // ---------------------------------------------------------------------------
-// Network tier classification — same logic as accelerator (versions.rs)
+// Network tier classification
 // ---------------------------------------------------------------------------
 
 export type NetworkTier = "nightly" | "testnet" | "mainnet";
@@ -56,7 +56,7 @@ export function listCachedVersions(): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Resolution — port of accelerator's find_bb (bb.rs)
+// Resolution — find the bb binary
 // ---------------------------------------------------------------------------
 
 /**
@@ -124,7 +124,7 @@ export function findBb(version?: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Retention / cleanup — port of accelerator's versions_to_evict (versions.rs)
+// Retention / cleanup — evict old versions beyond retention limit
 // ---------------------------------------------------------------------------
 
 /** Determine which cached versions should be evicted per the retention policy. */

@@ -7,13 +7,6 @@
 | [CI Pipeline](./ci-pipeline.md) | All GitHub Actions workflows, change detection, conditional deploys, and Docker caching strategy |
 | [Nitro Deployment](./nitro-deployment.md) | Step-by-step guide for deploying the Nitro Enclave on EC2 |
 
-## Local Native Accelerator (Phase 31)
-
-| Document | Description |
-|----------|-------------|
-| [Accelerator Decision](./accelerator-decision.md) | Research, alternatives analysis, and all decisions (Tauri vs Electron vs bun, port selection, security model, rollback paths) |
-| [Accelerator Plan](./accelerator-plan.md) | Step-by-step implementation plan with validation criteria and dependency graph |
-
 ## Development
 
 | Document | Description |
