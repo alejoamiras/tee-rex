@@ -461,3 +461,62 @@ resource "aws_cloudfront_distribution" "nightlies" {
     }
   }
 }
+
+# -----------------------------------------------------------------------------
+# Landing Page Distribution (static S3 only — no EC2 prover origins)
+# -----------------------------------------------------------------------------
+
+resource "aws_cloudfront_distribution" "landing" {
+  comment             = "tee-rex landing page — static S3 only"
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+  http_version        = "http2"
+  price_class         = "PriceClass_100"
+  aliases             = var.landing_cloudfront_aliases
+
+  # S3 origin (static landing page)
+  origin {
+    domain_name              = aws_s3_bucket.landing.bucket_regional_domain_name
+    origin_id                = "s3-landing"
+    origin_access_control_id = aws_cloudfront_origin_access_control.app.id
+  }
+
+  # Default behavior: S3 static landing
+  default_cache_behavior {
+    target_origin_id       = "s3-landing"
+    viewer_protocol_policy = "redirect-to-https"
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+    compress               = true
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    # No COOP/COEP headers — landing page has no SharedArrayBuffer/WASM
+  }
+
+  # SPA fallback: 403/404 → /index.html
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+}

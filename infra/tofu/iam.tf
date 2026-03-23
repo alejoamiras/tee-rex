@@ -266,6 +266,8 @@ resource "aws_iam_role_policy" "ci_inline" {
           "${aws_s3_bucket.testnet.arn}/*",
           aws_s3_bucket.nightlies.arn,
           "${aws_s3_bucket.nightlies.arn}/*",
+          aws_s3_bucket.landing.arn,
+          "${aws_s3_bucket.landing.arn}/*",
         ]
       },
       {
@@ -277,6 +279,7 @@ resource "aws_iam_role_policy" "ci_inline" {
           "${aws_s3_bucket.mainnet.arn}/*",
           "${aws_s3_bucket.testnet.arn}/*",
           "${aws_s3_bucket.nightlies.arn}/*",
+          "${aws_s3_bucket.landing.arn}/*",
         ]
       },
       {
@@ -288,6 +291,7 @@ resource "aws_iam_role_policy" "ci_inline" {
           aws_cloudfront_distribution.mainnet.arn,
           aws_cloudfront_distribution.testnet.arn,
           aws_cloudfront_distribution.nightlies.arn,
+          aws_cloudfront_distribution.landing.arn,
         ]
       },
     ]

@@ -72,6 +72,17 @@ output "nightlies_cloudfront_domain" {
   value       = aws_cloudfront_distribution.nightlies.domain_name
 }
 
+output "landing_cloudfront_distribution_id" {
+  description = "Landing page CloudFront distribution ID"
+  value       = aws_cloudfront_distribution.landing.id
+  sensitive   = true
+}
+
+output "landing_cloudfront_domain" {
+  description = "Landing page CloudFront domain name"
+  value       = aws_cloudfront_distribution.landing.domain_name
+}
+
 # -----------------------------------------------------------------------------
 # ECR
 # -----------------------------------------------------------------------------
