@@ -54,6 +54,17 @@ let currentExternalProvider: WalletProvider | null = null;
 // ── Clock ──
 startClock();
 
+// ── Top banner dismiss ──
+if (localStorage.getItem("banner-dismissed")) {
+  document.getElementById("top-banner")?.remove();
+} else {
+  document.getElementById("dismiss-banner")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    document.getElementById("top-banner")?.remove();
+    localStorage.setItem("banner-dismissed", "1");
+  });
+}
+
 // ── Environment indicator ──
 if (ENV_NAME) {
   const indicator = $("env-indicator");
