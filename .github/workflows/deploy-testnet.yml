@@ -173,6 +173,45 @@ jobs:
             --distribution-id ${{ secrets.TESTNET_CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/index.html"
 
+  # ── Build & deploy landing page to S3 + invalidate CloudFront ────
+  deploy-landing:
+    name: Deploy Landing
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build landing
+        run: bun run --cwd packages/landing build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync packages/landing/dist/ s3://${{ secrets.LANDING_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "max-age=31536000,immutable" \
+            --exclude "index.html"
+
+          aws s3 cp packages/landing/dist/index.html s3://${{ secrets.LANDING_S3_BUCKET }}/index.html \
+            --cache-control "max-age=60"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.LANDING_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/index.html"
+
   # ── Post-deploy validation against shared prod instance ──────────
   validate-testnet:
     name: Validate Testnet
