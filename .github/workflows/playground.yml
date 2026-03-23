@@ -1,4 +1,4 @@
-name: App
+name: Playground
 
 on:
   workflow_dispatch:
@@ -19,14 +19,14 @@ jobs:
         with:
           filters: |
             relevant:
-              - 'packages/app/**'
+              - 'packages/playground/**'
               - 'packages/sdk/**'
               - 'tsconfig.json'
               - 'biome.json'
               - 'package.json'
               - 'bun.lock'
-              - '.github/workflows/app.yml'
-              - '.github/workflows/_e2e-app.yml'
+              - '.github/workflows/playground.yml'
+              - '.github/workflows/_e2e-playground.yml'
               - '.github/actions/setup-aztec/**'
               - '.github/actions/start-services/**'
       - name: Override for manual dispatch
@@ -70,7 +70,7 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - run: bun run --cwd packages/app test:unit
+      - run: bun run --cwd packages/playground test:unit
 
   mocked-e2e:
     name: Mocked E2E
@@ -91,19 +91,19 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
-      - run: bun run --cwd packages/app test:e2e
+      - run: bun run --cwd packages/playground test:e2e
 
   local-network-e2e:
     name: Local Network E2E
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
-    uses: ./.github/workflows/_e2e-app.yml
+    uses: ./.github/workflows/_e2e-playground.yml
     secrets: inherit
     with:
       test_script: "test:e2e:local-network"
 
-  app-status:
-    name: App Status
+  playground-status:
+    name: Playground Status
     if: always()
     needs: [changes, lint, unit-tests, mocked-e2e, local-network-e2e]
     runs-on: ubuntu-latest

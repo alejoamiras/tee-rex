@@ -6,7 +6,7 @@
  * us full UI coverage (deploy, token flow, mode switching) without the
  * cost of real proof generation.
  *
- * Usage: bun run --cwd packages/app test:e2e:local-network
+ * Usage: bun run --cwd packages/playground test:e2e:local-network
  */
 import { expect, type Page, test } from "@playwright/test";
 import {

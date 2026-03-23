@@ -5,7 +5,7 @@
  * no mode switching — just verifies that each proving mode can deploy
  * an account successfully. Used by infra.yml and deploy pipelines.
  *
- * Usage: bun run --cwd packages/app test:e2e:smoke
+ * Usage: bun run --cwd packages/playground test:e2e:smoke
  */
 import { expect, type Page, test } from "@playwright/test";
 import { assertTeeAttested, deployAndAssert, initSharedPage } from "./fullstack.helpers";

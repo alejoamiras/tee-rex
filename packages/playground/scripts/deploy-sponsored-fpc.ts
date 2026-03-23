@@ -6,18 +6,18 @@
  * the FeeJuice.claim() that credits the FPC's balance.
  *
  * Usage:
- *   bun run packages/app/scripts/deploy-sponsored-fpc.ts
+ *   bun run packages/playground/scripts/deploy-sponsored-fpc.ts
  *
  *   # Reuse a known salt:
- *   bun run packages/app/scripts/deploy-sponsored-fpc.ts --salt 0x1234...
+ *   bun run packages/playground/scripts/deploy-sponsored-fpc.ts --salt 0x1234...
  *
  *   # Skip deploy (FPC already exists), just bridge + claim more Fee Juice:
- *   bun run packages/app/scripts/deploy-sponsored-fpc.ts --salt 0x1234... --fund-only
+ *   bun run packages/playground/scripts/deploy-sponsored-fpc.ts --salt 0x1234... --fund-only
  *
  *   # Deploy without updating the SPONSORED_FPC_SALT GitHub secret:
- *   bun run packages/app/scripts/deploy-sponsored-fpc.ts --no-secret
+ *   bun run packages/playground/scripts/deploy-sponsored-fpc.ts --no-secret
  *
- * Environment (or .env file in packages/app/scripts/):
+ * Environment (or .env file in packages/playground/scripts/):
  *   L1_PRIVATE_KEY=0x...   Sepolia private key (for minting test FJ on L1)
  *   L1_RPC_URL=https://... Sepolia RPC endpoint
  */
@@ -54,7 +54,7 @@ const bridgeAmount = process.env.BRIDGE_AMOUNT ? BigInt(process.env.BRIDGE_AMOUN
 if (!l1RpcUrl || !l1PrivateKey) {
   console.error("L1_RPC_URL and L1_PRIVATE_KEY are required.\n");
   console.error("  L1_PRIVATE_KEY=0x... L1_RPC_URL=https://... \\");
-  console.error("    bun run packages/app/scripts/deploy-sponsored-fpc.ts\n");
+  console.error("    bun run packages/playground/scripts/deploy-sponsored-fpc.ts\n");
   process.exit(1);
 }
 

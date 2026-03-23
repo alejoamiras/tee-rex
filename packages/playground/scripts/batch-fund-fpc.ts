@@ -5,12 +5,12 @@
  * concurrent nonces, then bridging the total in a single L1→L2 deposit.
  *
  * Usage:
- *   bun run packages/app/scripts/batch-fund-fpc.ts --salt 0x1234... --amount 1000000
+ *   bun run packages/playground/scripts/batch-fund-fpc.ts --salt 0x1234... --amount 1000000
  *
  *   # Custom batch size (default 50):
- *   bun run packages/app/scripts/batch-fund-fpc.ts --salt 0x1234... --amount 1000000 --batch-size 100
+ *   bun run packages/playground/scripts/batch-fund-fpc.ts --salt 0x1234... --amount 1000000 --batch-size 100
  *
- * Environment (or .env file in packages/app/scripts/):
+ * Environment (or .env file in packages/playground/scripts/):
  *   L1_PRIVATE_KEY=0x...   Sepolia private key (for minting test FJ on L1)
  *   L1_RPC_URL=https://... Sepolia RPC endpoint
  */
@@ -35,7 +35,7 @@ const saltIndex = cliArgs.indexOf("--salt");
 if (saltIndex === -1 || !cliArgs[saltIndex + 1]) {
   console.error("--salt 0x... is required\n");
   console.error(
-    "  bun run packages/app/scripts/batch-fund-fpc.ts --salt 0x1234... --amount 1000000\n",
+    "  bun run packages/playground/scripts/batch-fund-fpc.ts --salt 0x1234... --amount 1000000\n",
   );
   process.exit(1);
 }
@@ -56,7 +56,7 @@ if (!l1RpcUrl || !l1PrivateKey) {
   console.error("L1_RPC_URL and L1_PRIVATE_KEY are required.\n");
   console.error("  L1_PRIVATE_KEY=0x... L1_RPC_URL=https://... \\");
   console.error(
-    "    bun run packages/app/scripts/batch-fund-fpc.ts --salt 0x... --amount 1000000\n",
+    "    bun run packages/playground/scripts/batch-fund-fpc.ts --salt 0x... --amount 1000000\n",
   );
   process.exit(1);
 }

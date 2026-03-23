@@ -68,12 +68,12 @@ jobs:
       prover_url: http://localhost:4002
       setup_prover_tunnel: true
 
-  # ── App Smoke E2E with both TEE + UEE against testnet ───────
-  e2e-app:
-    name: App Smoke E2E (TEE + UEE + testnet)
+  # ── Playground Smoke E2E with both TEE + UEE against testnet ─
+  e2e-playground:
+    name: Playground Smoke E2E (TEE + UEE + testnet)
     needs: deploy-server
     if: ${{ !cancelled() && needs.deploy-server.outputs.deployed == 'true' }}
-    uses: ./.github/workflows/_e2e-app.yml
+    uses: ./.github/workflows/_e2e-playground.yml
     secrets: inherit
     with:
       aztec_node_url: https://rpc.testnet.aztec-labs.com
@@ -84,7 +84,7 @@ jobs:
   # ── Teardown: Always stop the EC2 instance ──────────────────────
   teardown:
     name: Teardown
-    needs: [check, deploy-server, e2e-sdk, e2e-app]
+    needs: [check, deploy-server, e2e-sdk, e2e-playground]
     if: always() && needs.check.outputs.triggered == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -105,7 +105,7 @@ jobs:
   # ── Gate job for branch protection ─────────────────────────────
   infra-status:
     name: Infra Status
-    needs: [check, ensure-base, deploy-server, e2e-sdk, e2e-app, teardown]
+    needs: [check, ensure-base, deploy-server, e2e-sdk, e2e-playground, teardown]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -117,7 +117,7 @@ jobs:
           fi
 
           # Infra was triggered — check that critical jobs succeeded
-          if [ "${{ needs.e2e-sdk.result }}" = "failure" ] || [ "${{ needs.e2e-app.result }}" = "failure" ]; then
+          if [ "${{ needs.e2e-sdk.result }}" = "failure" ] || [ "${{ needs.e2e-playground.result }}" = "failure" ]; then
             echo "E2E tests failed"
             exit 1
           fi
@@ -125,7 +125,7 @@ jobs:
             echo "Deploy job failed"
             exit 1
           fi
-          if [ "${{ needs.e2e-sdk.result }}" = "cancelled" ] || [ "${{ needs.e2e-app.result }}" = "cancelled" ]; then
+          if [ "${{ needs.e2e-sdk.result }}" = "cancelled" ] || [ "${{ needs.e2e-playground.result }}" = "cancelled" ]; then
             echo "E2E tests were cancelled"
             exit 1
           fi

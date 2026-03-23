@@ -8,7 +8,7 @@ export default defineConfig({
   webServer: {
     command: "bun run dev",
     port: 5173,
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     env: {
       PROVER_URL: process.env.PROVER_URL || "http://localhost:4000",
       E2E_RETRY_STALE_HEADER: "true",
