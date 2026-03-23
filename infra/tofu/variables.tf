@@ -101,6 +101,12 @@ variable "nightlies_s3_bucket" {
   default     = "tee-rex-app-nightlies"
 }
 
+variable "landing_s3_bucket" {
+  description = "S3 bucket name for landing page"
+  type        = string
+  default     = "tee-rex-landing"
+}
+
 # -----------------------------------------------------------------------------
 # ACM
 # -----------------------------------------------------------------------------
@@ -130,12 +136,18 @@ variable "mainnet_cloudfront_aliases" {
 variable "testnet_cloudfront_aliases" {
   description = "Alternate domain names for testnet CloudFront distribution"
   type        = list(string)
-  default     = ["testnet.tee-rex.dev"]
+  default     = ["testnet.tee-rex.dev", "playground.tee-rex.dev"]
 }
 
 variable "nightlies_cloudfront_aliases" {
   description = "Alternate domain names for nightlies CloudFront distribution"
   type        = list(string)
   default     = ["nightlies.tee-rex.dev"]
+}
+
+variable "landing_cloudfront_aliases" {
+  description = "Alternate domain names for landing page CloudFront distribution"
+  type        = list(string)
+  default     = ["tee-rex.dev"]
 }
 
