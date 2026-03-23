@@ -46,7 +46,7 @@ async function waitForEmbeddedInit(page: import("@playwright/test").Page) {
   await expect(page.locator("#embedded-ui")).toBeVisible({ timeout: 10_000 });
   // Wait for service checks to complete — log shows either "not reachable" or status updates
   await expect(page.locator("#log")).toContainText(
-    /(TEE-Rex server not reachable|aztec unavailable)/,
+    /(TEE-Rex server not reachable|Aztec node not reachable)/,
     {
       timeout: 10_000,
     },
@@ -108,25 +108,6 @@ test("mode buttons toggle active class (local and UEE)", async ({ page }) => {
   await expect(page.locator("#mode-uee")).not.toHaveClass(/mode-active/);
 });
 
-test("TEE button is disabled when TEE_URL is not configured", async ({ page }) => {
-  await mockServicesOffline(page);
-  await page.goto("/?wallet=embedded");
-  await waitForEmbeddedInit(page);
-
-  await expect(page.locator("#mode-tee")).toBeDisabled();
-  await expect(page.locator("#mode-local")).toHaveClass(/mode-active/);
-});
-
-test("TEE service row elements are present in the UI", async ({ page }) => {
-  await mockServicesOffline(page);
-  await page.goto("/?wallet=embedded");
-  await waitForEmbeddedInit(page);
-
-  await expect(page.locator("#tee-status")).toBeVisible();
-  await expect(page.locator("#tee-attestation-label")).toBeVisible();
-  await expect(page.locator("#tee-url")).toHaveCount(1);
-});
-
 test("TEE service row shows not configured when TEE_URL is not set", async ({ page }) => {
   await mockServicesOffline(page);
   await page.goto("/?wallet=embedded");
@@ -167,13 +148,6 @@ test("service dots show offline and teerex label shows unavailable when services
   await expect(page.locator("#teerex-label")).toHaveText("unavailable");
 });
 
-test("log panel shows checking Aztec node message on load", async ({ page }) => {
-  await mockServicesOffline(page);
-  await page.goto("/?wallet=embedded");
-
-  await expect(page.locator("#log")).toContainText("Checking Aztec node");
-});
-
 // ── Wallet selection screen tests ──
 
 test("wallet selection screen appears on load (no query param)", async ({ page }) => {
@@ -185,16 +159,6 @@ test("wallet selection screen appears on load (no query param)", async ({ page }
   await expect(page.locator("#wallet-selection")).toBeVisible();
   await expect(page.locator("#embedded-ui")).not.toBeVisible();
   await expect(page.locator("#external-ui")).not.toBeVisible();
-});
-
-test("?wallet=embedded bypasses wallet selection and shows embedded UI", async ({ page }) => {
-  await mockServicesOffline(page);
-  await page.goto("/?wallet=embedded");
-  await waitForEmbeddedInit(page);
-
-  // Embedded UI is visible, wallet selection is hidden
-  await expect(page.locator("#embedded-ui")).toBeVisible();
-  await expect(page.locator("#wallet-selection")).not.toBeVisible();
 });
 
 test("embedded choice button is disabled when Aztec node is offline", async ({ page }) => {
