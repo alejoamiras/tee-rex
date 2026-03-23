@@ -1,14 +1,18 @@
 name: Deploy Mainnet
 
+# Disabled: mainnet is not live yet. Auto-deploy on push to main caused race
+# conditions with deploy-testnet (shared EC2 instance). Re-enable the push
+# trigger when mainnet launches and the race condition is resolved.
+# See: memory/project_deploy_race_condition.md
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "lessons/**"
-      - "**/e2e/**"
-      - "**/*.test.ts"
-      - "**/playwright.config.ts"
+  # push:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - "**.md"
+  #     - "lessons/**"
+  #     - "**/e2e/**"
+  #     - "**/*.test.ts"
+  #     - "**/playwright.config.ts"
   workflow_dispatch:
 
 concurrency:
