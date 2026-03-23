@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TEE-Rex — Trusted Proving for Aztec</title>
+  <meta name="description" content="Hardware-attested zero-knowledge proving for the Aztec network. Fast, private, verifiable." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦖</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-[#131313] text-[#e5e2e1] min-h-screen antialiased overflow-x-hidden">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative min-h-screen flex flex-col items-center justify-center px-6 overflow-hidden">
+    <!-- Background glow -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="w-[800px] h-[800px] rounded-full bg-emerald-500/10 blur-[120px] animate-hero-glow"></div>
+    </div>
+    <!-- Grid lines -->
+    <div class="absolute inset-0 pointer-events-none opacity-[0.04]" style="background-image: linear-gradient(rgba(78,222,163,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(78,222,163,0.3) 1px, transparent 1px); background-size: 60px 60px;"></div>
+
+    <!-- Nav -->
+    <nav class="absolute top-0 left-0 right-0 flex items-center justify-between px-8 py-6 z-10">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🦖</span>
+        <span class="font-headline font-bold text-lg tracking-tight text-[#e5e2e1]">TEE-Rex</span>
+      </div>
+      <div class="flex items-center gap-6">
+        <a href="https://github.com/alejoamiras/tee-rex" class="font-body text-sm text-[#e5e2e1]/50 hover:text-emerald-400 transition-colors">Docs</a>
+        <a href="https://playground.tee-rex.dev" class="font-body text-sm text-[#e5e2e1]/50 hover:text-emerald-400 transition-colors">Playground</a>
+        <a href="https://github.com/alejoamiras/tee-rex" class="font-body text-sm text-[#e5e2e1]/50 hover:text-emerald-400 transition-colors flex items-center gap-1.5">
+          <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </nav>
+
+    <!-- Hero content -->
+    <div class="relative z-10 text-center max-w-4xl mx-auto">
+      <!-- Version badge -->
+      <div class="inline-flex items-center gap-2 mb-8 px-4 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-label text-xs tracking-wide text-emerald-400">v4.1.0-rc.4 Live on Aztec Testnet</span>
+      </div>
+
+      <h1 class="font-headline font-extrabold text-6xl md:text-7xl lg:text-8xl tracking-tight leading-[0.95] mb-6">
+        <span class="text-[#e5e2e1]">Trusted Proving</span><br />
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-300">for Aztec</span>
+      </h1>
+
+      <p class="font-body text-lg md:text-xl text-[#e5e2e1]/60 max-w-2xl mx-auto mb-10 leading-relaxed">
+        Hardware-attested zero-knowledge proving in AWS Nitro Enclaves.
+        Fast proofs. Full privacy. Cryptographic attestation.
+      </p>
+
+      <!-- CTA buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="https://playground.tee-rex.dev" class="group inline-flex items-center gap-2 px-8 py-3.5 rounded-lg bg-emerald-500 text-[#131313] font-body font-semibold text-sm tracking-wide hover:bg-emerald-400 transition-all duration-200 hover:shadow-[0_0_30px_rgba(78,222,163,0.3)]">
+          Try the Playground
+          <svg class="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+        </a>
+        <a href="https://www.npmjs.com/package/@alejoamiras/tee-rex" class="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg border border-[#e5e2e1]/10 text-[#e5e2e1]/80 font-body font-medium text-sm tracking-wide hover:border-emerald-500/30 hover:text-emerald-400 transition-all duration-200">
+          npm install @alejoamiras/tee-rex
+        </a>
+      </div>
+    </div>
+
+    <!-- Terminal preview -->
+    <div class="relative z-10 mt-16 w-full max-w-2xl mx-auto animate-terminal-glow rounded-xl border border-[#e5e2e1]/10 bg-[#0e0e0e] overflow-hidden">
+      <div class="flex items-center gap-2 px-4 py-3 border-b border-[#e5e2e1]/5">
+        <div class="w-3 h-3 rounded-full bg-red-500/60"></div>
+        <div class="w-3 h-3 rounded-full bg-yellow-500/60"></div>
+        <div class="w-3 h-3 rounded-full bg-emerald-500/60"></div>
+        <span class="ml-3 font-label text-xs text-[#e5e2e1]/30">terminal</span>
+      </div>
+      <div class="px-6 py-5 font-label text-sm leading-relaxed">
+        <div class="text-[#e5e2e1]/40"><span class="text-emerald-400">$</span> npm install @alejoamiras/tee-rex</div>
+        <div class="text-[#e5e2e1]/40 mt-2"><span class="text-emerald-400">$</span> <span class="text-[#e5e2e1]/60">import</span> { TeeRexProver } <span class="text-[#e5e2e1]/60">from</span> <span class="text-emerald-400/80">"@alejoamiras/tee-rex"</span></div>
+        <div class="text-[#e5e2e1]/40 mt-1"><span class="text-emerald-400">$</span> <span class="text-[#e5e2e1]/60">const</span> prover = <span class="text-[#e5e2e1]/60">new</span> <span class="text-emerald-400/80">TeeRexProver</span>()</div>
+        <div class="text-[#e5e2e1]/40 mt-1"><span class="text-emerald-400">$</span> <span class="text-[#e5e2e1]/40">// Attestation-verified proving in one call</span></div>
+        <div class="text-[#e5e2e1]/40 mt-1"><span class="text-emerald-400">$</span> <span class="text-[#e5e2e1]/60">const</span> proof = <span class="text-[#e5e2e1]/60">await</span> prover.<span class="text-emerald-400/80">prove</span>(tx)<span class="animate-cursor-blink text-emerald-400">|</span></div>
+      </div>
+    </div>
+
+    <!-- Scroll hint -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 text-[#e5e2e1]/20 animate-bounce">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       PROBLEM / WHY TEE-REX
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative py-32 px-6">
+    <div class="max-w-5xl mx-auto text-center">
+      <span class="font-label text-xs uppercase tracking-[0.2em] text-emerald-400/60 mb-4 block">The Problem</span>
+      <h2 class="font-headline font-bold text-4xl md:text-5xl tracking-tight mb-6 text-[#e5e2e1]">
+        Client-side proving is slow.<br />
+        <span class="text-[#e5e2e1]/40">Server-side proving leaks your data.</span>
+      </h2>
+      <p class="font-body text-lg text-[#e5e2e1]/50 max-w-2xl mx-auto leading-relaxed">
+        Aztec transactions require zero-knowledge proofs. Generating them in the browser takes minutes.
+        Outsourcing to a server sacrifices privacy. TEE-Rex solves both.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       FEATURES
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative py-32 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-20">
+        <span class="font-label text-xs uppercase tracking-[0.2em] text-emerald-400/60 mb-4 block">How It Works</span>
+        <h2 class="font-headline font-bold text-4xl md:text-5xl tracking-tight text-[#e5e2e1]">
+          Three modes. One API.
+        </h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        <!-- Local -->
+        <div class="group relative p-8 rounded-2xl border border-[#e5e2e1]/5 bg-[#181818] hover:border-emerald-500/20 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-6">
+            <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" /></svg>
+          </div>
+          <h3 class="font-headline font-bold text-xl mb-3 text-[#e5e2e1]">Local (WASM)</h3>
+          <p class="font-body text-sm text-[#e5e2e1]/50 leading-relaxed mb-4">
+            Prove entirely in the browser using bb.js WebAssembly. Fully private, no server needed.
+          </p>
+          <div class="flex items-center gap-2">
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-[#e5e2e1]/5 text-[#e5e2e1]/40">Slow</span>
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">Fully Private</span>
+          </div>
+        </div>
+
+        <!-- UEE -->
+        <div class="group relative p-8 rounded-2xl border border-[#e5e2e1]/5 bg-[#181818] hover:border-emerald-500/20 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-6">
+            <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" /></svg>
+          </div>
+          <h3 class="font-headline font-bold text-xl mb-3 text-[#e5e2e1]">UEE (Server)</h3>
+          <p class="font-body text-sm text-[#e5e2e1]/50 leading-relaxed mb-4">
+            Offload proving to a remote server running native bb. Fast proofs, but the server sees your data.
+          </p>
+          <div class="flex items-center gap-2">
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">Fast</span>
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-[#e5e2e1]/5 text-[#e5e2e1]/40">Not Private</span>
+          </div>
+        </div>
+
+        <!-- TEE -->
+        <div class="group relative p-8 rounded-2xl border border-emerald-500/20 bg-[#181818] hover:border-emerald-500/40 transition-all duration-300 animate-card-premium">
+          <div class="absolute top-4 right-4">
+            <span class="font-label text-[10px] uppercase tracking-widest text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 bg-emerald-500/5">Recommended</span>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-6">
+            <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+          </div>
+          <h3 class="font-headline font-bold text-xl mb-3 text-[#e5e2e1]">TEE (Nitro Enclave)</h3>
+          <p class="font-body text-sm text-[#e5e2e1]/50 leading-relaxed mb-4">
+            Prove inside an AWS Nitro Enclave. Hardware attestation guarantees your data stays private and the code is untampered.
+          </p>
+          <div class="flex items-center gap-2">
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">Fast</span>
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">Private</span>
+            <span class="font-label text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">Attested</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       ARCHITECTURE OVERVIEW
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative py-32 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-20">
+        <span class="font-label text-xs uppercase tracking-[0.2em] text-emerald-400/60 mb-4 block">Architecture</span>
+        <h2 class="font-headline font-bold text-4xl md:text-5xl tracking-tight text-[#e5e2e1]">
+          What happens inside the enclave
+        </h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <!-- Steps -->
+        <div class="space-y-8">
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-label text-sm font-bold text-emerald-400">1</div>
+            <div>
+              <h4 class="font-headline font-semibold text-lg text-[#e5e2e1] mb-1">Encrypt & Send</h4>
+              <p class="font-body text-sm text-[#e5e2e1]/50 leading-relaxed">Your transaction witness is PGP-encrypted with the enclave's public key. Only the enclave can decrypt it.</p>
+            </div>
+          </div>
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-label text-sm font-bold text-emerald-400">2</div>
+            <div>
+              <h4 class="font-headline font-semibold text-lg text-[#e5e2e1] mb-1">Attest & Decrypt</h4>
+              <p class="font-body text-sm text-[#e5e2e1]/50 leading-relaxed">The enclave generates a cryptographic attestation document proving its identity, then decrypts your data in isolated memory.</p>
+            </div>
+          </div>
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-label text-sm font-bold text-emerald-400">3</div>
+            <div>
+              <h4 class="font-headline font-semibold text-lg text-[#e5e2e1] mb-1">Prove & Return</h4>
+              <p class="font-body text-sm text-[#e5e2e1]/50 leading-relaxed">Native bb generates the zero-knowledge proof inside the enclave. The proof is returned; your witness is discarded.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Diagram card -->
+        <div class="rounded-2xl border border-[#e5e2e1]/5 bg-[#0e0e0e] p-8 font-label text-sm">
+          <div class="space-y-4">
+            <div class="flex items-center gap-3 text-[#e5e2e1]/60">
+              <span class="text-emerald-400">Client</span>
+              <span class="flex-1 border-t border-dashed border-[#e5e2e1]/10"></span>
+              <span class="text-xs text-[#e5e2e1]/30">encrypt(witness, enclave_pk)</span>
+            </div>
+            <div class="flex items-center justify-center">
+              <svg class="w-4 h-4 text-emerald-400/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+            </div>
+            <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <div class="text-emerald-400 font-semibold mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                Nitro Enclave
+              </div>
+              <div class="text-xs text-[#e5e2e1]/40 space-y-1">
+                <div>&#x2192; Verify attestation</div>
+                <div>&#x2192; Decrypt witness</div>
+                <div>&#x2192; Generate ZK proof (native bb)</div>
+                <div>&#x2192; Discard witness</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-center">
+              <svg class="w-4 h-4 text-emerald-400/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+            </div>
+            <div class="flex items-center gap-3 text-[#e5e2e1]/60">
+              <span class="text-emerald-400">Client</span>
+              <span class="flex-1 border-t border-dashed border-[#e5e2e1]/10"></span>
+              <span class="text-xs text-[#e5e2e1]/30">receives proof only</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SDK
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative py-32 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-16">
+        <span class="font-label text-xs uppercase tracking-[0.2em] text-emerald-400/60 mb-4 block">TypeScript SDK</span>
+        <h2 class="font-headline font-bold text-4xl md:text-5xl tracking-tight text-[#e5e2e1] mb-4">
+          Drop-in replacement
+        </h2>
+        <p class="font-body text-lg text-[#e5e2e1]/50 max-w-xl mx-auto">
+          Replace your Aztec prover with TEE-Rex in one line. The SDK handles encryption, attestation verification, and proof retrieval.
+        </p>
+      </div>
+
+      <!-- Code block -->
+      <div class="rounded-2xl border border-[#e5e2e1]/5 bg-[#0e0e0e] overflow-hidden animate-terminal-glow">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-[#e5e2e1]/5">
+          <div class="w-3 h-3 rounded-full bg-red-500/60"></div>
+          <div class="w-3 h-3 rounded-full bg-yellow-500/60"></div>
+          <div class="w-3 h-3 rounded-full bg-emerald-500/60"></div>
+          <span class="ml-3 font-label text-xs text-[#e5e2e1]/30">app.ts</span>
+        </div>
+        <pre class="px-6 py-5 font-label text-sm leading-relaxed overflow-x-auto"><code><span class="text-[#e5e2e1]/40">import</span> <span class="text-[#e5e2e1]/70">{ TeeRexProver }</span> <span class="text-[#e5e2e1]/40">from</span> <span class="text-emerald-400/80">"@alejoamiras/tee-rex"</span>
+
+<span class="text-[#e5e2e1]/30">// One constructor — mode is auto-detected from the server</span>
+<span class="text-[#e5e2e1]/40">const</span> <span class="text-[#e5e2e1]/70">prover</span> = <span class="text-[#e5e2e1]/40">new</span> <span class="text-emerald-400">TeeRexProver</span>(<span class="text-emerald-400/80">"https://tee-rex.dev"</span>)
+
+<span class="text-[#e5e2e1]/30">// Use it anywhere you'd use an Aztec prover</span>
+<span class="text-[#e5e2e1]/40">const</span> <span class="text-[#e5e2e1]/70">wallet</span> = <span class="text-[#e5e2e1]/40">await</span> <span class="text-[#e5e2e1]/70">getSchnorrAccount</span>(<span class="text-[#e5e2e1]/70">pxe</span>, <span class="text-[#e5e2e1]/70">secret</span>, <span class="text-[#e5e2e1]/70">salt</span>, {
+  <span class="text-[#e5e2e1]/70">prover</span>  <span class="text-[#e5e2e1]/30">// ← drop-in replacement</span>
+}).<span class="text-emerald-400">deploy</span>().<span class="text-emerald-400">wait</span>()</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       STATS / TRUST INDICATORS
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative py-32 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="text-center p-8 rounded-2xl border border-[#e5e2e1]/5 bg-[#181818]">
+          <div class="font-headline font-extrabold text-5xl text-emerald-400 mb-2">~5s</div>
+          <div class="font-body text-sm text-[#e5e2e1]/40">TEE proving time</div>
+          <div class="font-body text-xs text-[#e5e2e1]/20 mt-1">vs ~2min in-browser</div>
+        </div>
+        <div class="text-center p-8 rounded-2xl border border-[#e5e2e1]/5 bg-[#181818]">
+          <div class="font-headline font-extrabold text-5xl text-emerald-400 mb-2">0</div>
+          <div class="font-body text-sm text-[#e5e2e1]/40">Data exposed</div>
+          <div class="font-body text-xs text-[#e5e2e1]/20 mt-1">PGP encrypted, hardware-isolated</div>
+        </div>
+        <div class="text-center p-8 rounded-2xl border border-[#e5e2e1]/5 bg-[#181818]">
+          <div class="font-headline font-extrabold text-5xl text-emerald-400 mb-2 flex items-center justify-center gap-2">
+            <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+          </div>
+          <div class="font-body text-sm text-[#e5e2e1]/40">AWS Nitro Attestation</div>
+          <div class="font-body text-xs text-[#e5e2e1]/20 mt-1">Cryptographically verified code integrity</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       CTA
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="relative py-32 px-6">
+    <div class="max-w-3xl mx-auto text-center">
+      <!-- Background glow -->
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="w-[600px] h-[400px] rounded-full bg-emerald-500/5 blur-[100px]"></div>
+      </div>
+      <div class="relative z-10">
+        <h2 class="font-headline font-bold text-4xl md:text-5xl tracking-tight text-[#e5e2e1] mb-6">
+          Ready to prove?
+        </h2>
+        <p class="font-body text-lg text-[#e5e2e1]/50 mb-10">
+          Try the interactive playground or integrate the SDK into your Aztec app.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a href="https://playground.tee-rex.dev" class="group inline-flex items-center gap-2 px-8 py-3.5 rounded-lg bg-emerald-500 text-[#131313] font-body font-semibold text-sm tracking-wide hover:bg-emerald-400 transition-all duration-200 hover:shadow-[0_0_30px_rgba(78,222,163,0.3)]">
+            Open Playground
+            <svg class="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+          </a>
+          <a href="https://github.com/alejoamiras/tee-rex" class="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg border border-[#e5e2e1]/10 text-[#e5e2e1]/80 font-body font-medium text-sm tracking-wide hover:border-emerald-500/30 hover:text-emerald-400 transition-all duration-200">
+            View on GitHub
+            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <footer class="w-full py-16 px-12 bg-[#0e0e0e]">
+    <div class="flex flex-col md:flex-row justify-between items-start gap-8 w-full max-w-screen-2xl mx-auto">
+      <div class="flex flex-col gap-4">
+        <p class="font-body text-xs uppercase tracking-widest text-[#e5e2e1] opacity-50">
+          Built for the Aztec ecosystem by Alejo Amiras. TEE-Rex is not affiliated with Aztec Labs.
+        </p>
+      </div>
+      <div class="flex gap-8">
+        <a href="https://github.com/alejoamiras/tee-rex" class="font-body text-xs uppercase tracking-widest text-[#e5e2e1] opacity-50 hover:text-emerald-400 hover:opacity-100 transition-opacity">GitHub</a>
+        <a href="https://github.com/alejoamiras/tee-rex" class="font-body text-xs uppercase tracking-widest text-[#e5e2e1] opacity-50 hover:text-emerald-400 hover:opacity-100 transition-opacity">Docs</a>
+        <a href="https://playground.tee-rex.dev" class="font-body text-xs uppercase tracking-widest text-emerald-500">Playground</a>
+        <a href="https://www.npmjs.com/package/@alejoamiras/tee-rex" class="font-body text-xs uppercase tracking-widest text-[#e5e2e1] opacity-50 hover:text-emerald-400 hover:opacity-100 transition-opacity">npm</a>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

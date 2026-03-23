@@ -4,7 +4,8 @@
   "workspaces": [
     "packages/sdk",
     "packages/server",
-    "packages/playground"
+    "packages/playground",
+    "packages/landing"
   ],
   "scripts": {
     "aztec:check": "bun scripts/check-aztec-nightlies.ts",
@@ -16,6 +17,7 @@
     "build:nitro": "bun run build:base && docker build --build-arg BASE_IMAGE=tee-rex-base -f Dockerfile.nitro -t tee-rex-nitro --platform linux/amd64 .",
     "dev": "bun run --cwd packages/server dev",
     "format": "biome format --write .",
+    "landing": "bun run --cwd packages/landing dev",
     "lint": "biome check . && shellcheck infra/*.sh infra/tofu/*.sh && bun run lint:pkg",
     "lint:actions": "actionlint",
     "lint:fix": "biome check --write .",
