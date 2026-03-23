@@ -1,4 +1,4 @@
-name: _App E2E (reusable)
+name: _Playground E2E (reusable)
 
 on:
   workflow_call:
@@ -36,7 +36,7 @@ on:
 
 jobs:
   e2e-app:
-    name: App E2E (${{ inputs.test_script }})
+    name: Playground E2E (${{ inputs.test_script }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -98,13 +98,13 @@ jobs:
           AZTEC_NODE_URL: ${{ inputs.aztec_node_url }}
           PROVER_URL: ${{ inputs.prover_url }}
           SPONSORED_FPC_SALT: ${{ !contains(inputs.aztec_node_url, 'localhost') && secrets.SPONSORED_FPC_SALT || '' }}
-        run: bun run --cwd packages/app ${{ inputs.test_script }}
+        run: bun run --cwd packages/playground ${{ inputs.test_script }}
 
       - name: Upload Aztec logs
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: aztec-node-logs-app
+          name: aztec-node-logs-playground
           path: /tmp/aztec-node.log
           if-no-files-found: ignore
           retention-days: 7

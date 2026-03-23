@@ -4,10 +4,9 @@
   "workspaces": [
     "packages/sdk",
     "packages/server",
-    "packages/app"
+    "packages/playground"
   ],
   "scripts": {
-    "app": "bun run --cwd packages/app dev",
     "aztec:check": "bun scripts/check-aztec-nightlies.ts",
     "aztec:update": "bun scripts/update-aztec-version.ts",
     "bb:download": "bun scripts/download-bb.ts",
@@ -23,15 +22,16 @@
     "lint:pkg": "sort-package-json --check package.json packages/*/package.json",
     "lint:shell": "shellcheck infra/*.sh infra/tofu/*.sh",
     "lint:tofu": "cd infra/tofu && tofu fmt -check -diff .",
+    "playground": "bun run --cwd packages/playground dev",
     "prepare": "husky",
     "sdk:build": "bun run --cwd packages/sdk build",
     "start": "bun run --cwd packages/server start",
     "test": "bun run lint && bun run test:typecheck && bun run test:unit",
     "test:all": "bun run test && bun run test:e2e",
-    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/app test:e2e:all",
+    "test:e2e": "bun run --cwd packages/sdk test:e2e && bun run --cwd packages/playground test:e2e:all",
     "test:e2e:remote": "bun run --cwd packages/sdk test:e2e:remote",
     "test:typecheck": "bun run --cwd packages/sdk test:lint && bun run --cwd packages/server typecheck",
-    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/app test:unit"
+    "test:unit": "bun run --cwd packages/sdk test:unit && bun run --cwd packages/server test:unit && bun run --cwd packages/playground test:unit"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [

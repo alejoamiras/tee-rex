@@ -24,7 +24,7 @@ Three independent workflows trigger on every PR to `main`. Each uses [`dorny/pat
 ```mermaid
 graph LR
     PR["Pull Request to main"] --> sdk["sdk.yml"]
-    PR --> app["app.yml"]
+    PR --> app["playground.yml"]
     PR --> server["server.yml"]
 
     sdk --> sdk_changes{"SDK files\nchanged?"}
@@ -57,10 +57,10 @@ graph LR
 | Workflow | Triggers on changes to |
 |----------|----------------------|
 | `sdk.yml` | `packages/sdk/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/sdk.yml`, `.github/workflows/_e2e-sdk.yml`, `.github/actions/**` |
-| `app.yml` | `packages/app/**`, `packages/sdk/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/app.yml`, `.github/workflows/_e2e-app.yml`, `.github/actions/**` |
+| `playground.yml` | `packages/playground/**`, `packages/sdk/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/playground.yml`, `.github/workflows/_e2e-playground.yml`, `.github/actions/**` |
 | `server.yml` | `packages/server/**`, `tsconfig.json`, `biome.json`, `package.json`, `bun.lock`, `.github/workflows/server.yml` |
 
-Note: `app.yml` includes `packages/sdk/**` because the app depends on the SDK. `workflow_dispatch` overrides all filters to `true`.
+Note: `playground.yml` includes `packages/sdk/**` because the app depends on the SDK. `workflow_dispatch` overrides all filters to `true`.
 
 ### Branch protection
 
@@ -152,7 +152,7 @@ Same pattern but for the nightlies branch. Publishes SDK with `nightlies` tag on
 |--------|------------|-------|
 | `servers` | `packages/server/**`, `Dockerfile*`, `infra/**`, `.github/workflows/_deploy-*/_build-*/deploy-mainnet.yml`, `.github/actions/**`, `package.json`, `bun.lock` | `check-server` |
 | `server_code` | `packages/server/**`, `Dockerfile*`, `package.json`, `bun.lock` | Forces rebuild in `check-server` (skips version check) |
-| `app` | `packages/app/**`, `packages/sdk/**`, `.github/workflows/deploy-mainnet.yml`, `package.json`, `bun.lock` | `deploy-app` |
+| `app` | `packages/playground/**`, `packages/sdk/**`, `.github/workflows/deploy-mainnet.yml`, `package.json`, `bun.lock` | `deploy-app` |
 
 `workflow_dispatch` overrides all three to `true` (deploys everything). Testnet and nightlies always run all jobs on push (no path filtering for server).
 
@@ -232,7 +232,7 @@ The nightlies wrapper calls `_aztec-update.yml` with these inputs:
 | `_publish-sdk.yml` | Resolve SDK version (queries npm, appends `.N` revision suffix if base already published), set version, `npm publish --provenance`, git tag + GitHub release. When `latest: true`, also sets npm `latest` dist-tag. Supports `workflow_dispatch` for manual retries. | `dist_tag`, `latest` |
 | `_aztec-update.yml` | Check npm for new Aztec version, update deps, create/merge PR. Shared by `aztec-nightlies.yml` and `aztec-stable.yml`. | `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge` |
 | `_e2e-sdk.yml` | Run SDK e2e tests with optional SSM tunnel to prover/host | `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
-| `_e2e-app.yml` | Run app Playwright e2e with optional SSM tunnel. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
+| `_e2e-playground.yml` | Run app Playwright e2e with optional SSM tunnel. Parameterized via `test_script` (default: `test:e2e:smoke`; per-PR uses `test:e2e:local-network`). | `test_script`, `tee_url`, `prover_url`, `aztec_node_url`, `setup_prover_tunnel` |
 
 ---
 
