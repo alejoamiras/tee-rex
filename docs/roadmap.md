@@ -1,593 +1,120 @@
 # Tee-Rex Roadmap
 
-Full history of completed phases, architectural decisions, and backlog items.
-**Read this file** when working on infrastructure, deployment, CI, or any task that references a past phase.
+History of completed phases, architectural decisions, and backlog.
+For phases 1-24 detail, see [roadmap-archive.md](./roadmap-archive.md).
 
 ---
 
-## Completed Phases (1–14, 16, 17F–G, 18A–C, 19, 20A–B, 21, 22, 23A–B, 24, 24.5, 25, 26, 27, 28A–C, 29, 31, 32, 33, 34, 35, 36)
+## Completed Phases (summary)
 
 | Phase | Summary |
 |---|---|
-| **1** | Monorepo migration to Bun workspaces (from pnpm/turbo) |
-| **2** | Integration test suite with `bun test` (later moved to `packages/sdk/e2e/`) |
-| **3** | Structured logging with LogTape (zero `console.log`, library-first SDK pattern) |
-| **4A-D** | Unit tests (20), E2E tests (21), demo frontend (3 proving modes), full token flow demo |
-| **5A-E** | Nitro Enclave attestation — SDK verifies COSE_Sign1, server FFI to libnsm.so, Dockerfile.nitro, deployed on EC2. Key fix: `ifconfig lo 127.0.0.1`. Lessons: `lessons/phase-5d-nitro-enclave-deployment.md` |
-| **7** | App frontend testing — 6 unit, 8 mocked Playwright, 12 fullstack Playwright. Test restructure: SDK e2e in `packages/sdk/e2e/`, app e2e in `packages/app/e2e/` |
-| **8** | Repo rename `nemi-fi` → `alejoamiras` (15+ files) |
-| **9** | CI granular parallel jobs (Lint, Typecheck, Unit, E2E per package) |
-| **10** | E2E CI with Aztec local network (Foundry + Aztec CLI, cached by version) |
-| **12** | Aztec auto-update CI — nightlies version detection → PR → full test suite (incl. TEE) → auto-merge. Gate job pattern, reusable workflows, composite actions. `PAT_TOKEN` for PR-triggered workflows. Branch protection: 4 gate jobs (SDK, App, Server, Infra Status). (Originally spartan, migrated to nightlies in Phase 25D.) |
-| **12B** | Multi-network support (`AZTEC_NODE_URL` configurable across app/CI/e2e) |
-| **12B'** | Nightly → Spartan dist-tag migration |
-| **12C** | Nextnet/live network support — sponsored FPC, auto-detect chain ID, `proverEnabled: true` |
-| **13** | OpenPGP encryption review — keep everywhere, upgraded to curve25519 + AES-256-GCM (SEIPDv2) |
-| **14** | SDK e2e restructure — single `proving.test.ts` with nested describes, TEE `describe.skipIf`, mode-switching tests |
-| **16** | `PROVER_URL` abstraction (like `AZTEC_NODE_URL`) — configurable everywhere, Vite proxy, CI inputs |
-| **18A** | Optional remote/TEE modes via env vars. `PROVER_CONFIGURED` / `TEE_CONFIGURED` feature flags (from `PROVER_URL` / `TEE_URL` at build time). Buttons start disabled in HTML, JS enables when configured. `/prover` and `/tee` Vite proxies conditional. Service panel labels: "not configured" / "available" / "unavailable" / "attested". Fullstack e2e skip guards for remote/TEE. `deploy-prod.yml` passes `TEE_URL` to app build. |
-| **18B** | Granular benchmark UI — `NO_WAIT` + `waitForTx()` polling for prove+send/confirm sub-timings |
-| **18C** | Attribution update — "made with ♥ by alejo · inspired by nemi.fi" across all READMEs and app footer |
-| **19** | Dependency updates — 20 non-Aztec packages across 4 risk-based batches |
-| **30** | **Wallet SDK integration** — `@aztec/wallet-sdk` for external wallet (browser extension) support. Dual-path: embedded wallet auto-inits as before + "Connect External" button triggers SDK discovery → emoji verification → capability request. External wallet replaces embedded for all operations; proving mode grayed out ("handled by wallet"); deploy disabled (wallet provides accounts). `?wallet=embedded` URL param bypasses external UI for e2e tests. New files: `wallet-connect.ts` (pure logic), UI section in `index.html`, wiring in `main.ts`. `AztecState` extended with `walletType`, `embeddedWallet`, `externalProvider`. |
-| **31** | **Local Native Accelerator** — Tauri 2.0 tray app (`packages/accelerator`) running `bb` natively on localhost:59833. SDK `ProvingMode.accelerated` with msgpack serialization and WASM fallback. Axum HTTP server, bb binary resolution, crash diagnostics, macOS code signing & notarization. See Phase 31 section for details. |
-| **32** | **CI/CD improvements** — narrow server change detection, smart `/health` version check in deploy-prod, devnet auto-merge fix, `api_version` in `/health`. See Phase 32 section. |
-| **33** | **Thin Enclave Architecture** — split monolithic server into host Express (`src/index.ts`) + thin enclave Bun.serve (`src/enclave.ts`). Host manages bb downloads/uploads, enclave handles keys, attestation, decryption, proving. bb SHA256 hashes embedded in NSM attestation `user_data`. Docker images no longer bake bb binaries. See Phase 33 section. |
-| **35** | **Deprecate Devnet** — removed devnet environment (v4.0.0, updated twice monthly, highest maintenance/lowest value). Deleted `aztec-devnet.yml`, `deploy-devnet.yml` workflows. Removed devnet CloudFront distribution, S3 bucket, IAM OIDC refs, variables, and outputs from Tofu. Removed devnet tier from `bb-versions.ts`, `download-bb.ts`, `update-aztec-version.ts` and their tests. Updated app badge colors. Reduced from 4→3 environments (mainnet, testnet, nightlies) served from 2 branches (`main`, `nightlies`). |
+| 1-5 | Monorepo (Bun), e2e tests, LogTape logging, demo frontend, Nitro Enclave attestation |
+| 7-10 | Playwright tests, repo rename, CI parallel jobs, Aztec local network in CI |
+| 12-14 | Aztec auto-update CI, multi-network support, nextnet, OpenPGP encryption, SDK e2e restructure |
+| 16-19 | `PROVER_URL` abstraction, optional remote/TEE modes, granular benchmarks, dependency updates |
+| 20-21 | Docker base+app split, EBS resize, multi-region research (sa-east-1, not implemented) |
+| 22-24 | CI change detection (dorny), conditional deploys, fullstack e2e stabilization, custom domain (`tee-rex.dev`) |
+| 25 | TEE stability fixes, nightlies migration (spartan→nightly), Infra Status gate |
+| 26 | OpenTofu IaC migration — 14 HCL files, all AWS resources imported, S3 remote state |
+| 27 | Code quality — sort-package-json, split e2e suites (local-network vs smoke), code cleanup |
+| 28 | Generalized auto-update (`_aztec-update.yml`), SDK revision versioning (`.1`, `.2` suffixes) |
+| 29 | EC2 consolidation — 2 instances → 1 per env, ~46% cost reduction |
+| 30 | Wallet SDK integration — `@aztec/wallet-sdk` external wallet support alongside embedded |
+| 31 | ~~Local Native Accelerator~~ — moved to standalone repo [`aztec-accelerator`](https://github.com/alejoamiras/aztec-accelerator) |
+| 32 | CI/CD — narrow server change detection, smart `/health` version check, `api_version` |
+| 33 | Thin Enclave Architecture — host Bun.serve + thin enclave Bun.serve, bb uploaded at runtime |
+| 34 | Enclave lockdown — removed direct CloudFront→enclave route, single SSM tunnel via host |
+| 35 | Deprecated devnet environment (4→3 envs: mainnet, testnet, nightlies) |
+| 36 | Expose proving time in UI step breakdown (`x-prove-duration-ms`) |
+| 37 | Remove accelerator package from tee-rex (moved to standalone repo) |
 
 ---
 
 ## Key Architectural Decisions
 
-- CI gate job pattern: workflows always trigger on PRs, `changes` job uses `dorny/paths-filter@v3` for declarative path-based change detection, gate jobs (`SDK/App/Server/Infra Status`) always run. `infra.yml` triggers on all PRs but only deploys when `test-infra` label is present — Infra Status auto-passes otherwise. `workflow_dispatch` overrides filters to `true`. Full CI reference: `docs/ci-pipeline.md`. Ruleset: `infra/rulesets/main-branch-protection.json`
-- AWS OIDC auth (no stored keys), IAM scoped to ECR repo + `Environment` tag. S3 permissions split: `S3AppDeploy` (put/list) and `S3AppCleanup` (delete, object-level ARNs only). Setup: `infra/iam/README.md`
-- **Infra files use placeholders** (`<ACCOUNT_ID>`, `<DISTRIBUTION_ID>`, `<OAC_ID>`, `<PROVER_EC2_DNS>`, `<TEE_EC2_DNS>`, etc.) for sensitive AWS resource IDs. **Before using any infra JSON/command**, substitute real values via `sed` or manually. See `infra/iam/README.md` and `infra/cloudfront/README.md` for instructions.
-- SSM port forwarding for EC2 access (no public ports). TEE: local:4001→EC2:4000, Prover: local:4002→EC2:80
-- SDK e2e structure: `e2e-setup.ts` (preload), `connectivity.test.ts`, `proving.test.ts` (Remote/Local/Accelerated/Accelerated fallback/TEE), `mode-switching.test.ts`, `nextnet.test.ts` (connectivity smoke, auto-skipped on local)
-- SDK e2e tests are network-agnostic: always use Sponsored FPC + `from: AztecAddress.ZERO` (no `registerInitialLocalNetworkAccountsInWallet`)
-- CI test workflows (`sdk.yml`, `app.yml`, `server.yml`) only trigger on PRs + manual dispatch — no push-to-main triggers (deploy-prod.yml handles post-merge)
-- **SDK publish pipeline**: `npm version` doesn't work in Bun workspaces (`workspace:*` protocol error) — use `node -e` to set version. `npm publish --provenance` requires `repository.url` in package.json matching the GitHub repo. YAML `if:` expressions with colons must be double-quoted. `workflow_dispatch` can trigger `_publish-sdk.yml` directly for retries. Uses `NPM_TOKEN` automation token — OIDC trusted publishing only supports one workflow per package (see `lessons/npm-trusted-publishing.md`). npm package-level 2FA must be set to "Authorization only" (not "Authorization and publishing") for automation tokens to work.
-- **EC2 deploy**: Use `instance-status-ok` (2/2 checks) instead of `instance-running` for SSM readiness. SSM agent needs the OS fully booted + IAM instance profile with `AmazonSSMManagedInstanceCore`.
-- App e2e: Playwright with `mocked` + `fullstack` projects. Mocked tests set `PROVER_URL` via playwright.config env so `PROVER_CONFIGURED=true`. Fullstack tests skip remote/TEE describes when their env vars are not set.
-- Env-var-driven feature flags: `PROVER_CONFIGURED = !!process.env.PROVER_URL`, `TEE_CONFIGURED = !!process.env.TEE_URL`. Buttons start `disabled` in HTML; JS enables them when configured + reachable/attested. Service row labels default to "not configured" in HTML.
-- **GHA workflow outputs cannot contain secrets**: GitHub masks any output whose value contains a secret string — the output silently becomes empty. Pass non-secret identifiers (e.g. image tags) and reconstruct full URIs in consuming jobs.
-- **Multi-stage Dockerfile `ARG`**: `--build-arg` only reaches global-scope `ARG` (before any `FROM`). Must re-declare `ARG` inside each stage that uses it.
-- **Docker prune ordering**: `docker image prune -af` deletes images not referenced by running containers. TEE deploy reads images via `nitro-cli` (no container), so prune must follow EIF build. Prover deploy starts a container first, protecting the image.
-- **nitro-cli orphaned overlay2 layers**: `nitro-cli build-enclave` creates overlay2 layers that Docker's metadata doesn't track. These layers are invisible to `docker images` and `docker system prune -af` but accumulate ~2-3GB per deploy on disk. Partial cleanup (wiping only overlay2) corrupts Docker's internal state (`failed to register layer`). The correct fix: stop Docker, wipe all of `/var/lib/docker/*`, restart Docker. This is a [known Docker limitation](https://github.com/moby/moby/issues/45939) affecting tools that use `docker export` or similar internal operations. Layer caching is sacrificed but the impact is minimal (~30s extra pull time) since the base image strategy (Phase 20B) keeps the app layer small.
-- **CloudFront origin timeout**: `OriginReadTimeout` set to 120s for prover and TEE origins (up from 60s default). 120s is the quota max without an AWS support ticket. For proofs exceeding 120s, request a quota increase to 180s via the Service Quotas console (`Response timeout per origin`). Config: `infra/cloudfront/distribution.json`.
-- **TEE socat proxy**: managed via systemd service (`tee-rex-proxy.service`) — `Restart=always`, `RestartSec=3`, `After=nitro-enclaves-allocator.service`, `WantedBy=multi-user.target`. Deploy script writes `ENCLAVE_CID` to `/etc/tee-rex/proxy.env` and installs the unit inline via heredoc. Survives crashes and EC2 reboots. Source-of-truth file: `infra/tee-rex-proxy.service`.
-- **Request IDs**: Every server request gets a unique `X-Request-Id` (auto-generated UUID or echoed from client). Returned in response header + error JSON `requestId` field. Logged with `requestId` on prove start/completion and unhandled errors. Middleware runs before `expressLogger()` so all log lines include the ID. Frontend/SDK don't need to send IDs — the server handles it transparently.
-- **cbor-x encoding pitfalls** (PR #81): cbor-x has three encoding behaviors that differ from naive expectations: (1) `Uint8Array` → CBOR tagged bstr (tag 64, `0xd840` prefix), but `Buffer` → plain CBOR bstr — COSE_Sign1 Sig_structure requires plain bstr, so always use `Buffer.alloc(0)` not `new Uint8Array(0)` for empty external_aad; (2) 8-byte CBOR uint64 → JavaScript `BigInt`, not `number` — Nitro's Rust NSM library always encodes timestamps as uint64; (3) CBOR maps → plain JS objects with string keys by default, not `Map` instances. Unit tests using JS-generated CBOR won't catch these because JS `number`/`Map`/`Uint8Array` encode differently than Rust/C equivalents.
-- **Server uses `PrivateExecutionStepSchema` from `@aztec/stdlib/kernel`** instead of a hand-rolled Zod schema for `/prove` validation. This keeps the schema automatically in sync across Aztec version updates and avoids format mismatches.
-- **Custom domain (`tee-rex.dev`)**: Cloudflare DNS + ACM wildcard cert + CloudFront alternate domain names. `nextnet.tee-rex.dev` (prod) and `devnet.tee-rex.dev` (devnet). Subdomain CNAMEs use DNS-only mode (`proxied: false`) — Cloudflare proxy rewrites `Host` header, breaking CloudFront. Root domain redirects via Cloudflare Redirect Rule (requires `proxied: true` A record). `VITE_ENV_NAME` env var controls frontend badge/switcher. Runbook: `infra/cloudfront/custom-domain-setup.md`.
-- **`sendWithRetry` + `E2E_RETRY_STALE_HEADER`**: On live networks, proving takes 50-90s, during which the block header can go stale ("Block header not found"). `sendWithRetry()` in `aztec.ts` re-simulates to refresh the header and retries up to 3 times. **Gated behind `E2E_RETRY_STALE_HEADER` env var** — only active during Playwright e2e tests (set in `playwright.config.ts` webServer env, forwarded via `vite.config.ts` define block). In production, sends fail immediately — re-simulating silently is unsafe because contract state or user inputs could change between attempts.
-- **Rate limit localhost exemption**: `/prove` rate limit (10 req/hour/IP) exempts `127.0.0.1` and `::1` via `skip` callback. SSM tunnels and local dev arrive as localhost; public traffic via CloudFront has `X-Forwarded-For`. Safe because only SSM-credentialed users can reach localhost on EC2.
-- **Wallet SDK dual-path architecture**: Embedded wallet (`EmbeddedWallet` from `@aztec/wallets/embedded`) runs in-page with browser PXE; NOT discoverable via Wallet SDK's `window.postMessage` protocol. External wallets (browser extensions) connect via `@aztec/wallet-sdk` discovery + ECDH + emoji verification. Both converge on the `Wallet` interface. State tracks `walletType` ("embedded"|"external"), keeps `embeddedWallet` for revert-on-disconnect. External wallets own proving (mode toggle disabled), provide accounts (deploy disabled), handle fees. `?wallet=embedded` URL param skips external wallet UI for e2e/CI.
-- **validate-prod scoped to deploy-only tests**: `validate-prod` in `deploy-prod.yml` runs `-g "deploys account"` (3 deploy tests, 1 prove call each) instead of the full 12-test suite. The comprehensive suite runs in `infra.yml` on PRs. `continue-on-error` removed — validate-prod is now a hard gate.
+- **CI gate pattern**: `dorny/paths-filter` change detection, gate jobs always run. `infra.yml` deploys only when `test-infra` label present. Full reference: `docs/ci-pipeline.md`
+- **AWS OIDC auth** (no stored keys), IAM scoped to ECR + `Environment` tag. S3 permissions split: put/list vs delete
+- **SSM port forwarding** for EC2 access (no public ports). Host: local:4002→EC2:80
+- **SDK e2e**: network-agnostic via Sponsored FPC + `from: AztecAddress.ZERO`. TEE tests `skipIf(!TEE_URL)`
+- **SDK publish**: `NPM_TOKEN` automation token (OIDC only supports one workflow per package). Revision versioning via `get-sdk-publish-version.ts`
+- **Docker strategy**: `Dockerfile.base` (Bun + deps, tagged by Aztec version) + `Dockerfile` (host) + `Dockerfile.nitro` (enclave). Nuclear Docker wipe before EIF build (nitro-cli orphaned overlay2 layers)
+- **CloudFront**: All traffic through host (port 80). Host proxies `/tee/*` and `/prover/*` to enclave internally. `OriginReadTimeout` 120s
+- **TEE socat proxy**: systemd service, `Restart=always`, bound to `127.0.0.1` (defense-in-depth)
+- **Server zero `@aztec/*` runtime deps**: calls `bb prove` CLI directly. Only deps: `@logtape/logtape`, `openpgp`
+- **Custom domain**: Cloudflare DNS + ACM wildcard cert. Subdomains use DNS-only (no proxy). Root redirects via Cloudflare rule
+- **Wallet SDK dual-path**: Embedded wallet (in-page PXE) + external wallet (browser extension via `@aztec/wallet-sdk` discovery). `?wallet=embedded` bypasses for e2e
+- **Rate limit localhost exemption**: SSM tunnels arrive as localhost, exempt from `/prove` rate limit
 
 ---
 
-## Phase 17: Auto-Deploy Pipeline
+## Phase 25: TEE Stability & Nightlies Migration — DONE
 
-**Goal**: After the aztec-nightlies auto-update PR passes all tests (including deployed prover + TEE), auto-merge and deploy everything to production. Nightly auto-updates keep the live system current with zero manual intervention.
-
-**Decision**: No custom domain. Use **CloudFront** as the single entry point — serves the static app from S3 and proxies to EC2 backends. One `https://d1234abcd.cloudfront.net` URL, same-origin, no CORS, no mixed content, no domain needed.
-
-**Architecture:**
-
-```
-aztec-nightlies.yml detects new version
-         │
-         ▼
-    Creates PR with label: test-infra
-         │
-    ┌────┴──────────────────────────────────┐
-    │  CI runs on PR:                        │
-    │  sdk.yml, app.yml, server.yml (unit)   │
-    │  infra.yml (deploy TEE + prover, e2e)  │
-    └────┬──────────────────────────────────┘
-         │ all green → auto-merge to main
-         ▼
-    deploy-prod.yml (triggers on push to main)
-    ┌────┬────┬────┐
-    │    │    │    │
-    ▼    ▼    ▼    ▼
-  Server  App   SDK
-  EC2     S3    npm
-  (enclave + prover)
-
-    CloudFront (https://nextnet.tee-rex.dev)
-      ├── /*           → S3 bucket (static Vite build)
-      ├── /prover/*    → EC2 host (http, port 80)
-      └── /tee/*       → EC2 host (http, port 80)  ← host proxies to enclave
-```
-
-**Completed parts:**
-
-| Part | Summary |
-|---|---|
-| **17A** | Fixed non-TEE `Dockerfile` (missing `packages/app/package.json` COPY, added healthcheck + curl) |
-| **17B** | `remote.yml` + `_deploy-prover.yml` — CI prover deploy on `test-remote` label. `infra/ci-deploy-prover.sh`. CI EC2: `t3.xlarge` |
-| **17C** | Nightlies workflow adds `test-infra` label to auto PRs (combined TEE + Remote deploy + e2e via `infra.yml`). Individual `tee.yml` / `remote.yml` kept for isolated debugging via `test-tee` / `test-remote` labels. |
-| **17D** | `deploy-prod.yml` (push to main → deploy to prod). Originally separate TEE + prover EC2s, now consolidated to single EC2 per env (Phase 29). IAM: `Environment: ["ci", "prod"]`. Prod EC2: `m5.xlarge` with Elastic IP. Secrets: `PROD_TEE_INSTANCE_ID` |
-| **17E** | CloudFront + S3 for production app. S3 bucket `tee-rex-app-prod` (OAC, private). CloudFront distribution `<DISTRIBUTION_ID>` with 3 origins: S3 (default), prover EC2 (`/prover/*`), TEE EC2 (`/tee/*`). CF Function strips path prefixes. COOP/COEP response headers policy. `deploy-prod.yml` has `deploy-app` job (build + S3 sync + CF invalidation). SG rule: CloudFront prefix list for ports 80-4000. IAM: S3 + CF invalidation permissions. Secrets: `PROD_S3_BUCKET`, `PROD_CLOUDFRONT_DISTRIBUTION_ID`, `PROD_CLOUDFRONT_URL`. Setup docs: `infra/cloudfront/README.md`. |
-| **17F** | Nextnet connectivity smoke test (`nextnet.test.ts`) + `nextnet-check` job in `deploy-prod.yml` as pre-publish gate. `validate-prod` job runs app fullstack e2e against nextnet after all deploys complete (SSM tunnels to prod TEE + prover). |
-| **17G** | SDK auto-publish in `deploy-prod.yml`. `publish-sdk` job triggers on nightlies auto-update merges (`chore: update @aztec/*`), reads Aztec version from `@aztec/stdlib` dep, sets SDK version to match, publishes to npm with `--tag nightlies` + `--provenance`, creates git tag + GitHub release. Gated by `validate-prod` (full e2e) with `nextnet-check` fallback when validate-prod is skipped. Uses `NPM_TOKEN` automation token (OIDC only supports one workflow per package — doesn't work with deploy-prod + deploy-devnet). `_publish-sdk.yml` also supports `workflow_dispatch` for manual retries. |
+- **25A**: Fixed hugepages allocation failure (stop allocator before Docker wipe)
+- **25B**: README badges and links
+- **25D**: Migrated spartan → nightlies dist-tag
+- **25E**: Infra Status as 4th required branch protection gate
 
 ---
 
-## Phase 18: Frontend Improvements
+## Phase 26: OpenTofu IaC — DONE
 
-**Goal**: Polish the app UX — auto-configure TEE, granular benchmarks, attribution update.
-
-**18A — Optional remote/TEE via env vars:** DONE (PR #31)
-- `PROVER_URL` and `TEE_URL` env vars control whether remote/TEE modes are available
-- `PROVER_CONFIGURED` / `TEE_CONFIGURED` boolean exports in `aztec.ts`
-- Buttons start `disabled` in HTML; `main.ts` enables when configured (remote) or configured+attested (TEE)
-- `/prover` and `/tee` Vite proxies only created when env vars are set
-- Service panel rows: "not configured" (default) / "available" / "unavailable" / "attested" / "unreachable"
-- Removed TEE manual URL input + Check button — TEE auto-configures from env
-- `deploy-prod.yml` passes `TEE_URL` to app build
-- Fullstack e2e skip guards: remote tests skip when `PROVER_URL` not set
-
-**18B — Granular benchmark UI:** DONE (PR #37)
-- Break `.send()` into two timed phases using `NO_WAIT` + `waitForTx()` polling: prove+send and confirm
-- Added `proveSendMs` / `confirmMs` optional fields to `StepTiming` interface
-- `waitForTx()` helper polls `getTxReceipt()` every 1s, throws on dropped txs
-- All send operations in `deployTestAccount()` and `runTokenFlow()` refactored to capture sub-timings
-- For token deploy, uses `TokenContract.at()` after confirm (address deterministic from simulate)
-- UI renders "prove + send" and "confirm" sub-rows alongside existing simulation details in step breakdown
-
-**18C — Attribution update:** DONE
-- Changed footer to `made with ♥ by alejo · inspired by nemi.fi` (with link to github.com/nemi-fi/tee-rex/)
+14 HCL files covering all AWS resources. Import-only migration, S3 remote state with DynamoDB locking. Security hardening: SSH disabled, SG split, ECR scan-on-push, S3 encryption, CloudFront TLS 1.2 + HTTP/3. CI: `tofu fmt -check` + `tofu validate` on PR.
 
 ---
 
-## Phase 19: Dependency Updates — DONE (PR #38)
+## Phase 29: EC2 Consolidation — DONE
 
-Updated 20 non-Aztec packages across 4 risk-based batches. Skipped `zod` (v4 incompatible with `@aztec/stdlib` Zod 3 schemas).
-
----
-
-## Phase 20: Deploy Pipeline Optimization
-
-**Goal**: Speed up the deploy-prod pipeline and eliminate disk space fragility on EC2 instances.
-
-**Current state**: Deploy scripts wipe `/var/lib/docker` entirely on every deploy because the EBS volumes are too small to keep cached layers. This forces a full image pull (~2GB) every time and makes deploys slow. EC2 startup now uses `instance-status-ok` (2/2 checks) + 10 min SSM timeout with diagnostics on failure.
-
-**20A — Increase EBS volumes + Docker cleanup:** DONE (PR #45, updated in #74)
-- Resized all 4 EC2 EBS volumes from 8GB to 20GB (`aws ec2 modify-volume` + `growpart` / cloud-init auto-grow)
-- TEE deploy (`ci-deploy.sh`): uses nuclear Docker wipe (`systemctl stop docker && rm -rf /var/lib/docker/*`) because `nitro-cli build-enclave` creates orphaned overlay2 layers that `docker system prune` cannot remove (see lesson below). Layer caching is not possible for TEE deploys.
-- Prover deploy (`ci-deploy-prover.sh`): uses `docker system prune -af` — layer caching works because Docker manages all containers/images normally (no nitro-cli involvement)
-- Validated via CI: Remote Prover deploy + e2e (green), TEE deploy + e2e (green)
-
-**20B — Split Docker image into base + app layers:** DONE (PRs #46, #48, #49, #51)
-- `Dockerfile.base`: shared base image (Bun + system deps + `bun install` ~2.4GB), tagged `tee-rex:base-<aztec-version>` in ECR
-- `Dockerfile` (prover) and `Dockerfile.nitro` stage 2 (builder): `ARG BASE_IMAGE` / `FROM ${BASE_IMAGE}`, removed dep install layers
-- `_build-base.yml`: idempotent reusable workflow — reads Aztec version, checks ECR, builds+pushes only if missing. ECR registry cache. Outputs `base_tag` (not full URI — see lessons).
-- `_deploy-tee.yml` / `_deploy-prover.yml`: accept `base_tag` input, construct full URI internally from `ECR_REGISTRY` secret + tag, ECR registry cache (bundles Phase 20D)
-- `deploy-prod.yml`, `tee.yml`, `remote.yml`: added `ensure-base` job before deploy jobs
-- Deploy scripts: `ci-deploy-prover.sh`: stop → pull → run container → prune (container protects image, layer caching works). `ci-deploy.sh`: nuclear Docker wipe → pull → build EIF → prune → run enclave → install systemd proxy (no layer caching due to nitro-cli orphaned overlay2 — see architectural decisions).
-- Local build scripts: two-step `build:base` + `build` / `build:nitro` in root `package.json`
-- **CI lessons (critical)**:
-  1. **GHA secret masking on outputs**: Workflow outputs containing secret values (e.g. ECR registry URI) are silently redacted to empty string. Warning: `Skip output 'X' since it may contain secret.` Fix: output only non-secret parts (e.g. image tag) and let consumers reconstruct the full value from their own secrets.
-  2. **Multi-stage Dockerfile `ARG` scoping**: `--build-arg` only populates `ARG` declarations at global scope (before the first `FROM`). In multi-stage builds, add a global `ARG` before stage 1, then re-declare it inside the stage that uses it (e.g. `ARG BASE_IMAGE` before `FROM rust AS nsm`, then again before `FROM ${BASE_IMAGE} AS builder`).
-  3. **`docker image prune -af` vs `nitro-cli`**: Prune deletes all images not referenced by running containers. For TEE deploys, `nitro-cli build-enclave` reads the Docker image directly (no container), so prune must happen **after** EIF build. For prover deploys, `docker run` starts the container first, protecting the image from prune.
-
-**~~20C — Early health check endpoint:~~** Removed — server already listens immediately. `ProverService` initializes asynchronously (`setTimeout`), `/attestation` doesn't depend on it.
-
-**~~20D — ECR registry cache for Docker builds:~~** Bundled into 20B
-
-**~~20E — Pre-build EIF in CI (research):~~** Cancelled — diminishing returns after 20A+20B optimizations. `nitro-cli` requires a Nitro instance anyway.
-
----
-
-## Phase 21: Multi-Region Strategy (Research) — DONE
-
-**Goal**: Research deploying TEE, prover, and frontend across multiple AWS regions (closest to Argentina + London offices). **Research only — no implementation.**
-
-**Research doc**: `lessons/phase-21-multi-region-research.md`
-
-**Key findings:**
-- **Regions**: sa-east-1 (São Paulo, ~30-50ms from Buenos Aires) + eu-west-2 (London, current)
-- **Nitro Enclaves**: Supported in all AWS regions since Oct 2025 — no blockers for sa-east-1
-- **ECR strategy**: Cross-region replication (configure once, push once to eu-west-2, auto-replicates to sa-east-1)
-- **Geo-routing**: CloudFront Function rewrites paths based on `CloudFront-Viewer-Country` header. No custom domain needed. Add sa-east-1 origins as `/prover-sa/*` and `/tee-sa/*` cache behaviors.
-- **IaC**: Keep shell scripts for MVP (1 new region). Adopt **OpenTofu** at 3+ regions — open-source Terraform fork (MPL 2.0), same HCL syntax/providers, `for_each` on providers for clean multi-region configs. Example at `infra/opentofu-example/`.
-- **Cost**: +$160/month (prover-only MVP) to +$360/month (full dual-region). sa-east-1 has ~20-30% premium over eu-west-2.
-- **Simplest MVP**: sa-east-1 prover + CloudFront geo-routing (~$160/month, ~8 hours effort). Prover-first because proving is the slowest operation and biggest UX win.
-
-**Phased rollout (when ready to implement):**
-1. **21A**: ECR cross-region replication (~1 hour)
-2. **21B**: Deploy sa-east-1 prover (~4 hours)
-3. **21C**: CloudFront geo-routing via CF Function (~4 hours)
-4. **21D** *(optional)*: Deploy sa-east-1 TEE (~4 hours)
-5. **21E**: Monitoring + validation (~2 hours)
-
----
-
-## Phase 22: CI Change Detection & Conditional Deploys — DONE (PRs #57, #61)
-
-**Goal**: Eliminate redundant CI work — skip unrelated PR test jobs and skip deploy-prod jobs for unchanged components.
-
-**22A — Unified change detection with `dorny/paths-filter`:** DONE (PR #57)
-- Replaced copy-pasted shell scripts (`gh pr diff` + grep loop) in `sdk.yml`, `app.yml`, `server.yml` with declarative `dorny/paths-filter@v3`
-- Works for both `pull_request` and `push` events (the old scripts only worked for PRs)
-- `workflow_dispatch` override step sets `relevant=true` to bypass filters on manual runs
-
-**22B — Conditional deploy-prod:** DONE (PR #57)
-- Added `changes` job to `deploy-prod.yml` with two outputs: `servers` and `app`
-- `servers` filter: `packages/server/**`, `packages/sdk/**`, `Dockerfile*`, `infra/**`, `package.json`, `bun.lock`
-- `app` filter: `packages/app/**`, `packages/sdk/**`, `package.json`, `bun.lock`
-- `ensure-base`, `deploy-server` gated on `servers == 'true'`
-- `deploy-app` gated on `app == 'true'`
-- `validate-prod` runs when either changed (`!cancelled()` + OR condition)
-- `nextnet-check` and `publish-sdk` remain ungated (independent of what changed)
-- App-only merges now skip ~50 min of server deploys; workflow-only merges skip all deploys
-
-**22C — CI pipeline documentation:** DONE (PR #61)
-- Moved `lessons/ci-pipeline-audit.md` to `docs/ci-pipeline.md` as a living reference
-- Covers all 16 workflow files with mermaid diagrams, change detection paths, conditional deploy logic, Docker image strategy, and key design decisions
-
----
-
-## Phase 23: Devnet Support — DONE
-
-**Goal**: Support a separate `devnet` deployment alongside production (`nextnet`/`nightlies`). Long-lived `devnet` branch, own infrastructure. Auto-update via `aztec-devnet.yml` (weekly, Phase 28A+C), push-triggered deploy.
-
-**Architecture:**
-
-```
-main branch (nightlies/nextnet) → deploy-prod.yml (on push)     → prod EC2s + S3 + CF
-devnet branch (devnet Aztec)  → deploy-devnet.yml (on push)   → devnet EC2s + S3 + CF
-
-deploy-devnet.yml flow:
-  push to devnet (or workflow_dispatch)
-    → ensure-base
-    → deploy-server (enclave + prover on single EC2)
-    → validate-devnet (SDK + app e2e against deployed infra)  ← quality gate
-    → deploy-app (devnet S3/CF)
-    → publish-sdk (npm --tag devnet)  ← only if validate green
-```
-
-No branch protection ruleset on `devnet` — the workflow itself is the quality gate. E2e must pass before app deploys and SDK publishes.
-
-**Completed parts:**
-
-| Part | Summary |
-|---|---|
-| **23A** | IAM templates updated: `refs/heads/devnet` in trust policy, `devnet` in Environment tags / S3 / CloudFront. `_deploy-tee.yml` / `_deploy-prover.yml` extended with devnet instance ID resolution. AWS provisioning (EC2, S3, CF, secrets) done via CLI after merge. |
-| **23B** | `deploy-devnet.yml`: `workflow_dispatch`-only pipeline. Jobs: `ensure-base` → `deploy-tee` + `deploy-prover` → `validate-devnet` (blocking SSM tunnels + SDK e2e + app fullstack e2e) → `deploy-app` + `publish-sdk`. Extracted `_publish-sdk.yml` reusable workflow (parameterized `dist_tag` + `latest`) — `deploy-prod.yml` refactored to call it with `nightlies`/`true`, devnet calls with `devnet`/`false`. Git tag `|| true` handles same-version edge case. |
-
-| **23C** | Created `devnet` branch from `main` with devnet Aztec version and `AZTEC_NODE_URL` references. `devnet-backup` branch also exists. |
-
----
-
-## Phase 24: Stabilize Fullstack E2E & CI Hardening — DONE (PRs #89, #91, #93, #94, #96)
-
-**Goal**: Make `validate-prod` pass reliably (0/50+ runs previously) and harden the deploy pipeline.
-
-| Part | Summary |
-|---|---|
-| **24A** | `sendWithRetry()` in `aztec.ts` — retries "Block header not found" up to 3 times by re-simulating to refresh stale block headers. Gated behind `E2E_RETRY_STALE_HEADER` env var so production sends fail immediately (re-simulating silently is unsafe). Playwright config sets the flag via webServer env; Vite config forwards it. |
-| **24B** | Localhost rate limit exemption — `/prove` rate limiter skips `127.0.0.1`/`::1` (SSM tunnels, local dev). Public traffic still rate-limited via CloudFront's `X-Forwarded-For`. |
-| **24C** | Scoped validate-prod — narrowed from full 12-test suite to deploy-only (`-g "deploys account"`), removed `continue-on-error: true`, reduced timeout 60→30 min. Comprehensive tests run in `infra.yml` on PRs. |
-| **24D** | `_publish-sdk.yml` gets `workflow_dispatch` — manual SDK publishing from Actions tab without re-running deploy-prod. |
-| **24E** | Gate `publish-sdk` on `validate-prod` — `needs: [validate-prod, nextnet-check]` with `always()` + result checks. Blocks on validate-prod failure, falls back to nextnet-check when skipped. |
-| **24F** | npm publish fix — switched from OIDC to `NPM_TOKEN` automation token (OIDC only supports one workflow per package). Package-level 2FA set to "Authorization only" to allow automation tokens. |
-
----
-
-## Phase 24.5: Custom Domain (`tee-rex.dev`) — DONE (PR #98)
-
-**Goal**: Set up `nextnet.tee-rex.dev` and `devnet.tee-rex.dev` as custom domains, add environment indicator + switcher in the frontend.
-
-| Part | Summary |
-|---|---|
-| **Infra** | ACM wildcard cert (`*.tee-rex.dev`) in us-east-1. CloudFront alternate domain names on both distributions. Cloudflare CNAME records (DNS-only / gray cloud). Root domain `tee-rex.dev` 301-redirects to `nextnet.tee-rex.dev` via Cloudflare Redirect Rule (dummy A record `192.0.2.1` proxied). GitHub secrets updated: `PROD_CLOUDFRONT_URL` → `https://nextnet.tee-rex.dev`, `DEVNET_CLOUDFRONT_URL` → `https://devnet.tee-rex.dev`. Runbook: `infra/cloudfront/custom-domain-setup.md`. |
-| **Frontend** | `VITE_ENV_NAME` env var (`"nextnet"` or `"devnet"`) baked at build time. Environment badge in header (emerald for nextnet, amber for devnet) with cross-environment switcher link. Hidden in local dev (no env var). `ENV_NAME`, `OTHER_ENV_URL`, `OTHER_ENV_NAME` exports in `aztec.ts`. |
-| **CI** | `VITE_ENV_NAME: nextnet` in `deploy-prod.yml`, `VITE_ENV_NAME: devnet` in `deploy-devnet.yml`. |
-
-**Key decisions:**
-- Subdomain CNAMEs MUST use `proxied: false` (gray cloud). Cloudflare orange-cloud proxy rewrites `Host` header → CloudFront rejects.
-- Root redirect uses `proxied: true` because Cloudflare Redirect Rules only work on proxied traffic.
-- `.dev` TLD is HSTS-preloaded — browsers enforce HTTPS-only, no HTTP downgrade attacks possible.
-- Old CloudFront URLs (`*.cloudfront.net`) still work — backward compatible.
-
----
-
-## Phase 25: TEE Stability, Devnet Release & Nightlies Migration
-
-**Goal**: Fix recurring TEE enclave deploy failures, publish a devnet patch release, and migrate from spartan (deprecated) to nightlies dist-tag. Version format: `X.Y.Z-spartan.YYYYMMDD` → `X.Y.Z-nightly.YYYYMMDD`.
-
-**25A — Fix TEE `nitro-enclaves-allocator` failure:** DONE (PR #100)
-- Root cause: hugepages memory allocation failure after Docker wipe — allocator couldn't reclaim memory already mapped by the kernel.
-- Fix: stop allocator before Docker wipe, restart after. Proper cleanup ordering in `infra/ci-deploy.sh`.
-
-**25B — Update READMEs and documentation:** DONE (PR #99)
-- CI badges (SDK, App, Server, Deploy Production) and live site links added to root README
-- SDK workflow badge added to `packages/sdk/README.md`
-- App footer: linked "alejo" to GitHub repo
-
-**25C — Devnet patch release (`-patch.1`):** DONE
-- Reset `devnet` branch to `main`, updated Aztec deps to `4.0.0-devnet.2-patch.1`, deployed via `deploy-devnet.yml`
-- Published SDK `@alejoamiras/tee-rex@4.0.0-devnet.2-patch.1` with `--tag devnet`
-- Previous devnet branch backed up at `devnet-backup`
-
-**25D — Migrate from spartan to nightlies:** DONE (PR #101)
-- Renamed `aztec-spartan.yml` → `aztec-nightlies.yml`, `check-aztec-spartan.ts` → `check-aztec-nightlies.ts`
-- Updated `VERSION_PATTERN` to accept `nightly` only (rejects spartan); `AZTEC_VERSION_PATTERN` still accepts both for cross-format upgrades
-- `deploy-prod.yml` `publish-sdk` now uses `dist_tag: nightlies`; `_publish-sdk.yml` default changed to `nightlies`
-- IAM trust policy: `chore/aztec-spartan-*` → `chore/aztec-nightlies-*` (applied to AWS)
-- All docs updated: `CLAUDE.md`, `docs/ci-pipeline.md`, `packages/sdk/README.md`, `infra/iam/README.md`
-- `AZTEC_NODE_URL` unchanged (`https://nextnet.aztec-labs.com`)
-
-**25E — Infra Status branch protection gate:** DONE (PR #103)
-- `infra.yml` now triggers on all PRs (not just `test-infra` label). When label absent, all jobs skip and Infra Status auto-passes. When present, runs full deploy + e2e and blocks merge on failure.
-- Added **Infra Status** as 4th required check in branch protection (alongside SDK/App/Server Status).
-- Prevents auto-merge from racing ahead of infrastructure tests (which caused PR #102 e2e failures).
-
----
-
-## Phase 26: OpenTofu Infrastructure-as-Code Migration — DONE (PRs #111, #112, #113, #117, #118)
-
-**Goal**: Codify all existing AWS infrastructure (6 EC2 instances, 2 CloudFront distributions, S3 buckets, ECR, IAM, security groups, EIPs, ACM) as OpenTofu configuration. Import-only — no resources recreated.
-
-**Strategy**: Single state file for all 3 environments (ci, prod, devnet). S3 remote state with DynamoDB locking. Local-only execution (no CI integration). CI runs `tofu fmt -check` + `tofu validate` on every PR that touches `.tf` files.
-
-**Key decisions:**
-- **Import-only migration**: All resources imported via `tofu import` CLI commands — IDs never appear in committed files.
-- **Security for public repo**: `terraform.tfvars` (gitignored) holds all real values. `.tf` files use `var.*` and `data.*` only. `terraform.tfvars.example` committed with placeholder values.
-- **Safety guardrails**: `lifecycle { prevent_destroy }` on S3, CloudFront, ACM, key pair. `lifecycle { ignore_changes = [ami, user_data] }` on all EC2 instances to prevent replacements.
-- **Safety snapshot**: `snapshot.sh` captures complete AWS state to `.snapshot/` (gitignored) before any imports — "break glass" recovery document.
-- **Replaced `infra/opentofu-example/`**: Deleted the Phase 21 research artifact, replaced with production OpenTofu configuration.
-- **No `tofu plan` in CI**: fmt + validate catches 90% of issues with zero AWS credentials. Plan/apply remain local-only — appropriate for a solo/small-team project. Revisit when multiple contributors touch infra.
-
-| Part | Summary |
-|---|---|
-| **26A** | OpenTofu migration — 14 HCL files covering all AWS resources. S3 remote state with DynamoDB locking. All resources imported via `tofu import`, `tofu plan` shows zero diff. (PR #111) |
-| **26B** | Security hardening — 13 findings (3 critical, 10 recommended). SSH disabled by default, SG port range split, redundant IAM policy removed, ECR scan-on-push, S3 encryption + versioning, CloudFront TLS 1.2 + HTTP/3 + security headers (HSTS, X-Content-Type-Options, X-Frame-Options), OIDC trust `pull_request` condition removed. All applied live via `tofu apply` — zero downtime. (PR #112) |
-| **26D** | Post-merge fixes for 26B. (1) Added `ecr:DescribeImages` to both managed and inline CI IAM policies — missing permission caused `_build-base.yml` ECR check to fail silently (stderr redirected to `/dev/null`), making every Build Base Image job rebuild unnecessarily. (2) Reverted ECR from `IMMUTABLE` to `MUTABLE` tags — immutable tags are incompatible with static deploy tags (`prod-prover`, `prod-tee`) that get overwritten on each deploy. (3) Tofu state cleanup: `tofu state mv` for renamed inline policy, created missing managed policy + attachment, removed stale data source. Final `tofu plan` shows zero diff. (PRs #117, #118) |
-| **26C** | CI lint — `tofu fmt -check -diff` + `tofu init -backend=false` + `tofu validate` job in `actionlint.yml` with change detection for `infra/tofu/**/*.tf`. `lint:tofu` standalone script (mirrors `lint:actions` pattern — not in main `lint` chain). `tofu fmt` lint-staged hook auto-formats `.tf` files on commit. (PR #113) |
-
-**Files:**
-- `infra/tofu/*.tf` — 14 HCL files (backend, providers, versions, variables, data, iam, security-group, ec2, eip, ecr, s3, acm, cloudfront, outputs)
-- `infra/tofu/terraform.tfvars.example` — placeholder values (committed)
-- `infra/tofu/snapshot.sh` — AWS state capture script
-- `infra/tofu/README.md` — usage guide with import commands and safety notes
-
----
-
-## Phase 27: Code Quality & Showcase Readiness — DONE (PRs #106, #107, #109, #110, #114)
-
-**Goal**: Polish the codebase for showcase readiness — enforce consistent formatting, improve test pipeline speed, clean up code, and make the live app more presentable.
-
-| Part | Summary |
-|---|---|
-| **27A** | `sort-package-json` added to quality pipeline — enforces canonical key ordering in all `package.json` files. Runs as auto-fix in lint-staged and as check-only gate in `bun run lint`. (PR #106) |
-| **27B** | Slim `CLAUDE.md` + add GitHub icon link to app header bar. (PR #107) |
-| **27C** | Code quality cleanup — extract `executeStep()` helper in `aztec.ts` (deduplicates simulate→send→confirm pattern, -58 lines), consolidate magic constants, add `$btn()` typed helper in `ui.ts` (eliminates 8 casts), add CORS comment in server. (PR #109) |
-| **27D** | Split app e2e into fast + slow suites. `demo.fullstack.spec.ts` → `demo.local-network.spec.ts` (12 tests, simulated proofs, ~5 min) + `demo.smoke.spec.ts` (3 deploy-only tests, real proofs). Shared helpers extracted to `fullstack.helpers.ts`. Per-PR pipeline (`app.yml`) now runs local-network tests instead of real-proof fullstack (~5 min vs 30-60 min). (PR #110) |
-| **27E** | App links cleanup — visible "GitHub" text label in header, replace raw CloudFront URLs (`d3d1wk4leq65j7.cloudfront.net`) with custom domain (`nextnet.tee-rex.dev`) in dev scripts. (PR #114) |
-
----
-
-## Phase 28: Auto-Update & SDK Versioning for All Environments
-
-**Goal**: Extend the nightly auto-update pipeline to devnet (and eventually testnet/mainnet), and solve SDK re-publishing when the Aztec version hasn't changed but SDK code has.
-
-**28A+C — Generalized auto-update pipeline:** DONE
-- Extracted `_aztec-update.yml` reusable workflow — parameterized check→update→PR flow (inputs: `dist_tag`, `target_branch`, `branch_prefix`, `add_label`, `auto_merge`, `version`)
-- `aztec-nightlies.yml` → thin wrapper calling `_aztec-update.yml` with `nightly`/`main` params
-- New `aztec-devnet.yml` — thin wrapper for devnet (weekly Monday 09:00 UTC, targets `devnet` branch, immediate merge)
-- Generalized `check-aztec-nightlies.ts` → `check-aztec-update.ts` — takes dist-tag as positional arg
-- Broadened `update-aztec-version.ts` — `VERSION_PATTERN` and `AZTEC_VERSION_PATTERN` now accept `devnet.N[-patch.N]` formats
-- Added push trigger to `deploy-devnet.yml` (on push to `devnet` branch, paths-ignore for docs/tests)
-- IAM trust policy: added `chore/aztec-devnet-*` branch pattern
-
-**28B — SDK revision versioning:** DONE
-- Problem: npm won't let you re-publish the same version. If the Aztec devnet version is `4.0.0-devnet.2-patch.1` and we need to publish an SDK-only fix, we need a revision suffix.
-- Solution: `scripts/get-sdk-publish-version.ts` queries npm for existing versions and appends a dot-separated revision number:
-  ```
-  4.0.0-devnet.2-patch.1      ← first publish (matches Aztec version)
-  4.0.0-devnet.2-patch.1.1    ← SDK-only fix (revision 1)
-  4.0.0-devnet.2-patch.1.2    ← another fix (revision 2)
-  ```
-- `_publish-sdk.yml` calls the script between "Read Aztec version" and "Set SDK version"
-- Git tag and release notes adjust automatically for revisions vs first publishes
-- Resets to no suffix when a new Aztec version drops
-
----
-
-## Phase 29: EC2 Consolidation — DONE (PR #132)
-
-**Goal**: Consolidate 2 EC2 instances per environment (TEE m5.xlarge + prover t3.xlarge) into 1 m5.xlarge running both services. Saves ~$2,900/year (46% reduction).
-
-**Architecture**: Single m5.xlarge per env runs Nitro enclave (localhost:4000 via socat, not externally accessible) and host Docker container on port 80 (2 CPU + 8GB). CloudFront routes both `/tee/*` and `/prover/*` through the host on port 80 — the host proxies to the enclave internally.
-
-**Changes:**
-
-| Item | Summary |
-|------|---------|
-| **Unified deploy script** | `infra/ci-deploy-unified.sh` — takes two image URIs (nitro + prover), deploys enclave first, then prover container on same host |
-| **Unified deploy workflow** | `_deploy-unified.yml` — builds both Docker images in parallel, deploys to single instance via SSM |
-| **Caller workflows** | `deploy-prod.yml`, `deploy-devnet.yml`, `infra.yml` — replaced parallel `deploy-tee` + `deploy-prover` with single `deploy-server` calling `_deploy-unified.yml` |
-| **CloudFront** | Prover origins (`/prover/*`) now point to TEE instance EIPs (same machine, port 80) |
-| **GitHub secrets** | `PROVER_INSTANCE_ID`, `PROD_PROVER_INSTANCE_ID`, `DEVNET_PROVER_INSTANCE_ID` set to TEE instance IDs (e2e tunnel code unchanged) |
-| **Prover instances** | Stopped (not terminated) — easy restart if rollback needed. Cleanup (Tofu removal) planned separately. |
-
-**Key decisions:**
-- Enclave takes 2 CPU + 8GB hugepages, leaving 2 CPU + 8GB for prover container. Tight but workable. Upgrade path: m5.2xlarge (8 vCPU, 32GB, $0.384/hr).
-- Prover deployed AFTER enclave is healthy — Docker wipe during enclave build can't affect running enclave.
-- Old `_deploy-tee.yml`, `_deploy-prover.yml`, `ci-deploy-prover.sh` preserved for rollback.
-
----
-
-## Phase 31: Local Native Accelerator — DONE
-
-**Goal**: Bypass browser WASM throttling by routing proving to a native `bb` binary on the user's machine via a lightweight desktop app.
-
-**Key decisions**: Tauri 2.0 (not Electron), localhost HTTP on port 59833 (no extension), no encryption in v1. See [accelerator-decision.md](./accelerator-decision.md) for full rationale and rollback paths. See [accelerator-plan.md](./accelerator-plan.md) for step-by-step implementation plan.
-
-**SDK change**: Add `ProvingMode.accelerated` to `TeeRexProver` — tries `http://127.0.0.1:59833/prove`, auto-falls back to WASM if unavailable. Emits `"fallback"` phase before WASM fallback so apps can inform users.
-
-**New package**: `packages/accelerator` — Tauri tray app that listens on localhost and runs the `bb` proving binary natively.
-
-**Completed parts:**
-
-| Part | Summary |
-|------|---------|
-| **Step 0** | Branch setup, Rust toolchain, workspace entry for `packages/accelerator` |
-| **Step 1** | SDK: `ProvingMode.accelerated`, `#acceleratedCreateChonkProof` with msgpack serialization, `detect` phase, auto-fallback to WASM, unit tests, accelerator health check in frontend |
-| **Step 2** | Tauri scaffold: tray-only app (no window), system tray with status + quit menu items, tee-rex icon |
-| **Step 3** | bb execution: `bb::find_bb()` resolution (sidecar → `~/.bb/bb` → PATH), `bb::prove()` spawns `bb prove --scheme chonk`, temp file I/O, field-count header prepend |
-| **Step 4** | HTTP server: Axum on `127.0.0.1:59833`, `GET /health`, `POST /prove` (msgpack body → bb → base64 proof), CORS headers, 50MB body limit, tray status updates during proving |
-| **Step 5A** | Manual end-to-end integration test: SDK ↔ accelerator with real Aztec proving — confirmed working |
-| **Diagnostics** | Crash diagnostics for `DataCloneError` / OOM investigation: frontend ring buffer (Worker postMessage sizes, WASM Memory allocations, global error handlers, memory snapshots, JSON export), accelerator file-based logging (daily-rotating via `tracing-appender`, "Show Logs" tray menu), enriched `/health` with version + bb path + log_dir |
-| **Bugfix** | `StatusGuard` drop guard ensures tray resets to Idle on any exit (success, error, client disconnect). Fixed `set_title(None)` not clearing macOS menu bar text — use `set_title(Some(""))` |
-| **Step 5B** | `"fallback"` ProverPhase — SDK emits `fallback` before WASM fallback so apps can inform users. Frontend: fallback ASCII animation, accelerator status update + warning log on mid-session fallback. ACCEL button always enabled (was permanently disabled — `checkEmbeddedServices` never set `disabled=false`). |
-| **Step 5C** | Accelerated mode e2e tests — phase tracking on happy path (`detect`+`serialize`, no `fallback`), fallback test (dead port → WASM, `detect`+`fallback`, no `serialize`), accelerator health check in `connectivity.test.ts`, accelerated mode transitions in `mode-switching.test.ts` (Remote→Accelerated→Local). Fallback test always runs (no skipIf). |
-| **Step 6** | CI pipeline: `accelerator.yml` PR gate (changes → clippy + rust tests + lint → gate), `release-accelerator.yml` release pipeline (tag-triggered matrix build: macOS arm64/x86_64 + Linux x86_64, GitHub Releases). Branch protection updated with "Accelerator Status" gate. Windows blocked (no `bb` binary from Aztec). macOS code signing deferred (TODO in workflow). |
-| **Step 7** | BB binary version compatibility: `copy-bb.ts` writes `AZTEC_VERSION` from `@aztec/bb.js` package version, `build.rs` exposes as `AZTEC_BB_VERSION` compile-time env var, `/health` returns `aztec_version` field. SDK `#checkAcceleratorHealth()` parses the response and compares with its own `@aztec/stdlib` dependency version — falls back to WASM on mismatch, proceeds on `"unknown"`. |
-| **Step 8A/C** | Auto-start on login (`tauri-plugin-autostart`, "Start on Login" tray checkbox) + documentation (accelerator README, root README, architecture, how-it-works, ci-pipeline updates) |
-
-| **Step 9** | CI e2e integration — headless binary (`src/bin/accelerator-server.rs`) via lib+bins pattern (no Tauri/GUI deps at runtime). `BB_BINARY_PATH` env var for bb resolution in CI. `accelerator.yml` e2e job: prebuild bb sidecar → build headless binary → start Aztec local network + tee-rex server + accelerator → SDK e2e with `ACCELERATOR_URL`. Gate job updated. |
-
-| **Step 7B** | Multi-version bb support + semver + auto-release. `versions.rs`: NetworkTier enum (Nightly/Devnet/Testnet/Mainnet), retention policy (2/3/5/all), download-on-demand from GitHub Releases, tar.gz extraction, atomic caching to `~/.tee-rex-accelerator/versions/{version}/bb`, cleanup on prove. `bb.rs`: version-aware `find_bb(version)` adds cache lookup before sidecar chain. `server.rs`: reads `X-Aztec-Version` header, downloads bb on demand, `/health` returns `available_versions` array, CORS allows version header. Tray: "Versions" submenu showing bundled + cached versions, rebuilt after download/cleanup. SDK: `#checkAcceleratorHealth` returns `{ available, needsDownload }` from `available_versions`, emits `"downloading"` phase, sends `x-aztec-version` header on `/prove`, legacy exact-match preserved for old accelerators. Version bump `0.0.0` → `1.0.0-rc.1`. release-please automation: manifest + config + workflow, `PAT_TOKEN` for tag-triggered releases. |
-
----
-
-## Phase 32: CI/CD Improvements — DONE (PR #182)
-
-**Goal**: Optimize deploy pipeline and fix devnet auto-merge. Reduce unnecessary server rebuilds and add API versioning.
-
-**Changes:**
-
-| Item | Summary |
-|------|---------|
-| **Narrow server change detection** | Removed `packages/sdk/**` from `servers` path filter in `deploy-prod.yml`. Server has zero `@aztec/*` runtime deps — SDK changes don't require a server rebuild. |
-| **Smart `/health` version check** | Added `check-server` job to `deploy-prod.yml` (same pattern as `deploy-devnet.yml`). SSM tunnels to running server, checks `available_versions` in `/health`. Skips rebuild if bb version already cached. Distinguishes `server_code` changes (always rebuild) from infra-only changes (check first). Saves ~10 min on deploys where the version is already deployed. |
-| **Devnet auto-merge fix** | Changed `auto_merge: false` → `true` in `aztec-devnet.yml`. Was merging immediately without waiting for CI checks — now waits for all checks to pass before merging, matching the nightlies behavior. |
-| **`api_version` in `/health`** | Added `api_version: 1` to server `/health` response. Enables SDK↔server compatibility checks and fail-fast detection of breaking API changes. |
-
-**Key decisions:**
-- `server_code` path filter subset (Dockerfile*, packages/server/**, package.json, bun.lock) forces rebuild even when version check would skip it — prevents deploying stale server code
-- `workflow_dispatch` always forces rebuild (both `server_code` and `servers` override to true)
-- `api_version` is a simple integer, not semver — bumped on breaking API changes only
+Single instance per env runs Nitro enclave (localhost:4000 via socat) + host container (port 80, `--network host`). CloudFront routes both `/tee/*` and `/prover/*` through host. Deploy: enclave first, then host. ~46% cost reduction.
 
 ---
 
 ## Phase 33: Thin Enclave Architecture — DONE
 
-**Goal**: Split monolithic server into host (Express) + thin enclave (Bun.serve). Host manages bb version downloads and uploads; enclave handles cryptographic operations. bb binaries no longer baked into Docker/EIF images — uploaded at runtime.
+Host (Bun.serve, port 80) manages bb downloads/uploads. Enclave (Bun.serve, port 4000) handles keys, attestation, decryption, proving. bb SHA256 hashes in NSM attestation `user_data`. Docker images no longer bake bb binaries — uploaded at runtime via `POST /upload-bb`.
 
-**Architecture:**
 ```
-CloudFront → Host Express (port 80, --network host)
-                ├─ GET /health         → aggregates host + enclave health
-                ├─ GET /attestation    → proxies to enclave
-                ├─ POST /prove         → downloads bb if needed, uploads to enclave, proxies
-                └─ GET /encryption-public-key → proxies to enclave
-                ▼ (http://localhost:4000 via socat→vsock)
-           Thin Enclave (Bun.serve, port 4000)
-                ├─ POST /upload-bb     → save binary, compute SHA256
-                ├─ POST /prove         → decrypt + bb prove
-                ├─ GET /attestation    → NSM doc with bb hashes in user_data
-                ├─ GET /public-key     → encryption public key
-                └─ GET /health         → loaded versions + hashes
+CloudFront → Host (port 80)
+               ├─ /health        → aggregates host + enclave
+               ├─ /attestation   → proxies to enclave
+               ├─ /prove         → downloads bb if needed, uploads, proxies
+               └─ /encryption-public-key → proxies
+               ▼ (localhost:4000 via socat→vsock)
+          Thin Enclave (port 4000)
 ```
 
-**New files:**
-
-| File | Purpose |
-|------|---------|
-| `packages/server/src/enclave.ts` | Thin enclave Bun.serve() HTTP server |
-| `packages/server/src/enclave.test.ts` | 12 tests for enclave service |
-| `packages/server/src/lib/enclave-protocol.ts` | Shared host↔enclave types |
-| `packages/server/src/lib/bb-hash.ts` | BB binary SHA256 hashing + cache |
-| `packages/server/src/lib/bb-download.ts` | Download bb from GitHub releases |
-| `packages/server/src/lib/enclave-client.ts` | Typed HTTP client for host→enclave |
-| `scripts/download-and-upload-bb.sh` | Manual bb version management |
-
-**Modified files:**
-
-| File | Change |
-|------|--------|
-| `packages/server/src/index.ts` | `AppMode` discriminated union: `standard` (local dev) vs `proxy` (TEE_MODE=nitro) |
-| `packages/server/src/lib/attestation-service.ts` | `getAttestation(publicKey, userData?)` — optional userData for NSM user_data field |
-| `packages/sdk/src/lib/attestation.ts` | `parseEnclaveUserData()`, `verifyNitroAttestation` returns `bbVersions` |
-| `Dockerfile.nitro` | Removed bb baking, entrypoint → `src/enclave.ts` |
-| `Dockerfile` | Removed bb baking, added `TEE_MODE=nitro`, `ENCLAVE_URL` |
-| `infra/ci-deploy-unified.sh` | New flow: enclave → download bb → upload to enclave → host container |
-| `.github/workflows/_deploy-unified.yml` | Renamed prover→host, bb_versions as runtime input |
-
-**Key decisions:**
-- Express on host (middleware, rate limiting, CORS), Bun.serve in enclave (minimal surface area)
-- `TEE_MODE=standard` preserved for local dev — handles everything in one process
-- bb SHA256 in attestation `user_data` — hardware-signed by NSM, equivalent security to PCR0-covers-everything
-- Atomic bb upload: write to tmp dir, rename. Partial uploads are safe.
-- `Bun.serve({ maxRequestBodySize: 300_000_000 })` for ~200MB bb uploads
-- Backward compatible: `AppDependencies` interface still works, SDK attestation works with or without user_data
-
-### Phase 33 Follow-up: Express → Bun.serve Host Migration
-
-Replaced Express and 7 runtime dependencies (`express`, `cors`, `express-rate-limit`, `@logtape/express`, `ms`, `ox`, `zod`) with native `Bun.serve` on the host server. Both host and enclave now use the same `Bun.serve` pattern — runtime deps reduced from 9 to 2 (`@logtape/logtape`, `openpgp`).
-
-**Changes:**
-- `src/index.ts`: Rewrote host as `Bun.serve` with native request routing, CORS headers, and body size limit (`maxRequestBodySize`)
-- `src/lib/rate-limit.ts`: New sliding-window rate limiter (replaces `express-rate-limit`), 9 unit tests
-- Removed `setInterval` keepAlive hack (Bun.serve refs the event loop natively)
-- Removed `sysctl` workaround for silent port-bind failure (Bun.serve throws on bind errors)
-- **Behavioral change**: Oversized requests (>50MB) now return bare `413` from Bun.serve instead of JSON error body. SDK doesn't parse 413 bodies, so no client impact.
+Follow-up: Migrated host from Express to Bun.serve — runtime deps reduced from 9 to 2.
 
 ---
 
-## Phase 34: Thin Enclave Architecture Cleanup — DONE (PR #201)
+## Phase 34: Enclave Lockdown — DONE
 
-**Goal**: Make the enclave truly internal-only. Remove CloudFront's direct route to port 4000, lock down the security group, and unify all CI workflows to use a single SSM tunnel through the host.
-
-**Changes:**
-
-| Item | Summary |
-|------|---------|
-| **CloudFront** | Removed `tee-ec2` origin (port 4000) from all 5 distributions. `/tee/*` now routes through `prover-ec2` (port 80, the host). |
-| **Security group** | Removed port 4000 ingress rule. Only port 80 is externally accessible. |
-| **Enclave** | Reverted PR #200's JSON content-type handling — enclave `/prove` only accepts raw binary from the host proxy. |
-| **socat** | Bound to `127.0.0.1` (defense-in-depth). Even if the SG were misconfigured, the enclave proxy only accepts local connections. |
-| **CI workflows** | Unified deploy-nightlies, deploy-devnet, deploy-prod, `_e2e-sdk`, `_e2e-app`, and infra to single SSM tunnel on port 80. `TEE_URL = PROVER_URL` (both go through host). |
-
-**Key insight**: The host already handled all endpoints (`/prove`, `/attestation`, `/public-key`, `/health`) and proxied to the enclave. The `tee-ec2` CloudFront origin was a leftover from before Phase 33 that was never cleaned up.
+Removed CloudFront direct route to port 4000. SG only allows port 80. socat bound to `127.0.0.1`. All CI workflows use single SSM tunnel through host.
 
 ---
 
-## Phase 36: Expose Proving Time in UI Step Breakdown — DONE
+## Phase 35: Deprecate Devnet — DONE
 
-**Goal**: Show actual proving time alongside roundtrip time in the step breakdown, for all modes (WASM, UEE/TEE, Accelerated).
+Removed devnet environment (4→3 envs). Deleted workflows, CloudFront, S3, IAM refs, Tofu resources.
 
-**Problem**: The "prove + send" time displayed in the UI includes network latency, encryption, and tx submission — making remote proving look slower than it actually is. The server/accelerator already measured this via `x-prove-duration-ms` but the SDK only logged it.
+---
 
-**Changes:**
+## Phase 36: Proving Time in UI — DONE
 
-| File | Change |
-|------|--------|
-| `packages/sdk/src/lib/tee-rex-prover.ts` | Added `"proved"` to `ProverPhase` union, new `ProverPhaseData` interface with `durationMs`. Callback extended to `(phase, data?) => void`. All three paths emit `"proved"` with timing. |
-| `packages/app/src/aztec.ts` | Added `proveMs?` to `StepTiming`. Module-level capture from `"proved"` callback, read/reset after each `sendWithRetry`. |
-| `packages/app/src/results.ts` | Renders "prove" sub-row before "prove + send" in step breakdown. |
-| `packages/accelerator/src-tauri/src/server.rs` | Removed `#[cfg(debug_assertions)]` guards — `x-prove-duration-ms` header always exposed in CORS and always included in response. |
+SDK emits `"proved"` phase with `durationMs`. UI renders "prove" sub-row in step breakdown.
 
-**Key decision**: The original debug-only guard on the accelerator was about not leaking hardware info (thread count in `/health`), not proving time. Proving duration is safe to expose — it's a localhost-only app on the user's own machine.
+---
+
+## Phase 37: Remove Accelerator Package — DONE
+
+Moved accelerator to standalone repo [`aztec-accelerator`](https://github.com/alejoamiras/aztec-accelerator). Removed `packages/accelerator/`, `ProvingMode.accelerated`, accelerated mode from app, CI workflows (`accelerator.yml`, `release-accelerator.yml`), branch protection gate.
 
 ---
 
 ## Backlog
 
-- Phase 6 (next-net testing) absorbed into Phase 12B/12C, further work in Phase 17F
-- Phase 11 benchmarking (instance sizing) — tackle when proving speed becomes a bottleneck
-- Phase 15 TEE generalization research (TeeProvider interface) — tackle after core features stabilize
-- ~~**Gate `publish-sdk` on `validate-prod` instead of `nextnet-check`**~~ Done (#96)
-- ~~**IAM trust policy audit**~~ Done
-- ~~**IAM S3 DeleteObject scoping**~~ Done (#73)
-- ~~**SDK witness triple-encoding**~~ Done (#73)
-- ~~**Socat proxy fragile background process (audit #30)**~~ Done (#74)
-- ~~**CloudFront origin timeout 60s (audit #2)**~~ Done (#76)
-- ~~**Request logging and request IDs (audit #21)**~~ Done (#78)
+- Phase 11: Instance sizing benchmarking — tackle when proving speed becomes a bottleneck
+- Phase 15: TEE generalization research (TeeProvider interface) — tackle after core features stabilize
+- Phase 21: Multi-region deployment (sa-east-1) — research done, implementation when needed
+- Landing page for tee-rex.dev
+- Rename `packages/app` → `packages/playground`, domain `playground.tee-rex.dev`
