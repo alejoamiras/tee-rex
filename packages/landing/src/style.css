@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ── Theme ── */
+@theme {
+  --color-primary: #4edea3;
+  --color-background: #131313;
+  --color-surface: #131313;
+  --color-on-surface: #e5e2e1;
+
+  --font-headline: "Manrope", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-label: "Space Grotesk", monospace, system-ui;
+}
+
+/* ── Font utility classes ── */
+.font-headline {
+  font-family: var(--font-headline);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.font-label {
+  font-family: var(--font-label);
+}
+
+/* ── Terminal glow ── */
+@keyframes terminal-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(78, 222, 163, 0.1), 0 0 60px rgba(78, 222, 163, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(78, 222, 163, 0.15), 0 0 80px rgba(78, 222, 163, 0.08);
+  }
+}
+
+.animate-terminal-glow {
+  animation: terminal-glow 4s ease-in-out infinite;
+}
+
+/* ── Hero glow ── */
+@keyframes hero-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+.animate-hero-glow {
+  animation: hero-glow 6s ease-in-out infinite;
+}
+
+/* ── Card premium hover ── */
+@keyframes card-premium {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(78, 222, 163, 0);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(78, 222, 163, 0.08);
+  }
+}
+
+.animate-card-premium {
+  animation: card-premium 3s ease-in-out infinite;
+}
+
+/* ── Grid accent line pulse ── */
+@keyframes grid-accent {
+  0%, 100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.animate-grid-accent {
+  animation: grid-accent 4s ease-in-out infinite;
+}
+
+/* ── Cursor blink ── */
+@keyframes cursor-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
