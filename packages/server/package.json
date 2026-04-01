@@ -16,8 +16,8 @@
     "openpgp": "6.3.0"
   },
   "devDependencies": {
-    "@aztec/bb-prover": "4.2.0-nightly.20260331",
-    "@aztec/simulator": "4.2.0-nightly.20260331",
+    "@aztec/bb-prover": "4.2.0-nightly.20260401",
+    "@aztec/simulator": "4.2.0-nightly.20260401",
     "@logtape/pretty": "^2.0",
     "@types/node": "^25.0.0"
   }
